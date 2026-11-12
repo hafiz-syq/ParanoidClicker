@@ -11,8 +11,17 @@ export interface Sample {
   offsetMs: number;
 }
 
-export function toSample(s: Stamps): Sample {
+// null = sampel tidak bisa dipercaya. Tiga sebab yang benar-benar terjadi di lapangan:
+// (1) RTT 0/negatif karena resolusi Date.now() cuma 1 ms dan perjalanannya muat dalam satu
+// milidetik — paling sering di localhost; (2) jam dinding HP melompat mundur di antara dua cap
+// (NTP client OS, ganti timezone); (3) lawan mengirim t1 absurd. Ketiganya wajib dibuang lebih
+// dulu karena delay negatif selalu menang di sort estimasiOffset, dan θ hasil akhirnya tetap
+// terbaca wajar sementara jitter-nya 0 — angka palsu yang lolos sensor.
+export function toSample(s: Stamps): Sample | null {
+  if (!Number.isFinite(s.t1) || !Number.isFinite(s.t2) || !Number.isFinite(s.t3) || !Number.isFinite(s.t4))
+    return null;
   const rttMs = s.t4 - s.t1 - (s.t3 - s.t2);
+  if (rttMs <= 0) return null;
   return {
     rttMs,
     delayMs: rttMs / 2,

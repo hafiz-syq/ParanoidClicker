@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { genDid } from '../shared/ids';
+import { parseFrame } from '../shared/limits';
 import {
   dist,
   estimateJitter,
@@ -12,11 +13,18 @@ import {
 const PING_COUNT = 60;
 const PING_INTERVAL_MS = 1000;
 
-interface Summary {
-  rtt: { p50: number; p95: number; max: number };
+interface Run {
+  at: string;
+  sid: string;
+  rttP50: number;
+  rttP95: number;
+  rttMax: number;
   offsetMs: number;
   jitterP95Ms: number;
   verdict: string;
+  rejected: number;
+  lost: number;
+  stamps: Stamps[];
 }
 
 function verdictOf(jitterP95Ms: number): string {
@@ -46,63 +54,115 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export function DebugScope() {
   const [log, setLog] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
-  const [done, setDone] = useState<Summary | null>(null);
   const [count, setCount] = useState(0);
+  const [verdict, setVerdict] = useState('belum jalan');
   const [audio, setAudio] = useState<string[]>([]);
   const [wake, setWake] = useState('belum diuji');
+  // Satu run per HP adalah bukti lapangan: tidak boleh hilang karena tombol dite twice
+  // atau karena /create gagal pada percobaan berikutnya.
+  const [runs, setRuns] = useState<Run[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
-  // cap mentah per ping ikut diekspor: re-analisis di laptop tidak perlu mengulang tes di HP
-  const stampsRef = useRef<Stamps[]>([]);
+  const wakeRef = useRef<WakeLockSentinel | null>(null);
+
   const say = useCallback((line: string) => setLog((prev) => [...prev, line]), []);
 
-  useEffect(() => () => wsRef.current?.close(), []);
+  useEffect(
+    () => () => {
+      wsRef.current?.close();
+      void wakeRef.current?.release().catch(() => undefined);
+    },
+    []
+  );
+
+  const holdScreen = useCallback(
+    async (label: string) => {
+      if (!('wakeLock' in navigator)) {
+        setWake(`wakeLock tidak ada — ${label} bisa kepotong layar tidur`);
+        return;
+      }
+      try {
+        void wakeRef.current?.release().catch(() => undefined);
+        const sentinel = await navigator.wakeLock.request('screen');
+        wakeRef.current = sentinel;
+        setWake(`type=${sentinel.type} ditahan (${label})`);
+        sentinel.addEventListener('release', () => {
+          if (wakeRef.current === sentinel) setWake(`type=${sentinel.type} lepas (${label})`);
+        });
+      } catch (e) {
+        setWake(`gagal: ${String(e)}`);
+      }
+    },
+    []
+  );
+
+  const releaseScreen = useCallback(() => {
+    const sentinel = wakeRef.current;
+    wakeRef.current = null;
+    void sentinel?.release().catch(() => undefined);
+  }, []);
 
   const measure = useCallback(async () => {
     setRunning(true);
-    setDone(null);
     setCount(0);
     const samples: Sample[] = [];
     const stamps: Stamps[] = [];
     const rtts: number[] = [];
-    stampsRef.current = stamps;
-    // nonce → pemanggil resolve untuk ping yang sedang menunggu jawaban
+    let rejected = 0;
+    let lost = 0;
+    // nonce → resolve untuk ping yang masih menunggu jawaban
     const waiters = new Map<number, () => void>();
 
+    await holdScreen('pengukuran');
+
     let sid = '';
+    let wsPath = '';
     try {
       const res = await fetch('/create', { method: 'POST' });
-      const body = (await res.json()) as { sid?: string; error?: string };
-      if (!res.ok || typeof body.sid !== 'string') {
+      const body = (await res.json()) as { sid?: string; wsPath?: string; error?: string };
+      if (!res.ok || typeof body.sid !== 'string' || typeof body.wsPath !== 'string') {
         throw new Error(`/create gagal ${res.status}: ${JSON.stringify(body)}`);
       }
       sid = body.sid;
+      wsPath = body.wsPath;
       say(`/create → sid=${sid}`);
     } catch (e) {
       say(String(e));
       setRunning(false);
+      releaseScreen();
       return;
     }
 
-    const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?sid=${sid}`;
+    // wsPath sudah membawa tok hasil /create; menyusun ulang query di sini pernah jadi
+    // jalur banjir DO (sid boleh dikarang bebas, tanpa token tidak ada DO yang bangkit).
+    const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${wsPath}`;
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.addEventListener('message', (ev: MessageEvent<string>) => {
       let frame: Record<string, unknown>;
       try {
-        frame = JSON.parse(ev.data) as Record<string, unknown>;
-      } catch {
-        say(`frame tidak terurai: ${ev.data.slice(0, 60)}`);
+        // Frame dari server lewat gerbang yang sama dengan frame klien: tanpa ini,
+        // socket jahat bisa kirim 8 MB atau __proto__ ke layar ukur.
+        frame = parseFrame(ev.data);
+      } catch (e) {
+        say(`frame ditolak: ${String(e)}`);
         return;
       }
       if (frame.t === 'welcome') {
         say(`welcome: members=${String(frame.members)} rowsWritten=${String(frame.rowsWritten)}`);
         return;
       }
+      if (frame.t === 'error') {
+        say(`server menolak: ${String(frame.code)}`);
+        return;
+      }
       if (frame.t !== 'pong' || typeof frame.nonce !== 'number') {
         say(`frame tak terduga: ${ev.data.slice(0, 80)}`);
         return;
       }
+      // Pong telat (ping-nya sudah dicatat hilang) atau duplikat tidak boleh masuk
+      // seri: estimateJitter mengasumsikan tepat satu sampel per tick.
+      if (!waiters.has(frame.nonce)) return;
       const st: Stamps = {
         t1: Number(frame.t1),
         t2: Number(frame.t2),
@@ -110,11 +170,18 @@ export function DebugScope() {
         t4: Date.now(),
       };
       const sample = toSample(st);
+      // Tick dianggap selesai begitu jawabannya datang, walau sampelnya dibuang: tanpa
+      // resolve di sini, timeout 1500 ms tetap jalan dan satu kejadian tercatat dua kali
+      // (satu dibuang + satu hilang), sementara loop pengukuran menggantung 1,4 detik.
+      waiters.get(frame.nonce)?.();
+      if (!sample) {
+        rejected++;
+        return;
+      }
       samples.push(sample);
       stamps.push(st);
       rtts.push(sample.rttMs);
       setCount(samples.length);
-      waiters.get(frame.nonce)?.();
     });
     ws.addEventListener('error', () => say('WebSocket error (lihat tab Jaringan)'));
 
@@ -125,6 +192,7 @@ export function DebugScope() {
     if (ws.readyState !== WebSocket.OPEN) {
       say(`tidak bisa terhubung ke ${url}`);
       setRunning(false);
+      releaseScreen();
       return;
     }
 
@@ -137,6 +205,7 @@ export function DebugScope() {
         // Ping tanpa jawaban dalam 1500 ms dicatat hilang, tidak dibiarkan menggantung.
         const timeout = setTimeout(() => {
           waiters.delete(i);
+          lost++;
           say(`ping ${i} hilang`);
           resolve();
         }, 1500);
@@ -149,30 +218,43 @@ export function DebugScope() {
       });
       if (i % 10 === 9) {
         const s = samples[samples.length - 1];
-        say(`${samples.length}/${PING_COUNT} rtt=${s?.rttMs.toFixed(1)}ms θ=${s?.offsetMs.toFixed(1)}ms`);
+        say(`${samples.length}/${PING_COUNT} rtt=${s ? s.rttMs.toFixed(1) : '—'}ms θ=${s ? s.offsetMs.toFixed(1) : '—'}ms`);
       }
       await sleep(Math.max(0, PING_INTERVAL_MS - (Date.now() - slot)));
     }
 
     ws.close(1000, 'selesai');
+    releaseScreen();
     setRunning(false);
+
     if (samples.length < 2) {
       say('tidak ada sampel: periksa koneksi/worker');
       return;
     }
     const jitter = estimateJitter(samples);
-    const summary: Summary = {
-      rtt: dist(rtts),
+    const rtt = dist(rtts);
+    const run: Run = {
+      at: new Date().toISOString(),
+      sid,
+      rttP50: rtt.p50,
+      rttP95: rtt.p95,
+      rttMax: rtt.max,
       offsetMs: estimateOffset(samples),
       jitterP95Ms: jitter,
       verdict: verdictOf(jitter),
+      rejected,
+      lost,
+      stamps,
     };
-    setDone(summary);
+    setRuns((prev) => [...prev, run]);
+    setVerdict(run.verdict);
     say(
-      `ringkas: rtt p50=${summary.rtt.p50.toFixed(1)} p95=${summary.rtt.p95.toFixed(1)}ms · ` +
-        `θ=${summary.offsetMs.toFixed(1)}ms · jitter p95=${jitter.toFixed(1)}ms`
+      `ringkas: rtt p50=${rtt.p50.toFixed(1)} p95=${rtt.p95.toFixed(1)}ms · ` +
+        `θ=${run.offsetMs.toFixed(1)}ms · jitter p95=${jitter.toFixed(1)}ms` +
+        `${rejected ? ` · ${rejected} sampel dibuang` : ''}${lost ? ` · ${lost} ping hilang` : ''}`
     );
-  }, [say]);
+    say(run.verdict);
+  }, [holdScreen, releaseScreen, say]);
 
   const probeAudio = useCallback(async () => {
     const out: string[] = [];
@@ -203,8 +285,9 @@ export function DebugScope() {
       timedOut = true;
       throw new Error('tidak dijawab dalam 12 detik');
     });
+    let stream: MediaStream | undefined;
     try {
-      const stream = await Promise.race([wantMic, timeout]);
+      stream = await Promise.race([wantMic, timeout]);
       // label belum masuk tipe MediaTrackSettings di lib.dom TypeScript 5.9.
       const settings = stream.getAudioTracks()[0]?.getSettings() as
         | (MediaTrackSettings & { label?: string })
@@ -216,32 +299,17 @@ export function DebugScope() {
       await sleep(600);
       read('sesudah mic');
       src.disconnect();
-      stream.getTracks().forEach((track) => track.stop());
     } catch (e) {
       out.push(`mic: ${String(e)}`);
+    } finally {
+      stream?.getTracks().forEach((track) => track.stop());
+      await ctx.close();
     }
-    await ctx.close();
     setAudio(out);
   }, []);
 
-  const probeWake = useCallback(async () => {
-    if (!('wakeLock' in navigator)) {
-      setWake('navigator.wakeLock tidak ada');
-      return;
-    }
-    try {
-      const sentinel = await navigator.wakeLock.request('screen');
-      // isVisible tidak ada di semua build Chrome, jadi keberhasilan request yang dilaporkan.
-      setWake(`type=${sentinel.type} — layar ditahan 60 detik lalu lepas sendiri`);
-      sentinel.addEventListener('release', () => setWake(`type=${sentinel.type} — sudah lepas`));
-      setTimeout(() => void sentinel.release().catch(() => undefined), 60_000);
-    } catch (e) {
-      setWake(`gagal: ${String(e)}`);
-    }
-  }, []);
-
   const exportJson = JSON.stringify(
-    { host: location.host, count, done, stamps: stampsRef.current, env: envLines(), audio, log },
+    { host: location.host, env: envLines(), wake, audio, runs, log },
     null,
     1
   );
@@ -262,27 +330,30 @@ export function DebugScope() {
         <button onClick={probeAudio} style={btn}>
           Ukur audio
         </button>
-        <button onClick={probeWake} style={btn}>
-          Uji wake lock
-        </button>
       </p>
 
       <p style={{ fontSize: 13 }}>
-        {running ? `sampel ${count}/${PING_COUNT}` : done ? done.verdict : 'belum jalan'}
+        {running ? `sampel ${count}/${PING_COUNT}` : verdict} · run tersimpan: {runs.length}
       </p>
+      <p style={{ fontSize: 13 }}>{wake}</p>
 
       {audio.map((l) => (
         <p key={l} style={{ fontSize: 13, margin: 2 }}>
           {l}
         </p>
       ))}
-      <p style={{ fontSize: 13 }}>{wake}</p>
 
       <h2 style={{ fontSize: 15 }}>Log</h2>
       <pre style={pre}>{log.join('\n')}</pre>
 
       <h2 style={{ fontSize: 15 }}>Hasil (salin ke catatan)</h2>
-      <textarea readOnly rows={10} value={exportJson} style={{ ...pre, width: '100%' }} />
+      <textarea
+        readOnly
+        rows={12}
+        value={exportJson}
+        style={{ ...pre, width: '100%' }}
+        onFocus={(e) => e.currentTarget.select()}
+      />
       <button
         onClick={() => void navigator.clipboard.writeText(exportJson).then(() => say('hasil disalin'))}
         style={btn}

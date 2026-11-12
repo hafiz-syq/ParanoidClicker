@@ -18,7 +18,9 @@ function stampsFrom(offsetMs: number, upMs: number, procMs: number, downMs: numb
 }
 
 function sampleAt(offsetMs: number, upMs: number, procMs: number, downMs: number): Sample {
-  return toSample(stampsFrom(offsetMs, upMs, procMs, downMs));
+  const s = toSample(stampsFrom(offsetMs, upMs, procMs, downMs));
+  if (!s) throw new Error('skenario ini harus menghasilkan sampel valid');
+  return s;
 }
 
 describe('toSample', () => {
@@ -34,6 +36,33 @@ describe('toSample', () => {
     // Naik 60 ms, turun 4 ms -> estimasi offset tertarik jauh walau RTT-nya normal.
     expect(sampleAt(40, 60, 3, 4).offsetMs).toBeCloseTo(68, 6);
     expect(sampleAt(40, 4, 3, 60).offsetMs).toBeCloseTo(12, 6);
+  });
+
+  it('RTT nol/negatif dan cap non-finite menghasilkan null, bukan sampel', () => {
+    // (t4-t1) sama kecilnya dengan (t3-t2): RTT 0 berarti tidak ada waktu di jaringan, mustahil.
+    expect(toSample({ t1: 1000, t2: 1000, t3: 1020, t4: 1020 })).toBeNull();
+    // Jam dinding HP melompat mundur di antara t1 dan t4.
+    expect(toSample({ t1: 1000, t2: 1020, t3: 1020, t4: 990 })).toBeNull();
+    expect(toSample({ t1: 1e12, t2: 1020, t3: 1020, t4: 1030 })).toBeNull();
+    expect(toSample({ t1: NaN, t2: 1020, t3: 1020, t4: 1030 })).toBeNull();
+  });
+
+  it('sampel rusak yang dibuang tidak bisa membajak estimasi', () => {
+    // Setiap base menghasilkan θ=40 dengan naik=turun=20, proc=0 -> RTT 40.
+    const good: Sample[] = [];
+    for (let i = 0; i < 24; i++) {
+      const base = 1000 + i * 1000;
+      const s = toSample({ t1: base, t2: base + 60, t3: base + 60, t4: base + 40 });
+      if (s) good.push(s);
+    }
+    expect(good).toHaveLength(24);
+    const corrupt = [
+      toSample({ t1: 1000, t2: 1020, t3: 1020, t4: 990 }),
+      toSample({ t1: 1e12, t2: 1020, t3: 1020, t4: 1030 }),
+    ].filter((s): s is Sample => s !== null);
+    // Yang rusak tidak pernah masuk array, jadi θ tetap 40 ms.
+    expect(corrupt).toHaveLength(0);
+    expect(estimateOffset(good.concat(corrupt))).toBeCloseTo(40, 6);
   });
 });
 

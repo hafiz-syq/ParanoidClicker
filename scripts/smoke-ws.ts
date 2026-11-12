@@ -9,13 +9,17 @@ const BASE = process.env['PC_BASE_URL'] ?? 'http://127.0.0.1:8787';
 const PINGS = 10;
 
 const res = await fetch(`${BASE}/create`, { method: 'POST' });
-const { sid } = (await res.json()) as { sid: string };
-if (typeof sid !== 'string') throw new Error(`/create gagal: ${res.status}`);
+const created = (await res.json()) as { sid?: string; wsPath?: string; error?: string };
+if (typeof created.sid !== 'string' || typeof created.wsPath !== 'string') {
+  throw new Error(`/create gagal: ${res.status} ${JSON.stringify(created)}`);
+}
+const { sid, wsPath } = created;
 console.log(`sid=${sid}`);
 
-const wsUrl = `${BASE.replace(/^http/, 'ws')}/ws?sid=${sid}`;
+const wsUrl = `${BASE.replace(/^http/, 'ws')}${wsPath}`;
 const ws = new WebSocket(wsUrl);
 const samples: Sample[] = [];
+let rejected = 0;
 const waiters = new Map<number, () => void>();
 
 ws.addEventListener('message', (ev) => {
@@ -35,6 +39,15 @@ ws.addEventListener('message', (ev) => {
     t4: Date.now(),
   };
   const s = toSample(st);
+  // Sampel dibuang kalau RTT-nya <= 0. Di localhost ini nyata terjadi: resolusi Date.now()
+  // 1 ms, jadi satu perjalanan yang muat dalam satu milidetik menghasilkan RTT 0 atau negatif.
+  // Angka yang dibuang harus tetap kelihatan supaya hal yang sama ketahuan di lapangan.
+  if (!s) {
+    rejected++;
+    console.log(`ping ${frame.nonce}: dibuang (rtt=${(st.t4 - st.t1 - (st.t3 - st.t2)).toFixed(2)}ms)`);
+    waiters.get(frame.nonce)?.();
+    return;
+  }
   samples.push(s);
   console.log(`ping ${frame.nonce}: rtt=${s.rttMs.toFixed(2)}ms offset=${s.offsetMs.toFixed(2)}ms`);
   waiters.get(frame.nonce)?.();
@@ -64,8 +77,10 @@ for (let i = 0; i < PINGS; i++) {
   await new Promise((r) => setTimeout(r, 100));
 }
 
+// Banjir create + sid palsu tanpa token diuji di scripts/attack.ts (T5), bukan di sini.
+
 // sid kedua harus ditolak: alfabet hanya 32 simbol, tanpa I O 0 1.
-const bad = new WebSocket(`${BASE.replace(/^http/, 'ws')}/ws?sid=${genSid()}!`);
+const bad = new WebSocket(`${BASE.replace(/^http/, 'ws')}/ws?sid=${genSid()}!&tok=${'0'.repeat(64)}`);
 const badStatus = await new Promise<string>((resolve) => {
   bad.addEventListener('error', () => resolve('ditolak'), { once: true });
   bad.addEventListener('open', () => {
@@ -75,5 +90,7 @@ const badStatus = await new Promise<string>((resolve) => {
 });
 console.log(`sid cacat → ${badStatus}`);
 
-console.log(`sampel=${samples.length}/${PINGS} offset=${estimateOffset(samples).toFixed(2)}ms`);
+console.log(
+  `sampel=${samples.length}/${PINGS} dibuang=${rejected} offset=${estimateOffset(samples).toFixed(2)}ms`
+);
 ws.close(1000, 'selesai');

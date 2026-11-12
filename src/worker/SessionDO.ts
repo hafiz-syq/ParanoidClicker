@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { FrameReject, parseFrame } from '../shared/limits';
+import { FrameReject, MAX_MEMBERS, parseFrame } from '../shared/limits';
 import { isSid } from '../shared/ids';
 
 export class SessionDO extends DurableObject<Env> {
@@ -53,8 +53,18 @@ export class SessionDO extends DurableObject<Env> {
       ws.send(JSON.stringify({ t: 'error', code: 'PROTO' }));
       return;
     }
+    // Dibaca dari tabel, bukan dari memori: DO boleh dievict kapan saja dan dibangun ulang.
+    // Generik <{n:number}> wajib: tanpa itu .one() bertipe SqlStorageValue (boleh null).
+    const total = this.sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM member').one().n;
+    const known = this.sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM member WHERE did = ?', did).one().n > 0;
+    if (!known && total >= MAX_MEMBERS) {
+      ws.send(JSON.stringify({ t: 'error', code: 'FULL' }));
+      return;
+    }
+    // OR IGNORE, bukan OR REPLACE: hello ulang dari HP yang sama tidak boleh membayar
+    // kuota "rows written" dua kali dan tidak boleh menggeser joined_at aslinya.
     const cursor = this.sql.exec(
-      'INSERT OR REPLACE INTO member (did, joined_at) VALUES (?, ?)',
+      'INSERT OR IGNORE INTO member (did, joined_at) VALUES (?, ?)',
       did,
       Date.now()
     );
@@ -64,7 +74,7 @@ export class SessionDO extends DurableObject<Env> {
         sid,
         did,
         serverNow: Date.now(),
-        members: this.sql.exec('SELECT COUNT(*) AS n FROM member').one().n,
+        members: known ? total : total + 1,
         rowsWritten: cursor.rowsWritten,
       })
     );
@@ -80,7 +90,10 @@ export class SessionDO extends DurableObject<Env> {
   }
 
   async webSocketClose(ws: WebSocket, code: number): Promise<void> {
-    ws.close(code, 'client closed');
+    // Klien bisa mengirim code 1005/1006/1015; ws.close() menolak ketiganya dengan
+    // InvalidAccessError, jadi code di luar daftar sah diterjemahkan ke 1000.
+    const legal = code >= 1000 && code <= 1011 && code !== 1004 && code !== 1005 && code !== 1006;
+    ws.close(legal ? code : 1000, 'client closed');
   }
 
   async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
