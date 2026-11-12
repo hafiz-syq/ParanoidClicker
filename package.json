@@ -1,0 +1,40 @@
+{
+  "name": "paranoidclick",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n worker,app -c cyan,green \"npm:dev:worker\" \"npm:dev:app\"",
+    "dev:worker": "wrangler dev --local --port 8787",
+    "dev:app": "vite",
+    "build": "vite build",
+    "preview": "npm run build && wrangler dev --assets=dist --local --port 8787",
+    "login": "wrangler login",
+    "deploy": "npm run build && wrangler deploy",
+    "secret": "wrangler secret put SESSION_SIGNING_KEY",
+    "tail": "wrangler tail",
+    "test": "vitest run",
+    "test:worker": "vitest run --config vitest.worker.config.ts",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.worker.json --noEmit",
+    "check": "npm run typecheck && npm run test && npm run test:worker"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.8.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "concurrently": "10.0.7",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vite": "8.3.8",
+    "vitest": "4.1.12",
+    "wrangler": "4.161.0"
+  }
+}

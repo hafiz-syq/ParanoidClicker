@@ -1,0 +1,3 @@
+# Salin jadi .dev.vars untuk dev lokal; isinya token uji, JANGAN pakai token produksi.
+# Produksi memasang nilai ini lewat `npm run secret` (wrangler secret put), bukan file.
+SESSION_SIGNING_KEY=ganti-dengan-64-hex-acak
