@@ -217,8 +217,16 @@ export function DebugScope() {
         ws.send(JSON.stringify({ t: 'ping', nonce: i, t1: slot }));
       });
       if (i % 10 === 9) {
+        // θ yang menentukan adalah estimasi bergulir, bukan bacaan sampel terakhir. Di HP pertama
+        // keduanya berbeda sampai 103 ms (586,5 mentah vs 655,5–664 estimasi): mencetak yang mentah
+        // saja membuat operator mengira sinkroni rusak padahal angka itu memang yang dibuang.
         const s = samples[samples.length - 1];
-        say(`${samples.length}/${PING_COUNT} rtt=${s ? s.rttMs.toFixed(1) : '—'}ms θ=${s ? s.offsetMs.toFixed(1) : '—'}ms`);
+        const est = estimateOffset(samples);
+        const raw = s ? `${s.offsetMs.toFixed(1)}ms` : '—';
+        say(
+          `${samples.length}/${PING_COUNT} rtt=${s ? `${s.rttMs.toFixed(1)}ms` : '—'} ` +
+            `θ=${Number.isFinite(est) ? `${est.toFixed(1)}ms` : '—'} (sampel ${raw})`
+        );
       }
       await sleep(Math.max(0, PING_INTERVAL_MS - (Date.now() - slot)));
     }

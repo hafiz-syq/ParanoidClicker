@@ -29,7 +29,8 @@ Buka http://localhost:5173 (atau :8787 untuk build yang sama seperti produksi).
 | `npm test` | logika murni (sinkron, batas frame, id) |
 | `npm run test:worker` | Worker + Durable Object di runtime workerd asli |
 | `npm run typecheck` | TS app dan TS worker |
-| `npm run check` | ketiganya berurutan — gerbang sebelum commit |
+| `npm run lint:arch` | `src/app/sync/` tetap murni: tanpa impor bare, tanpa API browser, tanpa layer lain |
+| `npm run check` | keempatnya berurutan — gerbang sebelum commit |
 | `npm run smoke` | jalur WebSocket asli, butuh `npm run dev:worker` |
 | `npm run attack` | tes serangan T5/T6/T7/T9, butuh `npm run dev:worker` |
 
@@ -81,10 +82,13 @@ Tiga hal yang perlu dibaca dengan benar, karena angkanya menipu kalau dibaca cep
    estimasi kumulitiknya justru mengunci (655,5 → 657,0 dari sampel 10 ke 60). Yang membuat
    estimator setenang itu adalah jangkar delay terkecil: 14–18 ms, hanya bergerak 4 ms, walau
    RTT medianya 48 ms dan spikenya sampai 167 ms.
-3. **Baris `10/60 θ=…` di log layar adalah sampel terakhir yang mentah** (`DebugScope.tsx:221`
-   mencetak `s.offsetMs` sampel, bukan `estimateOffset(samples)`), jadi operator yang membaca
-   layar akan melihat 586 → 689 → 657 dan mengira sinkroni rusak padahal tidak. Verdict-nya
-   sendiri sudah dihitung dari estimasi, jadi tidak salah — tapi membingungkan di lapangan.
+3. **Baris `10/60 θ=…` di log layar dulu mencetak sampel mentah** (`s.offsetMs`, bukan
+   `estimateOffset(samples)`), jadi operator melihat 586 → 689 → 657 dan menyimpulkan sinkroni
+   rusak padahal yang dilihat adalah noise yang memang dibuang. Verdict-nya sendiri selalu benar
+   karena dihitung dari estimasi. Sejak commit ini layar mencetak
+   `θ=<estimasi bergulir> (sampel <mentah>)` — keduanya, supaya yang mentah tetap bisa dilihat
+   tanpa ditafsirkan sebagai angka penentu. **Ini mengubah app yang disajikan, jadi HP berikutnya
+   baru melihatnya setelah `npm run deploy` ulang.**
 
 Tiga yang **belum** terjawab, dan tidak bisa dijawab oleh run ini:
 
@@ -198,7 +202,7 @@ URL asli. Akun Workers Free cukup — tidak ada yang perlu dibayar.
 
 ```
 npm run login                    # buka browser, otorisasi OAuth; cek: npx wrangler whoami
-npm run check                    # 23 tes unit + 11 tes worker + typecheck, harus hijau
+npm run check                    # typecheck + lint:arch + 23 tes unit + 11 tes worker, harus hijau
 npm run secret                   # tempel satu baris hex 64, lihat catatan asal-usul di bawah
 npm run deploy                   # = vite build && wrangler deploy; cetak URL workers.dev
 curl https://paranoidclick.<akun>.workers.dev/health

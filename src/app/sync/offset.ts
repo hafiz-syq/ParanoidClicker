@@ -61,11 +61,14 @@ export function estimateOffset(samples: Sample[], k = 4): number {
 
 // Jitter yang kita janjikan adalah ketidakstabilan ESTIMASI offset antar window,
 // bukan RTT mentah: yang bocor ke fase adalah offset, dan RTT simetris tidak bergerak.
-export function estimateJitter(samples: Sample[], window = 8, k = 4): number {
-  if (samples.length < window * 2) return NaN;
+// Parameternya bernama windowSize, bukan window: `window` adalah global browser dan
+// scripts/lint-arch.ts memeriksa nama itu mentah di folder ini — tabrakan nama akan
+// membuat penjaga arsitektur salah tuduh.
+export function estimateJitter(samples: Sample[], windowSize = 8, k = 4): number {
+  if (samples.length < windowSize * 2) return NaN;
   const estimates: number[] = [];
-  for (let end = window; end <= samples.length; end++) {
-    estimates.push(estimateOffset(samples.slice(end - window, end), k));
+  for (let end = windowSize; end <= samples.length; end++) {
+    estimates.push(estimateOffset(samples.slice(end - windowSize, end), k));
   }
   const deltas: number[] = [];
   for (let i = 1; i < estimates.length; i++) deltas.push(Math.abs(estimates[i] - estimates[i - 1]));

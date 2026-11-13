@@ -71,6 +71,14 @@ Gerbang per-commit: `npm run check` → `ecc:code-review` → `ecc:quality-gate`
 - Host: `paranoidclick.<akun>.workers.dev`. Tanpa custom domain.
 - Backend: Cloudflare Workers + Durable Objects (SQLite, free plan). Satu secret: `SESSION_SIGNING_KEY`, via `wrangler secret put`, tidak pernah di-commit.
 - Sinkron = harga mati. DO adalah jam, leader adalah dirigen.
-- `src/app/sync/` harus pure TS — tanpa DOM, tanpa Web Audio. `lint:arch` menjaga ini.
-- Semua string UI dalam bahasa Indonesia, di satu file `src/i18n/id.ts`.
+- `src/app/sync/` harus pure TS — tanpa DOM, tanpa Web Audio. `npm run lint:arch` menjaga ini
+  (ditegakkan sejak 13 Nov 2026, ikut jalan di `npm run check`). Penjaganya sendiri sudah
+  diserang dengan berkas probe berisi **12 bentuk pelanggaran**: impor multi-baris, side-effect
+  import, `export * from`, `import()` dinamis, `require()`, impor dari `src/worker`, dan delapan
+  bentuk global — **10 dilaporkan dan script keluar `1`**. Dua yang diterima sebagai blind spot:
+  `const h = history;` dan `const l = location;` dalam bentuk bare, karena membedakan global dari
+  parameter lokal butuh analisis scope, bukan regex. `fetch` juga sengaja hanya diperiksa dalam
+  bentuk panggilan (`fetch(`) supaya parameter injeksi bernama `fetch` tidak salah tuduh.
+- String UI untuk saat ini masih inline di layarnya (`src/screens/DebugScope.tsx`). `src/i18n/id.ts`
+  belum ada — dibuat saat ada pemakai kedua (copy review APK atau bahasa kedua), bukan sebelum itu.
 - Jangan pernah jalankan skill `vercel-deploy` pihak ketiga.
