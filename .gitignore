@@ -4,3 +4,9 @@ dist/
 .dev.vars
 *.local
 .DS_Store
+
+# bukti log dari wrangler dev/tail — jangan pernah ikut commit
+tail*.log
+tail*.err
+dev-*.log
+prod-attack.log

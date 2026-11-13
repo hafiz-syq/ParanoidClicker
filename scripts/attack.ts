@@ -12,17 +12,23 @@ import { genSid } from '../src/shared/ids';
 const BASE = process.env['PC_BASE_URL'] ?? 'http://127.0.0.1:8787';
 const LOG = process.env['PC_LOG_FILE'] ?? '';
 
-// Kunci rate limiter diambil dari CF-Connecting-IP. Di produksi header itu ditulis ulang oleh
-// edge Cloudflare, jadi klien tidak bisa memalsukannya; di lokal header ini bebas dipakai, dan
+// Kunci rate limiter diambil dari CF-Connecting-IP. Di lokal header ini bebas dipalsukan, dan
 // tiap sesi uji mengambil alamat TEST-NET acak supaya tes yang beruntun tidak saling mengunci.
+// Di produksi TIDAK bisa sama sekali: edge Cloudflare menjawab 403 dengan halaman HTML miliknya
+// sendiri untuk permintaan yang membawa header itu, tanpa menjalankan Worker (terukur 2026-11-13
+// terhadap paranoidclick.hafizsyq.workers.dev). Satu percobaan sending header itu ke produksi
+// membuat SEMUA status tes terbaca 403 — T5b bahkan akan "lulus" karena kebetulan angkanya sama,
+// padahal yang menjawab Cloudflare, bukan gerbang token kita.
 const testIp = () => `198.51.100.${10 + Math.floor(Math.random() * 200)}`;
 const ownIp = testIp();
+const LOCAL = /^https?:\/\/(127\.|localhost|\[::1\])/.test(BASE);
+const fakeIp = (ip: string): Record<string, string> => (LOCAL ? { 'CF-Connecting-IP': ip } : {});
 
 // fetch (undici) menolak header Upgrade, jadi handshake palsu harus lewat node:http(s).
 // Modul dan port default dipilih dari skema BASE: kalau selalu node:http + port 80, tes ke
 // workers.dev (https) akan mengirim HTTP polos, mendapat redirect 301 dari Cloudflare, dan
 // membaca status itu sebagai kalau-nya Worker — bukan status handshake yang sebenarnya.
-function statusWithUpgrade(path: string, ip: string): Promise<number> {
+function statusWithUpgrade(path: string, ip: string): Promise<{ status: number; type: string }> {
   return new Promise((resolve, reject) => {
     const u = new URL(BASE);
     const secure = u.protocol === 'https:';
@@ -32,11 +38,21 @@ function statusWithUpgrade(path: string, ip: string): Promise<number> {
         port: u.port || (secure ? 443 : 80),
         method: 'GET',
         path,
-        headers: { 'CF-Connecting-IP': ip, Connection: 'Upgrade', Upgrade: 'websocket' },
+        // Kunci handshake yang sah (contoh dari RFC 6455). Tanpa Sec-WebSocket-Key/Version,
+        // edge Cloudflare menolak permintaannya sendiri dengan 403/400 ber-HTML dan Worker
+        // tidak pernah menjawab — sementara workerd lokal cukup longgar untuk meneruskannya,
+        // jadi tes ini hijau di lokal dan buta di produksi.
+        headers: {
+          ...fakeIp(ip),
+          Connection: 'Upgrade',
+          Upgrade: 'websocket',
+          'Sec-WebSocket-Key': 'dGhlIHNhbXBsZSBub25jZQ==',
+          'Sec-WebSocket-Version': '13',
+        },
       },
       (res) => {
         res.resume();
-        resolve(res.statusCode ?? 0);
+        resolve({ status: res.statusCode ?? 0, type: String(res.headers['content-type'] ?? '') });
       }
     );
     req.on('error', reject);
@@ -55,13 +71,21 @@ const wsUrl = (path: string) => `${BASE.replace(/^http/, 'ws')}${path}`;
 
 // Satu sesi sah untuk semua uji WS: /create dibatasi 3/menit, dan tiap bom socket
 // tidak boleh menghabiskan jatah itu.
-const created = (await (
-  await fetch(`${BASE}/create`, { method: 'POST', headers: { 'CF-Connecting-IP': ownIp } })
-).json()) as {
-  sid?: string;
-  token?: string;
-  wsPath?: string;
-};
+// Ini juga kendali positif seluruh suite: kalau permintaan ini saja tidak dijawab Worker
+// dengan JSON, semua tes di bawahnya cuma mengukur sesuatu yang lain.
+const createRes = await fetch(`${BASE}/create`, { method: 'POST', headers: fakeIp(ownIp) });
+const createText = await createRes.text();
+let created: { sid?: string; token?: string; wsPath?: string };
+try {
+  created = JSON.parse(createText) as typeof created;
+} catch {
+  throw new Error(
+    `/create → HTTP ${createRes.status}, content-type "${createRes.headers.get('content-type')}", ` +
+      `belum JSON: ${createText.slice(0, 80)}\n` +
+      `Permintaanmu tidak sampai ke Worker. Terhadap workers.dev: jangan kirim CF-Connecting-IP ` +
+      `(edge menjawab 403 HTML), dan pastikan PC_BASE_URL milik sendiri.`
+  );
+}
 if (typeof created.sid !== 'string' || typeof created.wsPath !== 'string') {
   throw new Error(`/create gagal — jalankan npm run dev:worker dulu. Jawab: ${JSON.stringify(created)}`);
 }
@@ -83,7 +107,12 @@ function codeOf(frame: string): string {
   }
 }
 
-// Kirim satu payload di socket baru, kumpulkan frame yang pulang dalam 700 ms.
+// Kirim satu payload di socket baru, tunggu sampai gerbang menjawab.
+// Batas 700 ms buta itu hanya sah di localhost: mengunggah frame 1 MB dan 12 MB ke
+// workers.dev dari laptop butuh jauh lebih lama, dan bom besar terbaca "close=1000 tanpa
+// frame" padahal perjalanannya belum selesai — kegagalan alat ukur, bukan kegagalan Worker.
+const BOMB_DEADLINE_MS = 15_000;
+
 function bomb(payload: string): Promise<Probe> {
   return new Promise<Probe>((resolve) => {
     const ws = new WebSocket(wsUrl(wsPath));
@@ -92,16 +121,20 @@ function bomb(payload: string): Promise<Probe> {
     const finish = (closeCode: number) => {
       if (settled) return;
       settled = true;
+      if (ws.readyState === WebSocket.OPEN) ws.close(1000, 'selesai');
       resolve({ codes: raw.map(codeOf), closeCode });
     };
-    ws.addEventListener('message', (ev) => raw.push(String(ev.data)));
+    ws.addEventListener('message', (ev) => {
+      const frame = String(ev.data);
+      raw.push(frame);
+      // Frame apa pun selain welcome berarti keputusan gerbang sudah jatuh; berhenti di
+      // welcome saja akan melaporkan "lulus" untuk bom yang belum dijawab.
+      if (codeOf(frame) !== 'welcome') finish(1000);
+    });
     ws.addEventListener('close', (ev) => finish(ev.code));
     ws.addEventListener('error', () => finish(0));
     ws.addEventListener('open', () => ws.send(payload), { once: true });
-    setTimeout(() => {
-      if (ws.readyState === WebSocket.OPEN) ws.close(1000, 'selesai');
-      else finish(0);
-    }, 700);
+    setTimeout(() => finish(1000), BOMB_DEADLINE_MS);
   });
 }
 
@@ -154,19 +187,39 @@ console.log('\n--- T5: banjir pembuatan sesi ---');
 const floodIp = testIp();
 const statuses: number[] = [];
 for (let i = 0; i < 30; i++) {
-  statuses.push((await fetch(`${BASE}/create`, { method: 'POST', headers: { 'CF-Connecting-IP': floodIp } })).status);
+  statuses.push((await fetch(`${BASE}/create`, { method: 'POST', headers: fakeIp(floodIp) })).status);
 }
 const allowed = statuses.filter((s) => s === 200).length;
 const throttled = statuses.filter((s) => s === 429).length;
-check('T5a', allowed <= 3 && throttled >= 27, `30 create dari 1 IP → ${allowed} lulus, ${throttled} 429`);
+// Di lokal limiter bekerja pada satu instans, jadi 3/60s persis dan boleh diuji keras.
+// Di produksi tidak: "Rate limits are approximate and apply separately in each Cloudflare
+// location" (dokumentasi Rate Limiting, 12 Nov 2026) — dari 30 permintaan banjir, terukur
+// 7 lulus lewat colo yang berbeda-beda dan 23 pulang dengan 429. Itu sifat platform, bukan
+// lubang di kode kita, dan memang bukan tempat pertahanannya: yang melarang sid karangan
+// melahirkan DO adalah gerbang token (T5b).
+// Yang diuji di sini cuma satu hal: limiter benar-benar menolak sebagian besar banjir.
+const dinding = LOCAL ? allowed <= 3 && throttled >= 27 : throttled > 0 && allowed <= 15;
+check(
+  'T5a',
+  dinding,
+  `30 create dari 1 IP → ${allowed} lulus, ${throttled} 429${LOCAL ? ' (satu instans, batas 3)' : ' (per colo, approximate)'}`
+);
 
 // Sid yang bentuknya sempurna tapi tidak pernah keluar dari /create: dulu ini pintu
 // belakangnya (1 DO SQLite per tebakan), sekarang harus 403 sebelum env.SESSION disentuh.
-const forged: number[] = [];
+// Yang ditolak harus 403 MILIK KITA: Worker menjawab JSON, Cloudflare menjawab HTML.
+// Tanpa syarat content-type, satu blokir edge saja bisa membuat tes ini hijau tanpa alasan.
+const forged: { status: number; type: string }[] = [];
 for (let i = 0; i < 30; i++) {
   forged.push(await statusWithUpgrade(`/ws?sid=${genSid()}&tok=${'a'.repeat(64)}`, testIp()));
 }
-check('T5b', forged.every((s) => s === 403), `30 sid palsu → status unik ${[...new Set(forged)].join(',')}`);
+const dariWorker = forged.every((f) => f.type.startsWith('application/json'));
+const statusUnik = [...new Set(forged.map((f) => f.status))].join(',');
+check(
+  'T5b',
+  forged.every((f) => f.status === 403) && dariWorker,
+  `30 sid palsu → status unik ${statusUnik}, ${dariWorker ? 'dijawab Worker (JSON)' : 'BUKAN Worker (HTML edge)'}`
+);
 
 console.log('\n--- T9: jejak di log ---');
 
