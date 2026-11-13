@@ -5,7 +5,8 @@
 // BATAS: hanya boleh ke URL milik sendiri. Tidak ada permintaan ke pihak ketiga di sini.
 // Kerangka T1/T2/T3/T4/T8/T10/T11 ikut baris ini nanti, begitu cmd.* dan join ada.
 import { existsSync, readFileSync } from 'node:fs';
-import { request } from 'node:http';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import { genSid } from '../src/shared/ids';
 
 const BASE = process.env['PC_BASE_URL'] ?? 'http://127.0.0.1:8787';
@@ -17,14 +18,18 @@ const LOG = process.env['PC_LOG_FILE'] ?? '';
 const testIp = () => `198.51.100.${10 + Math.floor(Math.random() * 200)}`;
 const ownIp = testIp();
 
-// fetch (undici) menolak header Upgrade, jadi handshake palsu harus lewat node:http.
+// fetch (undici) menolak header Upgrade, jadi handshake palsu harus lewat node:http(s).
+// Modul dan port default dipilih dari skema BASE: kalau selalu node:http + port 80, tes ke
+// workers.dev (https) akan mengirim HTTP polos, mendapat redirect 301 dari Cloudflare, dan
+// membaca status itu sebagai kalau-nya Worker — bukan status handshake yang sebenarnya.
 function statusWithUpgrade(path: string, ip: string): Promise<number> {
   return new Promise((resolve, reject) => {
     const u = new URL(BASE);
-    const req = request(
+    const secure = u.protocol === 'https:';
+    const req = (secure ? httpsRequest : httpRequest)(
       {
         hostname: u.hostname,
-        port: u.port || 80,
+        port: u.port || (secure ? 443 : 80),
         method: 'GET',
         path,
         headers: { 'CF-Connecting-IP': ip, Connection: 'Upgrade', Upgrade: 'websocket' },
@@ -166,9 +171,23 @@ check('T5b', forged.every((s) => s === 403), `30 sid palsu → status unik ${[..
 console.log('\n--- T9: jejak di log ---');
 
 if (LOG && existsSync(LOG)) {
+  // Tunggu tail benar-benar menulis: tanpa jeda, permintaan terakhir (30 forged 403 dari
+  // T5b) bisa belum sampai ke file saat dibaca, dan T9b lolos karena lognya belum lengkap.
+  await new Promise((r) => setTimeout(r, 1500));
   const text = readFileSync(LOG, 'utf8');
-  check('T9a', !text.includes('AAAA'), 'isi payload tidak tertulis di log dev');
-  check('T9b', !text.includes(created.token ?? '§'), `token sesi tidak tertulis di log (${text.length} byte diperiksa)`);
+  const lines = text.split('\n').length;
+  check('T9a', !text.includes('AAAA'), `isi payload tidak tertulis di log (${lines} baris, ${text.length} byte)`);
+  check('T9b', !text.includes(created.token ?? '§'), 'token sesi tidak tertulis di log');
+  // Kendali positif untuk T9b: sid dan tok duduk di query string yang sama, jadi kalau URL
+  // itu tercatat maka sid pasti ikut muncul. Kalau sid pun tidak muncul, logger ini tidak
+  // merekam query string sama sekali — T9b di atas lolos tanpa membuktikan apa-apa, dan itu
+  // harus tertulis di laporan, bukan tersamar jadi "lulus".
+  const sidSeen = text.includes(sid);
+  console.log(
+    sidSeen
+      ? `BUKTI   T9c  log merekam URL (sid ditemukan) dan tok-nya tidak ikut: T9b terbukti`
+      : `KOSONG  T9c  sid tidak muncul di log — log ini tidak merekam URL, T9b lolos tapi belum terbukti`
+  );
 } else {
   console.log('SKIP  T9  set PC_LOG_FILE ke log wrangler dev untuk memeriksa isi log');
 }

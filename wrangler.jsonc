@@ -3,6 +3,9 @@
   "name": "paranoidclick",
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-11-01",
+  "secrets": {
+    "required": ["SESSION_SIGNING_KEY"]
+  },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
