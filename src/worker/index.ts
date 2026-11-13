@@ -44,6 +44,12 @@ function parseHex(text: string): Uint8Array | null {
   return out;
 }
 
+// Tanpa kunci, token apa pun yang kami mint bisa dihitung ulang oleh siapa pun, jadi dua rute
+// di bawah harus menolak, bukan melayani sesi yang gerbangnya tidak ada.
+function noKey(env: Env): Response | null {
+  return (env.SESSION_SIGNING_KEY ?? '').length === 0 ? json({ error: 'NO_KEY' }, 500) : null;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -55,6 +61,8 @@ export default {
     }
 
     if (url.pathname === '/create') {
+      const blocked = noKey(env);
+      if (blocked) return blocked;
       if (request.method !== 'POST') return json({ error: 'PROTO' }, 405);
       const { success } = await env.CREATE_LIMITER.limit({ key: request.headers.get(IP) ?? 'no-ip' });
       if (!success) return json({ error: 'RATE_LIMITED' }, 429);
@@ -70,9 +78,11 @@ export default {
       }
       const sid = url.searchParams.get('sid');
       if (!isSid(sid)) return json({ error: 'PROTO' }, 400);
+      const blocked = noKey(env);
+      if (blocked) return blocked;
       // Tanpa gerbang ini, rate limit /create tidak mengikat apa pun: `/ws?sid=XXXX` yang
-      // ditebak sendiri sudah enough untuk melahiran 1 DO SQLite, dan skrip bisa mengulang
-      // 1.048.576 kali. Token membuktikan sid benar-benar keluar dari /create.
+      // ditebak sendiri sudah cukup untuk melahirkan 1 DO SQLite, dan skrip bisa mengulang
+      // sampai 1.048.576 kali. Token membuktikan sid benar-benar keluar dari /create.
       // shortcut: kapabilitas sekali-pakai ini ikut di query string (browser tidak bisa
       // mengirim header WS). Cabut kalau nanti pindah ke WebSocket over fetch/headers.
       const tok = parseHex(url.searchParams.get('tok') ?? '');

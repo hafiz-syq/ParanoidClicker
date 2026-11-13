@@ -10,6 +10,10 @@ function req(url: string, init?: RequestInit) {
   return worker.fetch(new Request(url, init), env);
 }
 
+function reqTanpaKunci(url: string, init?: RequestInit) {
+  return worker.fetch(new Request(url, init), { ...env, SESSION_SIGNING_KEY: '' });
+}
+
 function fakeSocket(sent: string[]) {
   return { send: (m: string) => void sent.push(m), close: () => undefined } as unknown as WebSocket;
 }
@@ -38,6 +42,21 @@ it('/create lalu /ws dengan tok yang sah membuka socket', async () => {
   const { wsPath } = (await created.json()) as { wsPath: string };
   const res = await req(`https://example.com${wsPath}`, { headers: { ...ip('8'), Upgrade: 'websocket' } });
   expect(res.status).toBe(101);
+});
+
+// Kunci kosong = token apa pun yang kita mint bisa dihitung ulang oleh siapa pun, jadi
+// satu-satunya jawaban yang benar adalah menolak, bukan melayani sesi tanpa gerbang.
+it('SESSION_SIGNING_KEY kosong membuat /create dan /ws gagal tertutup', async () => {
+  const created = await reqTanpaKunci('https://example.com/create', { method: 'POST', headers: ip('9') });
+  expect(created.status).toBe(500);
+  expect(await created.json()).toMatchObject({ error: 'NO_KEY' });
+  const ws = await reqTanpaKunci(`https://example.com/ws?sid=ABCD&tok=${'a'.repeat(64)}`, {
+    headers: { ...ip('9'), Upgrade: 'websocket' },
+  });
+  // 500, bukan 101: tanpa kunci tidak ada satu pun DO yang boleh berpindah tangan.
+  expect(ws.status).toBe(500);
+  const health = (await (await reqTanpaKunci('https://example.com/health')).json()) as object;
+  expect(health).toMatchObject({ ok: true, keyPresent: false });
 });
 
 it('/health menjawab ok', async () => {

@@ -78,3 +78,8 @@ saat handshake. Ia kapabilitas sekali-pakai per sesi dan tidak menambah rahasia 
 sendiri sudah ada di URL yang sama), tetapi **`resumeToken` dan `leaderToken` tetap tidak boleh
 masuk URL** (§15 T9), dan `wrangler tail` di produksi mencetak URL — itu belum diuji, baru bisa
 dibuktikan setelah deploy.
+
+Kalau `SESSION_SIGNING_KEY` lupa dipasang, `/create` dan `/ws` menjawab `500 {"error":"NO_KEY"}`
+dan `/health` menjawab `keyPresent: false`. Sengaja gagal tertutup: token yang di-mint dari kunci
+kosong bisa dihitung ulang oleh siapa pun, jadi melayani sesi justru lebih bahaya daripada menolak.
+Perilaku ini dijaga oleh tes di `src/worker/session.spec.ts`.
