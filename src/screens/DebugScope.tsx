@@ -156,6 +156,12 @@ export function DebugScope() {
         say(`server menolak: ${String(frame.code)}`);
         return;
       }
+      if (frame.t === 'state') {
+        // Layar ukur belum memakai tempo, tapi frame ini harus tercatat sebagai keadaan,
+        // bukan sebagai "frame tak terduga", supaya log lapangan tetap bisa dibaca.
+        say(`state: bpm=${String(frame.bpm)} running=${String(frame.running)}`);
+        return;
+      }
       if (frame.t !== 'pong' || typeof frame.nonce !== 'number') {
         say(`frame tak terduga: ${ev.data.slice(0, 80)}`);
         return;

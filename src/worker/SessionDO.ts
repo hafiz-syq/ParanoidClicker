@@ -1,6 +1,14 @@
 import { DurableObject } from 'cloudflare:workers';
 import { FrameReject, MAX_MEMBERS, parseFrame } from '../shared/limits';
 import { isSid } from '../shared/ids';
+import { DEFAULT_BPM, LEAD_MS, gridOf, parseBpm, retune, type Grid } from '../shared/tempo';
+
+/** Keadaan sesi yang sebenarnya: satu grid klik, bukan daftar "tick yang sudah dikirim". */
+interface TempoState {
+  bpm: number;
+  anchorMs: number | null;
+  running: boolean;
+}
 
 export class SessionDO extends DurableObject<Env> {
   // Pola resmi Cloudflare: this.sql = ctx.storage.sql (basis data SQLite, bukan KV).
@@ -10,6 +18,10 @@ export class SessionDO extends DurableObject<Env> {
     super(ctx, env);
     this.sql = ctx.storage.sql;
     this.sql.exec('CREATE TABLE IF NOT EXISTS member (did TEXT PRIMARY KEY, joined_at INTEGER NOT NULL)');
+    // CHECK(id = 1) memaksa satu baris: keadaan tempo tidak boleh bercabang jadi dua sejarah.
+    this.sql.exec(
+      'CREATE TABLE IF NOT EXISTS tempo (id INTEGER PRIMARY KEY CHECK (id = 1), bpm INTEGER NOT NULL, anchor_ms INTEGER NOT NULL, running INTEGER NOT NULL)'
+    );
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -40,6 +52,12 @@ export class SessionDO extends DurableObject<Env> {
         return this.hello(ws, frame);
       case 'ping':
         return this.pong(ws, frame);
+      case 'tempo':
+        return this.setTempo(ws, frame);
+      case 'start':
+        return this.transport(true);
+      case 'stop':
+        return this.transport(false);
       default:
         ws.send(JSON.stringify({ t: 'error', code: 'PROTO' }));
     }
@@ -78,6 +96,83 @@ export class SessionDO extends DurableObject<Env> {
         rowsWritten: cursor.rowsWritten,
       })
     );
+    // Yang baru masuk harus langsung sephase, bukan menunggu perubahan tempo berikutnya.
+    ws.send(this.stateFrame(this.readTempo()));
+  }
+
+  // Dibaca dari tabel, bukan dari memori: DO boleh dievict di tengah lagu dan dibangun ulang
+  // dengan tempo yang sama — alasan yang sama dengan hitungan member di hello().
+  private readTempo(): TempoState {
+    const row = this.sql
+      .exec<{ bpm: number; anchor_ms: number; running: number }>('SELECT bpm, anchor_ms, running FROM tempo WHERE id = 1')
+      .toArray()[0];
+    if (!row) return { bpm: DEFAULT_BPM, anchorMs: null, running: false };
+    return { bpm: row.bpm, anchorMs: row.running === 1 ? row.anchor_ms : null, running: row.running === 1 };
+  }
+
+  private writeTempo(state: TempoState): void {
+    this.sql.exec(
+      `INSERT INTO tempo (id, bpm, anchor_ms, running) VALUES (1, ?, ?, ?)
+       ON CONFLICT (id) DO UPDATE SET bpm = excluded.bpm, anchor_ms = excluded.anchor_ms, running = excluded.running`,
+      state.bpm,
+      state.anchorMs ?? 0,
+      state.running ? 1 : 0
+    );
+  }
+
+  private gridOf(state: TempoState): Grid | null {
+    return state.running && state.anchorMs !== null ? gridOf(state.bpm, state.anchorMs) : null;
+  }
+
+  private stateFrame(state: TempoState): string {
+    return JSON.stringify({ t: 'state', bpm: state.bpm, anchorMs: state.anchorMs, running: state.running });
+  }
+
+  private broadcast(state: TempoState): void {
+    const text = this.stateFrame(state);
+    for (const peer of this.ctx.getWebSockets()) {
+      if (peer.readyState === WebSocket.OPEN) peer.send(text);
+    }
+  }
+
+  private apply(from: TempoState, to: TempoState): void {
+    if (from.bpm === to.bpm && from.running === to.running && from.anchorMs === to.anchorMs) return;
+    this.writeTempo(to);
+    this.broadcast(to);
+  }
+
+  /**
+   * shortcut: siapa pun yang punya socket sesi boleh mengganti tempo, belum ada otoritas
+   * pemimpin. Ditutup di M3 (leader token + PIN join), bukan di sini.
+   */
+  private setTempo(ws: WebSocket, frame: Record<string, unknown>): void {
+    const bpm = parseBpm(frame.bpm);
+    if (bpm === null) {
+      // Ditolak ke pengirim saja: satu frame cacat tidak boleh mengubah keadaan sebelas HP.
+      ws.send(JSON.stringify({ t: 'error', code: 'BAD_BPM' }));
+      return;
+    }
+    const cur = this.readTempo();
+    const at = Date.now() + LEAD_MS;
+    const grid = this.gridOf(cur);
+    const next: TempoState = grid
+      ? { bpm, anchorMs: retune(grid, bpm, at).anchorMs, running: true }
+      : { bpm, anchorMs: null, running: false };
+    this.apply(cur, next);
+  }
+
+  private transport(on: boolean): void {
+    const cur = this.readTempo();
+    if (on) {
+      // Start ulang tidak boleh menggeser downbeat yang sudah jalan: anchor dihitung dari jam,
+      // jadi tanpa penjaga ini tombol yang ditekan dua kali membuat semua HP melompat.
+      if (cur.running) return;
+      // Beat 0 jatuh LEAD_MS dari sekarang, jadi klik pertama serentak walau frame-nya
+      // lewat jalan yang berbeda-beda.
+      this.apply(cur, { bpm: cur.bpm, anchorMs: Date.now() + LEAD_MS, running: true });
+      return;
+    }
+    this.apply(cur, { bpm: cur.bpm, anchorMs: null, running: false });
   }
 
   private pong(ws: WebSocket, frame: Record<string, unknown>): void {

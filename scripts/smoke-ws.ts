@@ -28,6 +28,11 @@ ws.addEventListener('message', (ev) => {
     console.log(`welcome members=${String(frame.members)} rowsWritten=${String(frame.rowsWritten)}`);
     return;
   }
+  if (frame.t === 'state') {
+    // Keadaan tempo yang dikirim DO saat hello; smoke hanya perlu melihatnya, bukan menindaklanjuti.
+    console.log(`state bpm=${String(frame.bpm)} running=${String(frame.running)}`);
+    return;
+  }
   if (frame.t !== 'pong' || typeof frame.nonce !== 'number') {
     console.log(`frame tak terduga: ${String(ev.data)}`);
     return;

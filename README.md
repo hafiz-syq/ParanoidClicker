@@ -26,7 +26,7 @@ Buka http://localhost:5173 (atau :8787 untuk build yang sama seperti produksi).
 | `npm run dev` | worker lokal + app, dua-duanya |
 | `npm run build` | bundel app ke `dist/` |
 | `npm run preview` | build + sajikan lewat wrangler (paling mirip produksi) |
-| `npm test` | logika murni (sinkron, batas frame, id) |
+| `npm test` | logika murni (sinkron, grid tempo, batas frame, id) |
 | `npm run test:worker` | Worker + Durable Object di runtime workerd asli |
 | `npm run typecheck` | TS app dan TS worker |
 | `npm run lint:arch` | `src/app/sync/` tetap murni: tanpa impor bare, tanpa API browser, tanpa layer lain |
@@ -195,6 +195,41 @@ dan `/health` menjawab `keyPresent: false`. Sengaja gagal tertutup: token yang d
 kosong bisa dihitung ulang oleh siapa pun, jadi melayani sesi justru lebih bahaya daripada menolak.
 Perilaku ini dijaga oleh tes di `src/worker/session.spec.ts`.
 
+## M1a: grid klik dan keadaan sesi
+
+Satu baris SQLite per sesi menyimpan `(bpm, anchorMs, running)`. `anchorMs` = waktu server saat
+beat 0 jatuh; tiap HP menurunkan beat-nya sendiri dari pasangan itu ditambah θ hasil M0. Tidak
+ada "tick" yang dikirim per beat, jadi satu frame yang terlambat tidak pernah menggeser klik
+perangkat lain.
+
+| Arah | Frame | Isi |
+|---|---|---|
+| klien → DO | `hello` `{sid, did}` | sama seperti M0 |
+| klien → DO | `ping` `{nonce, t1}` | sama seperti M0 |
+| klien → DO | `tempo` `{bpm}` | integer 30..300; selain itu dibalas `error BAD_BPM` ke pengirim saja |
+| klien → DO | `start` / `stop` | tanpa isi |
+| DO → semua | `state` `{bpm, anchorMs, running}` | tiap `hello` dan tiap perubahan |
+
+Tiga keputusan yang membuat diff-nya kecil:
+
+1. **Ganti tempo = ganti grid, bukan koreksi fase.** `retune()` di `src/shared/tempo.ts` memindah
+   anchor ke batas grid lama berikutnya, jadi tidak ada klik yang hilang atau dobel di seam.
+2. **Perubahan jatuh `LEAD_MS` = 300 ms di depan.** p95 RTT lapangan HP #1 = 99 ms, jadi frame
+   sempat mendarat sebelum beat pertama grid baru jatuh.
+3. **Keadaan dibaca dari tabel, bukan dari memori**, sama seperti hitungan member: DO boleh
+   dievict di tengah lagu.
+
+Sudah dibuktikan (14 Nov 2026, semua lokal): 6 tes matematika grid + 17 tes Worker hijau dalam
+`npm run check` (exit 0); `hello` di workerd asli lewat WebSocket asli dibalas `welcome` lalu
+`state bpm=120 running=false` (`npm run smoke`); `npm run attack` tetap lulus (9 OK, T9 SKIP
+karena tidak ada log yang ditangkap). Penjaga `start` ulang diuji dengan melepasnya: tanpanya
+tesnya merah, karena anchor bergeser dan baris SQLite tertulis dua kali — itu juga yang membakar
+kuota "rows written" plan gratis.
+
+BELUM ada: satu HP yang membunyikan klik (M1b: Web Audio + layar), otoritas pemimpin (siapa pun
+di dalam sesi boleh mengirim `tempo`/`start`/`stop` — ditutup M3), dan batas laju perubahan
+keadaan. `proto` di `/health` naik 1 → 2; produksi masih serving proto 1 sampai deploy berikut.
+
 ## Deploy spike ke akun sendiri (M0 lapangan)
 
 Angka keputusan M0 hanya bisa diambil dari HP di tempat latihan, jadi spike ini harus hidup di
@@ -202,7 +237,7 @@ URL asli. Akun Workers Free cukup — tidak ada yang perlu dibayar.
 
 ```
 npm run login                    # buka browser, otorisasi OAuth; cek: npx wrangler whoami
-npm run check                    # typecheck + lint:arch + 23 tes unit + 11 tes worker, harus hijau
+npm run check                    # typecheck + lint:arch + 29 tes unit + 17 tes worker, harus hijau
 npm run secret                   # tempel satu baris hex 64, lihat catatan asal-usul di bawah
 npm run deploy                   # = vite build && wrangler deploy; cetak URL workers.dev
 curl https://paranoidclick.<akun>.workers.dev/health

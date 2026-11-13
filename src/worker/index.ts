@@ -57,7 +57,8 @@ export default {
     if (url.pathname === '/health') {
       // keyPresent, bukan panjangnya: cukup untuk membuktikan `wrangler secret put` menempel
       // di deployment tanpa membocorkan apa pun tentang kunci.
-      return Response.json({ ok: true, proto: 1, keyPresent: (env.SESSION_SIGNING_KEY ?? '').length > 0 });
+      // proto 2 = frame tempo/start/stop + state mulai 14 Nov 2026.
+      return json({ ok: true, proto: 2, keyPresent: (env.SESSION_SIGNING_KEY ?? '').length > 0 });
     }
 
     if (url.pathname === '/create') {

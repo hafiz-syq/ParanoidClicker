@@ -127,9 +127,12 @@ function bomb(payload: string): Promise<Probe> {
     ws.addEventListener('message', (ev) => {
       const frame = String(ev.data);
       raw.push(frame);
-      // Frame apa pun selain welcome berarti keputusan gerbang sudah jatuh; berhenti di
-      // welcome saja akan melaporkan "lulus" untuk bom yang belum dijawab.
-      if (codeOf(frame) !== 'welcome') finish(1000);
+      // Frame apa pun selain welcome/state berarti keputusan gerbang sudah jatuh; berhenti di
+      // welcome saja akan melaporkan "lulus" untuk bom yang belum dijawab. `state` ikut
+      // dilewati karena hello sekarang dibalas dua frame: bom berbentuk hello yang sah tidak
+      // boleh dianggap keputusan.
+      const code = codeOf(frame);
+      if (code !== 'welcome' && code !== 'state') finish(1000);
     });
     ws.addEventListener('close', (ev) => finish(ev.code));
     ws.addEventListener('error', () => finish(0));
