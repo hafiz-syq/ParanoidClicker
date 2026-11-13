@@ -53,6 +53,56 @@ Ambang keputusan (dari HP di tempat latihan, bukan localhost):
 `scripts/smoke-ws.ts` membuktikan pipa socket jalan di localhost; angkanya **bukan** bukti
 jaringan. Catatan lapangan harus disalin dari kotak "Hasil" di layar spike dan disimpan.
 
+### Hasil lapangan pertama (HP #1, 13 Nov 2026 07:19 UTC, sid `35GZ`)
+
+Android + Opera, tab browser (`standalone=false`), 60 sampel dipakai 60, `rejected=0`, `lost=0`.
+
+| angka | terukur |
+| --- | --- |
+| RTT p50 / p95 / max | 48 / 99 / 167 ms |
+| **jitter p95 (w=8, k=4)** | **2,0 ms → lanjut: servo 4 tingkat cukup** |
+| θ yang dipakai (`estimateOffset`) | 657 ms |
+| estimasi bergulir per window | 655,5 … 664 ms — **rentang 8,5 ms sepanjang 60 detik** |
+| θ satu sampel mentah | 586,5 … 690 ms — rentang 103,5 ms |
+| delay terkecil per window | 14 … 18 ms (rentang 4 ms) |
+
+Angka-angka di atas aku hitung ulang sendiri dari 60 stempel mentah dengan fungsi yang sama
+yang dipakai app (`toSample`/`estimateOffset`/`estimateJitter`), dan reproduksi persis kotak
+"Hasil" layar — jadi ini bukan membaca verdict-nya doang.
+
+Tiga hal yang perlu dibaca dengan benar, karena angkanya menipu kalau dibaca cepat:
+
+1. **θ 657 ms bukan keterlambatan jaringan.** Itu jam dinding HP itu yang ketinggalan sekitar
+   setengah detik dari jam Cloudflare. Tidak masalah: setiap HP mengukur θ-nya sendiri terhadap
+   satu jam server yang sama, jadi selisih jam tiap HP saling menghilangkan — selama yang
+   dipakai adalah *fase*, bukan jam dinding.
+2. **Rentang 103,5 ms di baris "θ satu sampel" itu sinyal yang dibuang, bukan sinyal yang
+   dipakai.** Estimator median-dari-4-delay-terkecil duduk di 655,5–664 sepanjang run, dan
+   estimasi kumulitiknya justru mengunci (655,5 → 657,0 dari sampel 10 ke 60). Yang membuat
+   estimator setenang itu adalah jangkar delay terkecil: 14–18 ms, hanya bergerak 4 ms, walau
+   RTT medianya 48 ms dan spikenya sampai 167 ms.
+3. **Baris `10/60 θ=…` di log layar adalah sampel terakhir yang mentah** (`DebugScope.tsx:221`
+   mencetak `s.offsetMs` sampel, bukan `estimateOffset(samples)`), jadi operator yang membaca
+   layar akan melihat 586 → 689 → 657 dan mengira sinkroni rusak padahal tidak. Verdict-nya
+   sendiri sudah dihitung dari estimasi, jadi tidak salah — tapi membingungkan di lapangan.
+
+Tiga yang **belum** terjawab, dan tidak bisa dijawab oleh run ini:
+
+- **Satu HP bukan bukti lima HP.** Gerbangnya berbunyi "dari HP di tempat latihan", dan run ini
+  adalah satu perangkat lewat internet seluler (RTT p50 48 ms bukan angka Wi-Fi venue). Empat
+  HP lain, di ruangan tempat band benar-benar main, masih harus diukur.
+- **Kalibrasi akustik belum pernah diukur sama sekali** — `audio: []` berarti tombol "Ukur audio"
+  tidak pernah ditekan. Jaringan bilang 2 ms; yang menentukan terdengar-tidaknya click adalah
+  latency keluar speaker HP (puluhan ms di Android) dan TWS/earbud BT yang dipakai satu orang.
+  Angka 2 ms tidak menutupi itu sama sekali.
+- **Wake lock ditolak perangkat**: `gagal: NotAllowedError: Wake Lock permission request denied`.
+  Bukan dari kita — tidak ada `Permissions-Policy` di worker maupun aset, jadi penolakannya datang
+  dari browser/perangkat (hemat baterai adalah sebab yang paling mungkin, dan itu belum kuukur).
+  Run ini tetap bersih (t1 berjarak ~1000 ms, jadi CPU-nya tidak sempat tertidur), tapi itu
+  keberuntungan 60 detik di tab yang sedang fokus, bukan jaminan lima menit di kantong. Kalau
+  nanti pengukuran panjang menghasilkan spike saat layar mati, penyebabnya di sini — dan jawabannya
+  menjadwalkan click dari jam Web Audio, bukan `setInterval`.
+
 ## Gerbang keamanan M0
 
 `npm run attack` (§15 T5/T6/T7/T9) dijalankan terhadap worker lokal dan harus hijau sebelum
