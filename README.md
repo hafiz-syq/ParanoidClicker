@@ -417,6 +417,17 @@ bersih`, **100 tes unit** dalam 9 berkas (`servo.spec` 9, `ramp.spec` 11, `click
 `schedule.spec` 19, `live.spec` 16, `offset.spec` 13, `tempo.spec` 6, `limits.spec` 10,
 `gerbang.spec` 2) + **20 tes worker**, 699 ms + 2,61 s.
 
+Dua gerbang yang TIDAK ikut `npm run check` dijalankan terpisah, di worker lokal punya sendiri
+(`wrangler dev --local --port 8790`, bukan server yang dipakai pemeriksa): `npm run smoke` →
+10/10 sampel, 0 dibuang, **offset 0,50 ms**, rtts 1–2 ms, `sid` cacat ditolak; `npm run attack` →
+9 OK (T6a/b/c bom payload, T7a/b prototype pollution, T6e tipe tak dikenal, T6d DO tetap hidup,
+T5a 3 lulus dari 30 `/create` lalu 27 × 429, T5b 403 berstatus unik). `T9` tadinya SKIP dan
+sekarang jalan karena `PC_LOG_FILE` ditunjuk ke log wrangler: **T9a lulus** (isi payload tidak
+tertulis, 153 baris / 7705 byte) dan **T9b lulus** (token sesi tidak tertulis), tapi **T9c KOSONG**
+— `wrangler dev --local` sama sekali tidak merekam URL, jadi "sid tidak muncul di log" di localhost
+bukan bukti bahwa sid tidak bocor; yang terbukti cuma payload dan token tidak terserap log.
+Kebocoran `sid` hanya bisa disimpulkan dari log produksi lewat `npm run tail`.
+
 BELUM / batas yang diketahui di M2:
 
 - Angka di atas diukur di **browser desktop**, bukan HP. `0 hilang`, anchor identik dan delta klik
