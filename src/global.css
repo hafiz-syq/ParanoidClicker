@@ -16,6 +16,15 @@
   color-scheme: dark;
 }
 
+/* Diukur di browser bukti (viewport 390px): textarea .fill punya width:100% + padding
+ * + border bawaan, jadi totalnya 396px dan layar alat-ukur dapat scrollbar horizontal.
+ * Tanpa border-box, kelas .fill akan selalu lebih lebar 6px dari kontainer mana pun. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html,
 body {
   margin: 0;

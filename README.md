@@ -34,7 +34,10 @@ di HP lain jadi pengikut. Alat ukur spike M0 masih di `?layar=ukur`.
 | `npm run test:worker` | Worker + Durable Object di runtime workerd asli |
 | `npm run typecheck` | TS app dan TS worker |
 | `npm run lint:arch` | `src/app/sync/` tetap murni: tanpa impor bare, tanpa API browser, tanpa layer lain |
-| `npm run check` | keempatnya berurutan — gerbang sebelum commit |
+| `npm run cek:ikon` | ikon: tidak ada file kembar, `sizes` = IHDR, rujukan manifest/`index.html` ada |
+| `npm run cek:ikon:http` | versi served: `content-type: image/png` + sha256 body, butuh server; status 200 TIDAK dipakai sebagai bukti |
+| `npm run cek:kontras` | `scripts/cr.mjs`: CR tiap pasangan warna + penjaga kutipan README |
+| `npm run check` | keenamnya berurutan (typecheck, lint:arch, cek:ikon, cek:kontras, test, test:worker) — gerbang sebelum commit |
 | `npm run smoke` | jalur WebSocket asli, butuh `npm run dev:worker` |
 | `npm run attack` | tes serangan T5/T6/T7/T9, butuh `npm run dev:worker` |
 
@@ -286,7 +289,8 @@ sampler yang berjalan di dalam halaman, bukan dari DOM yang dibaca lewat round-t
 | tombol pemimpin di layar pengikut | `-5 -1 +1 +5` dan `Start`/`Stop` semuanya `disabled` |
 | `laju audio` yang terukur | 0,994–1,008× jam dinding |
 
-`npm run check` hijau (exit 0): typecheck, `lint:arch` 2 berkas `src/app/sync`, **60 tes unit**
+`npm run check` hijau (exit 0): typecheck, `lint:arch` 2 berkas `src/app/sync`, `cek:ikon`,
+`cek:kontras`, **60 tes unit**
 (17 di antaranya aritmetika jadwal — rate 2,5, jahitan, `adoptIndex`, `abandonedBeats`, grid
 jahat) + 17 tes worker. `npm run smoke` lulus (rtt ≤ 8 ms, offset 0,00 ms) dan `npm run attack`
 lulus di worker lokal (T5/T6/T7/T9).
@@ -313,8 +317,12 @@ BELUM / batas yang diketahui:
 - Belum ada servo: lompatan θ lebih dari setengah periode akan terdengar tertinggal sampai ping
   berikutnya menyetel ulang → M2.
 - Join masih lewat tautan, belum QR (M4) — dan tautan itu sendiri adalah kunci sesi.
-- Dua tab memakai satu profil browser → satu `did`, jadi "1 HP" di layar; penghitungan member
-  tidak bisa dibuktikan dari browser (`shortcut:` sewa member baru ada di M3).
+- Penghitungan member sudah bisa dibuktikan dari browser — dua *context* yang terisolasi punya dua
+  `did`, dan layar pengikut menampilkan `2 HP`. Yang BELUM: **pemimpin tidak pernah melihat angkanya
+  naik**. `members` cuma dikirim di frame `welcome` (`src/worker/SessionDO.ts:89-98`) dan tidak ada
+  broadcast perubahan anggota, jadi pemimpin tetap tertulis `1 HP` (`bukti/b3-pemimpin.png`) padahal
+  pengikut di sesi yang sama sudah `2 HP` (`bukti/b4-pengikut.png`). Belum dibereskan karena itu
+  perubahan protokol WS, bukan kosmetik.
 - Ikon: `paranoid-32.png` dipakai apa adanya di tab, dan OS menyusunkannya ke 16 px. Belum ada
   versi 16 px yang digambar ulang untuk ukuran itu, dan "Add to Home Screen" di HP asli belum
   diukur — lihat **Ikon & shell PWA**.
@@ -380,6 +388,76 @@ Tab dengan favicon dan "Add to Home Screen" di HP asli belum terukur; yang teruk
 Chromium sendiri meminta `/ikon/paranoid-32.png` dan `/ikon/paranoid-192.png` (ikon itu hanya ada
 di manifest), dan `npm run check` hijau dengan 0 error console.
 
+## Gerbang ikon: tidak ada kembar, tidak ada bukti status
+
+`scripts/gerbang-ikon.mjs` adalah penjaga yang dijalankan, bukan yang diklaim. Ia ikut jalan di
+`npm run check` lewat `npm run cek:ikon`, dan `npm run cek:kontras` (penjaga kutipan `scripts/cr.mjs`)
+juga ikut di sana — dulu keduanya hanya script yang harus diingat orang.
+
+Yang dijaga, dan kenapa:
+
+- **File kembar.** Bug `Marshal.Copy` di atas menghasilkan `paranoid-512.png` identik byte dengan
+  `paranoid-maskable-512.png`, karena satu-satunya perbedaan di antara keduanya hidup tepat di
+  komposit yang terbuang. Penjaga per-file (`terang == 0`) TIDAK bisa melihat itu — dua file kembar
+  sama-sama punya piksel terang. Yang melihatnya hanya perbandingan sha256 antar-berkas, jadi itu
+  yang di-`throw` di sini. Diserang dengan `cp paranoid-512.png paranoid-maskable-512.png`:
+  `IKON KEMBAR: … sha256 sama (555728d44a2608df…) — maskable tidak boleh identik dengan 512 biasa`,
+  exit 1, dan `npm run check` ikut jatuh.
+- **Ukuran yang ditulis = ukuran di file.** `sizes` di manifest dan `sizes` di `index.html` dibaca
+  dari header IHDR tiap PNG, bukan dipercaya; lima rujukan diperiksa, dan ikon tanpa `purpose`
+  maskable membuat manifest gagal.
+- **Status 200 BUKAN bukti.** `wrangler.jsonc` memakai `not_found_handling: "single-page-application"`,
+  jadi path ikon apa pun yang tidak ada balas **200** dengan `text/html`. Pemeriksaan yang menguji
+  ketersediaan lewat status code LULUS UNTUK IKON YANG TIDAK ADA. Karena itu `npm run cek:ikon:http`
+  menguji `content-type: image/png` DAN sha256 body terhadap berkas yang di-commit — dan membawa
+  kontrol positif: `/ikon/tidak-ada.png` harus DITOLAK oleh aturan yang sama.
+
+Peringatan ini bukan teori. Pada tree ini, sesudah `npm run build` tanpa merestart `wrangler dev`
+yang lama, `/assets/index-BhTOPOVU.js` balas `200 text/html; charset=utf-8` — nama file itu memang
+tidak ada lagi di disk, jadi SPA fallback mengirim `index.html`, browser menolak modulnya, dan
+aplikasi jadi layar kosong tanpa satu pun error HTTP. Yang kelihatan adalah 200; yang membuktikan
+adalah content-type.
+
+## Bukti di browser: satu PNG per layar
+
+Gerbang C6 dulu cuma prosa. Sekarang artefaknya ikut di-commit di `bukti/`, diambil dengan
+Playwright (Chromium 157) pada viewport 390×844, `deviceScaleFactor` 2 → semua berkas 780×1688,
+dari `wrangler dev --local` yang menyajikan `dist` di `http://localhost:8791`:
+
+```
+d6dadb64b182d0d16032b6690b5f3a4d9ea51a39680e6eca3ecd49d29c6234a9  bukti/b1-start.png
+1b8dc021b826f99682c710a7f04eee11c06219e50fdd6413e8b30b189bdc39fc  bukti/b2-start-tautan-basi.png
+c50fc319c08c5dc8d73532f5e543a4b50fa6777dfa67c257e483b5e3f95b7535  bukti/b3-pemimpin.png
+0df3a74eae20ae7681e3ef3d0fec207dcc9a70a04a3fedf3e4038e1f995d26be  bukti/b4-pengikut.png
+03d45264bf327aaa794d9da80648933e6f326f2f8cc9733d1433d566f5a55655  bukti/b5-alat-ukur.png
+```
+
+- `b1-start.png` — layar Start di atas `#0b0b0f` dengan teks `#eee` dan tautan `#9cf`: bukti visual
+  bahwa palet satu-tempat itu benar-benar terrender, bukan hanya ada di CSS.
+- `b2-start-tautan-basi.png` — `/?sid=AB&tok=zz` (sid 2 karakter, tok bukan hex): peringatan `#f99`
+  yang dihitung di **Warna layar** tampil di layar nyata, bukan di teori.
+- `b3-pemimpin.png` / `b4-pengikut.png` — satu sesi yang sama, dua *context* browser terisolasi
+  (dua `did` berbeda). Baris grid-nya identik: `bpm=120 anchor=1794714353561 running=true` di dua
+  layar; tombol tempo aktif di pemimpin dan mati (`:disabled`) di pengikut. Angka `1 HP` vs `2 HP`
+  di dua layar itu bukan salah potong — itu bug yang ditulis di **Keterbatasan**.
+- `b5-alat-ukur.png` — DebugScope: `secureContext=true`, `wakeLock=true`, `serviceWorker=true` di
+  browser bukti (di HP asli wake lock pernah `NotAllowedError`, dan itu yang belum terukur).
+
+Artefak ini juga yang menemukan satu bug: `b5` pertama kali keluar 792×1658, artinya kontennya
+melebar 6 px dari viewport. Penyebabnya `textarea.fill { width: 100% }` tanpa `box-sizing`, jadi
+padding + border bawaan menambah lebar — sekarang ada reset `box-sizing: border-box` di
+`src/global.css` dan semua layar terukur `scrollWidth == innerWidth == 390`.
+
+Cara mengambil ulang, urut persis seperti yang dijalankan (viewport 390×844, dsf 2, `fullPage`):
+(1) `/` → `b1`; (2) `/?sid=AB&tok=zz` → `b2`; (3) kembali ke `/`, klik **"Buat sesi baru (saya
+pemimpin)"**, klik **"Buat sesi & bunyikan klik"**, baca `p.pre` pertama = tautan join; (4) context
+KEDUA (terisolasi, jadi `did`-nya beda) buka tautan itu, klik **"Masuk ke sesi …"**; (5) klik
+**"Start"** di pemimpin, tunggu, → `b3` dan `b4`; (6) `/?layar=ukur` → `b5`. `playwright` sengaja
+tidak dijadikan dependency proyek — ia alat bukti, bukan bagian dari runtime aplikasi — jadi yang
+dipakai adalah browser yang sudah ada di mesin ini. Mesin ini PUNYA jalur browser, jadi tidak ada
+KETERBATASAN "tidak bisa menjalankan browser" di gerbang ini; yang belum terukur adalah HP asli
+(lihat **Deploy spike** dan tugas lapangan M0).
+
 ## Deploy spike ke akun sendiri (M0 lapangan)
 
 Angka keputusan M0 hanya bisa diambil dari HP di tempat latihan, jadi spike ini harus hidup di
@@ -387,7 +465,7 @@ URL asli. Akun Workers Free cukup — tidak ada yang perlu dibayar.
 
 ```
 npm run login                    # buka browser, otorisasi OAuth; cek: npx wrangler whoami
-npm run check                    # typecheck + lint:arch + 60 tes unit + 17 tes worker, harus hijau
+npm run check                    # typecheck + lint:arch + cek:ikon + cek:kontras + 60 tes unit + 17 tes worker, harus hijau
 npm run secret                   # tempel satu baris hex 64, lihat catatan asal-usul di bawah
 npm run deploy                   # = vite build && wrangler deploy; cetak URL workers.dev
 curl https://paranoidclick.<akun>.workers.dev/health
