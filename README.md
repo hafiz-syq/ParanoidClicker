@@ -565,7 +565,8 @@ mengecualikan komponen non-aktif.
 ## Ikon & shell PWA
 
 Sumber: `public/ikon/Paranoid.jpg` — grayscale JPEG 480×480, `sha256=ca56e5ff…374491a`, 14120 B,
-disimpan apa adanya (tidak di-encode ulang). Enam PNG-nya ikut di-commit, bukan dihasilkan saat
+disimpan apa adanya (tidak di-encode ulang). Enam PNG keluarga `paranoid-*` ikut di-commit, bukan
+dihasilkan saat
 build: `scripts/buat-ikon.ps1` merender semuanya dengan System.Drawing (mesin ini tidak punya
 `magick`/`ffmpeg`/`cwebp`, dan `convert` di PATH adalah utilitas disk FAT→NTFS Windows, jadi
 jangan pernah memanggilnya). Mark putih di atas hitam pekat, jadi komposisi yang jujur ke latar
@@ -589,6 +590,252 @@ tema M7), dan `paranoid-1024.png` yang baru disimpan untuk cadangan M8 — tidak
 Tab dengan favicon dan "Add to Home Screen" di HP asli belum terukur; yang terukur adalah
 Chromium sendiri meminta `/ikon/paranoid-32.png` dan `/ikon/paranoid-192.png` (ikon itu hanya ada
 di manifest), dan `npm run check` hijau dengan 0 error console.
+**16 Nov:** kalimat di atas mengacu ke tree sebelum permukaan web pindah mark — lihat bagian
+berikutnya; `favicon-16.png`/`favicon-32.png` yang sekarang dirujuk `index.html:9-10`.
+
+## Web pakai mark baru, aplikasi tetap pakai mark lama
+
+Perintah pemilik 2026-11-16: **"logo WEB pakai mark baru ini; logo APLIKASI tetap pakai yang
+lama."** Dua keluarga berkas di satu folder, dipisahkan oleh namanya:
+
+| permukaan | berkas | sumber | dibangun oleh |
+|---|---|---|---|
+| WEB (tab, favicon) | `public/ikon/favicon-16.png`, `favicon-32.png` | `aset/mark-web.png` | `scripts/buat-ikon-web.ps1` |
+| APLIKASI (manifest, iOS, M8) | `public/ikon/paranoid-*.png` | `public/ikon/Paranoid.jpg` | `scripts/buat-ikon.ps1` — TIDAK dijalankan ulang |
+
+Syarat pemilik: sha256 enam ikon lama tidak boleh berubah satu pun. Ini `sha256sum` sebelum dan
+sesudah build, dan diff-nya hanya MENAMBAH dua baris (baris `0a1,2` = tidak ada satu pun hash lama
+yang bergeser):
+
+```
+$ sha256sum public/ikon/*.png public/ikon/*.jpg > sebelum.txt   # lalu scripts/buat-ikon-web.ps1
+$ sha256sum public/ikon/*.png public/ikon/*.jpg > sesudah.txt
+$ diff sebelum.txt sesudah.txt
+0a1,2
+> 34f7abf9836cda25595a8010a292787540e7c9c84cdca4ad2cf2f56c48911d53 *public/ikon/favicon-16.png
+> 071fcaab4de5b10f50257b037e22278ae0b0265ee66c178cc16a04dde773ff19 *public/ikon/favicon-32.png
+```
+
+### Sumber baru tinggal di `aset/`, bukan di `public/`
+
+`aset/mark-web.png` = 411.433 B, `sha256=319fe7c884b9a2c59cbc69194ed4b45e3a453a2b53351f7acac76fcec131b534`.
+Disalin dari berkas temp Qoder (yang bisa dibersihkan kapan saja) dan di-hash **dua kali**: sekali
+pada berkas sumber, sekali pada salinan di repo — angka yang sama, jadi salinannya utuh. Vite
+menyalin `public/` apa adanya ke `dist/`, jadi sumber 411 KB di `public/` akan ikut ke setiap
+unduhan; `aset/` tidak:
+
+```
+$ du -sb public dist aset
+296357  public
+544977  dist
+411433  aset
+$ find dist -type f | grep -c aset
+0
+```
+
+Dua favicon baru jumlahnya 422 + 871 = 1.293 B; sumber 411.433 B tidak masuk ke `dist` sama sekali
+(`grep -c aset` = 0), yang adalah seluruh alasan `aset/` dipakai.
+
+### Yang diukur dari sumbernya, bukan dari laporan
+
+Dua alat, dua lintasan piksel berbeda, atas berkas yang sama. `scripts/ukur-ikon.ps1` adalah skrip
+pengukuran yang ditulis checker dan kusimpan apa adanya (satu lintasan LockBits, sepuluh ambang,
+tanpa `-ReferencedAssemblies` System.Drawing tidak melihat `System.Drawing.Imaging`);
+`buat-ikon-web.ps1 -Ukur` milikku dan tidak memanggil yang itu.
+
+```
+$ powershell -File scripts/ukur-ikon.ps1 -Path aset/mark-web.png
+format=Format32bppArgb size=3264x3264
+alpha[min,max,piksel<255]=0,255,9344357
+luminansi[min,max,mean]=0,254,31
+hist16=9334501,1962,1433,1342,1307,1060,1091,961,1266,1304,1494,1575,1922,2127,2712,1297639
+thr>0: n=1324246 x 25..3061 y 23..3240 -> mark 3037x3218 tengah x=1543 y=1631.5 fraksi=0.9305
+thr>8: n=1320536 x 25..3061 y 23..3240 -> mark 3037x3218 tengah x=1543 y=1631.5 fraksi=0.9305
+thr>16: n=1319023 x 25..3061 y 23..3240 -> mark 3037x3218 tengah x=1543 y=1631.5 fraksi=0.9305
+thr>32: n=1317133 x 25..3061 y 23..3240 -> mark 3037x3218 tengah x=1543 y=1631.5 fraksi=0.9305
+thr>48: n=1315720 x 25..3061 y 23..3240 -> mark 3037x3218 tengah x=1543 y=1631.5 fraksi=0.9305
+thr>64: n=1314355 x 25..3061 y 23..3240 -> mark 3037x3218 tengah x=1543 y=1631.5 fraksi=0.9305
+thr>96: n=1312008 x 25..3061 y 23..3240 -> mark 3037x3218 tengah x=1543 y=1631.5 fraksi=0.9305
+thr>128: n=1309811 x 25..3061 y 23..3240 -> mark 3037x3218 tengah x=1543 y=1631.5 fraksi=0.9305
+thr>192: n=1304323 x 25..3061 y 23..3240 -> mark 3037x3218 tengah x=1543 y=1631.5 fraksi=0.9305
+thr>240: n=1297385 x 25..3061 y 23..3240 -> mark 3037x3218 tengah x=1543 y=1631.5 fraksi=0.9305
+pixel(0,0) = #000000 a=0
+pixel(3263,0) = #000000 a=0
+pixel(0,3263) = #000000 a=0
+pixel(3263,3263) = #000000 a=0
+pixel(1632,1632) = #FFFFFF a=255
+pixel(1632,195) = #FFFFFF a=255
+pixel(1632,3068) = #F3F3F3 a=221
+bytes=411433
+
+$ powershell -File scripts/buat-ikon-web.ps1 -Src aset/mark-web.png -OutDir aset -Ukur
+sumber aset/mark-web.png 3264x3264 format=Format32bppArgb
+rgb(> 48)   x 25..3061 y 23..3240 -> 3037x3218 n=1315700 tengah x=1543 y=1631.5 margin kiri=25 kanan=202 atas=23 bawah=23
+tinta(> 48) x 534..2734 y 84..3102 -> 2201x3019 n=1308741 tengah x=1634 y=1593 margin kiri=534 kanan=529 atas=84 bawah=161
+alpha>0 n=1937133 alpha[min,max]=0,255  alpha>0 & maxKanal<128 (bagian gelap/bayangan) = 627274  maxDeltaKanal = 0
+ekor rgb>tinta: kanan x 2735..3061 = 9 piksel (alpha[max]=27) | bawah y 3103..3240 = 11 piksel (alpha[max]=76) | inti 1315662 piksel, maxRGB*alpha/255 rata-rata = 251.81
+```
+
+`thr>0 … thr>240` di atas adalah box berbasis **max kanal RGB**, dan box itu tidak bergerak sama
+sekali di sepuluh ambang — bahkan `pixel(1632,3068) = #F3F3F3 a=221` menunjukkan RGB-nya sendiri
+menyusut di tepi, bukan hanya alpha. Baris `tinta(> 48)` adalah box berbasis **max RGB × alpha**
+(seberapa banyak cahaya yang benar-benar sampai ke kanvas), dan dia berhenti 327 px lebih awal di
+kanan (2734 vs 3061) serta 138 px lebih awal di bawah (3102 vs 3240). Baris `ekor rgb>tinta`
+menghitung siapa yang membuat selisih itu: **9 piksel** di pita kanan (alpha tertingginya 27) dan
+**11 piksel** di pita bawah (alpha tertingginya 76), di antara 1.315.662 piksel inti. Jadi box rgb
+diseret 327 px oleh 20 piksel nyaris hampa, sementara inti mark rata-rata memancarkan 251,81 dari
+255 level. Angka inilah yang membuat `buat-ikon-web.ps1` menengahkan dengan box premultiplied.
+
+Catatan supaya tidak tertukar saat mengukur ulang: `-Ukur` mengukur salinan `Format32bppArgb`
+buatan GDI+, `ukur-ikon.ps1` mengukur hasil decode langsung. Hitungannya beda sampai puluhan
+piksel (n=1.315.700 vs 1.315.720 pada ambang 48) — itu resampling 1:1, bukan dua sumber berbeda.
+Dan `627.274` (baris `alpha>0 & maxKanal<128`) dengan `627.794` (turunan di bawah ini) adalah dua
+predikat yang berbeda: yang pertama menyaring kanal gelap, yang kedua menyaring alpha.
+
+Angka-angka itu yang menentukan bentuk jalurnya, dan tiga di antaranya membuat `buat-ikon.ps1`
+tidak bisa dipakai apa adanya:
+
+1. **Sumbernya ber-alpha, bukan JPEG pekat.** `ukur-ikon.ps1` mencetak `piksel<255 = 9.344.357`
+   dari 3264×3264 = 10.653.696 (87,71%) — tapi 8.716.563 di antaranya alpha=0 (10.653.696 −
+   `alpha>0` 1.937.133), jadi yang benar-benar menarik adalah 9.344.357 − 8.716.563 = **627.794
+   piksel semi-transparan**. `buat-ikon.ps1:101` memaksa `db[j+3] = 255` sesudah komposit. Untuk
+   ikon aplikasi itu memang yang diinginkan; untuk web itu menghapus satu-satunya pilihan latar.
+2. **Tintanya tidak cuma putih.** `maxDeltaKanal = 0` → setiap piksel ber-alpha netral (R=G=B),
+   tapi 627.274 di antaranya `maxRGB < 128`: bayangan lunak yang dibakar di sekeliling glyph.
+   Komposisi SCREEN (`buat-ikon.ps1:99`) **membuang** piksel gelap — hitam di atas latar apa pun
+   tetap latar itu — jadi bayangannya hilang tanpa error. Yang jujur di sini SRC-OVER
+   (`rgb*alpha + latar*(1-alpha)`), dan itu yang dipakai `buat-ikon-web.ps1`.
+3. **Dua bounding box, dua pusat.** Pusat box RGB ada di x=1543, y=1631,5; pusat box premultiplied
+   (baris `tinta`) di x=1634, y=1593 — selisih 91 px horizontal dan 38,5 px vertikal, disebabkan 20
+   piksel ekor ber-alpha ≤76 itu. Margin box RGB memang asimetris (kiri 25 vs kanan 202 — bukan
+   salah crop, memang begitu sumbernya), sedangkan box premultiplied hampir simetris (534 vs 529).
+   **Yang dipakai untuk menengahkan dan men-skala adalah box premultiplied.** Kalau box RGB yang
+   dipakai, `ox = ukuran/2 − 1543·scale` lebih besar daripada `ukuran/2 − 1634·scale`, jadi tinta
+   jatuh 91·scale = **0,42 px ke kanan di kanvas 16 px** dan **0,83 px di 32 px** (skala 0,00456 /
+   0,00912 yang tercetak di laporan build), dan 38,5·scale = 0,18 / 0,35 px ke atas. Simpangan itu
+   masih sub-piksel, tapi arahnya salah dan tidak bisa diperbaiki lewat mata — makanya tidak dipakai.
+
+### Kenapa favicon-nya kotak pekat, bukan PNG transparan — dihitung
+
+Mark-nya tinta putih. Kalau disimpan transparan, yang melihatnya adalah warna tab browser, dan itu
+bukan warna yang kita pilih:
+
+```
+$ node --input-type=module -e "
+import { cr } from './scripts/cr.mjs';
+const p = [['#ffffff','#dee1e6','tinta mark putih di atas tab Chromium TERANG'],
+           ['#ffffff','#ffffff','tinta mark putih di atas toolbar/new-tab putih'],
+           ['#ffffff','#0b0b0f','tinta mark di atas kotak favicon yang dibangun'],
+           ['#0b0b0f','#dee1e6','kotak favicon vs tab Chromium terang'],
+           ['#0b0b0f','#202124','kotak favicon vs tab Chromium gelap']];
+for (const [a,b,k] of p) console.log(k.padEnd(46), a, 'vs', b, '= CR', cr(a,b).toFixed(2)+':1');"
+
+tinta mark putih di atas tab Chromium TERANG   #ffffff vs #dee1e6 = CR 1.31:1
+tinta mark putih di atas toolbar/new-tab putih #ffffff vs #ffffff = CR 1.00:1
+tinta mark di atas kotak favicon yang dibangun #ffffff vs #0b0b0f = CR 19.64:1
+kotak favicon vs tab Chromium terang           #0b0b0f vs #dee1e6 = CR 14.98:1
+kotak favicon vs tab Chromium gelap            #0b0b0f vs #202124 = CR 1.22:1
+```
+
+Bentuk barisnya sengaja `vs`, bukan `di ... =` seperti output `scripts/cr.mjs`: penjaga kutipan di
+`cekKutipanREADME` membandingkan baris ber-bentuk itu dengan daftar `PAIRS` script tersebut, dan
+pasangan warna tab browser memang bukan bagian daftar itu. Rumusnya tetap fungsi yang sama —
+`cr()` yang diimpor dari `scripts/cr.mjs`, bukan salinan rumus.
+
+1.31:1 dan 1.00:1 artinya glyph-nya tidak ada di tab terang. Karena itu web dibangun di atas
+`#0b0b0f` — sama seperti ikon aplikasi dan `theme-color` — dan konsekuensinya ditulis apa adanya:
+di tab gelap tepi kotaknya menyatu (1.22:1), tapi glyph di dalamnya tetap 19.64:1 terhadap kotaknya
+sendiri. Yang hilang cuma garis tepi, bukan logonya.
+
+### `InkFrac` dipilih dari angka, bukan dari rasa
+
+Sweep empat fraksi tinggi-tinta (0 = kanvas penuh di script lama) ke direktori kerja, ukuran yang
+sama dilaporkan untuk 16 dan 32 px:
+
+| `InkFrac` | digambar (px) | margin @16 | pxTerang @16 | sendiri @16 | pxTerang @32 | sendiri @32 |
+|---|---|---|---|---|---|---|
+| 0.70 | 12.11 / 24.22 | 1.94 | 32 | 0 | 101 | 0 |
+| 0.78 | 13.49 / 26.99 | 1.25 | 33 | 0 | 132 | 0 |
+| **0.86** | **14.88 / 29.75** | **0.55** | **44** | **0** | **149** | **0** |
+| 0.92 | 15.91 / 31.83 | 0.03 | 51 | 0 | 161 | 0 |
+
+0.92 paling banyak piksel terangnya, dan ditolak justru karena angka keduanya: `offset=(0.03,0.23)`
+pada 16 px berarti kanvas sumber menempel tepi ikon, dan dua runcing atas-bawah glyph — ciri
+utamanya — jadi baris terakhir piksel. 0.86 dipilih. Gate pemotongan di `buat-ikon-web.ps1` sudah
+diserang, bukan cuma ditulis: `-InkFrac 0.95` keluar dengan
+
+```
+kanvas sumber terpotong di …\favicon-32.png: draw=32.87 offset=(-0.45,-0.04) untuk ikon 32 px pada inkFrac=0.950 (maks 0.925)
+```
+
+jadi fraksi yang memotong runcing glyph tidak bisa masuk diam-diam kalau seseorang mengganti angkanya.
+
+### Legibilitas 16 dan 32 px diukur di BROWSER yang menyajikan berkasnya
+
+Angka di atas adalah output `browser_evaluate` pada `http://127.0.0.1:8787` (`wrangler dev
+--assets=dist`): tiap berkas dimuat sebagai `<img>`, digambar ke canvas, lalu `getImageData`.
+"diturunkan browser ke 16" = apa yang Chromium lakukan sendiri ketika tab 1× hanya punya berkas
+32 px — jadi baris itu bukan resample versiku, tapi resample browser.
+
+| berkas / perlakuan | pxTerang | sendiri | min RGBA | max RGBA |
+|---|---|---|---|---|
+| `favicon-32.png` di 32 px | 149 | 0 | 7,7,9,255 | 255,255,255,255 |
+| `favicon-32.png` **diturunkan browser ke 16** | 43 | 0 | 10,10,14,255 | 255,255,255,255 |
+| `favicon-16.png` native 16 | 44 | 0 | 10,10,14,255 | 255,255,255,255 |
+| `paranoid-32.png` (LAMA) di 32 px | 132 | **4** | 11,11,15,255 | 255,255,255,255 |
+| `paranoid-32.png` (LAMA) diturunkan ke 16 | 38 | **2** | 11,11,15,255 | 254,254,254,255 |
+
+`sendiri` = piksel terang yang keempat tetangganya gelap: penanda stroke yang putus jadi bintik.
+Mark baru nol di kedua ukuran; mark lama punya 4 di 32 px dan 2 di 16 px. Mark baru juga lebih
+banyak massanya (149 vs 132 di 32; 44 vs 38 di 16) dan menyentuh putih penuh (255) sesudah
+diturunkan, sedangkan yang lama mentok di 254. `min` 7 pada 32 px adalah bayangan yang SRC-OVER
+pertahankan (latar `#0b0b0f` = 11,11,15, jadi 7 berarti lebih gelap dari latarnya).
+
+Cross-check alat kedua, `scripts/ukur-ikon.ps1` di atas berkas yang sama di disk:
+
+```
+favicon-16.png  thr>48: n=44  x 4..12 y 2..13 -> mark 9x12 tengah x=8 y=7.5   alpha[min,max]=255,255  bytes=422
+favicon-32.png  thr>48: n=149 x 6..24 y 4..27 -> mark 19x24 tengah x=15 y=15.5 alpha[min,max]=255,255  bytes=871
+```
+
+Dua lintasan piksel yang tidak saling memanggil memberi 44 dan 149 — angka yang sama dengan yang
+dicetak build script dan browser.
+
+Artefaknya: `bukti/b8-favicon-16-32.png` (848×880, Chromium lewat Playwright, `scale: css`) —
+baris 1 tab mock `#dee1e6`, baris 2 `#202124`, baris 3–4 tiap berkas diperbesar 10× tanpa smoothing
+(`imageSmoothingEnabled = false`), jadi yang terlihat adalah piksel asli berkas yang disajikan.
+**Batasannya ditulis, tidak disembunyikan:** Playwright tidak bisa merekam strip tab Chromium —
+screenshot browser hanya sampai viewport. Yang dibuktikan b8 adalah berkas yang benar-benar
+dijajikan, digambar browser, di ukuran yang benar-benar dipakai; bukan tangkayan layar tab.
+Tab asli di HP (dan `apple-touch-icon` di iOS) masih belum terukur, sama seperti sebelumnya.
+
+### Gerbang baru: dua permukaan tidak boleh bertukar keluarga
+
+Keputusan pemilik itu sekarang diperiksa, bukan dipercaya (`scripts/gerbang-ikon.mjs` §2b, jalan di
+`npm run cek:ikon` DAN di `npm run check` lewat `scripts/gerbang.spec.ts`): tiap `<link rel="icon">`
+harus menunjuk `favicon-*`, tiap ikon manifest dan `apple-touch-icon` harus menunjuk `paranoid-*`.
+Diserang dengan mengganti favicon kembali ke mark lama:
+
+```
+$ node scripts/gerbang-ikon.mjs        # index.html sengaja ditunjuk ke /ikon/paranoid-32.png
+gerbang ikon: 1 KLAIM GAGAL
+  index.html rel="icon": /ikon/paranoid-32.png adalah permukaan WEB — harus favicon-* (mark baru), bukan keluarga paranoid-*
+```
+
+`index.html` dikembalikan sesudah serangan, dan `npm run cek:ikon` pada tree ini menutup dengan
+`gerbang ikon: 8 berkas, 6 rujukan, tidak ada kembar, semua sha+IHDR cocok`.
+
+### Tiga hal yang jadi keputusan pemilik, bukan keputusanku
+
+1. **`apple-touch-icon`** sekarang masih `paranoid-180.png` (mark lama). Ia abu-abu: file-nya
+   dipakai saat orang "Add to Home Screen" (= permukaan aplikasi), tapi tag-nya ada di `index.html`
+   (= halaman web). Aku tidak memilih sendiri.
+2. **Mark di dalam layar** (README bagian "Ikon & shell PWA", masih tercatat sebagai keputusan
+   bersama tema M7) — belum disentuh; itu `src/`, dan kotak persetujuan M3a masih kosong.
+3. **`og:image` belum ada sama sekali.** Menambahkannya berarti (a) satu gambar 1200×630 yang
+   layout-nya belum diputuskan dan (b) URL absolut ke produksi — dan itu tidak bisa kubuktikan dari
+   sini tanpa deploy, yang tidak diizinkan.
+
 
 ## Gerbang ikon: tidak ada kembar, tidak ada bukti status
 

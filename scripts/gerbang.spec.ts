@@ -25,7 +25,7 @@ it('README tidak menyimpan satu pun baris CR yang tidak dihasilkan scripts/cr.mj
   ).toEqual([]);
 });
 
-it('keenam ikon berbeda byte-untuk-byte dan sizes yang ditulis dokumen = IHDR sebenarnya', () => {
+it('ikon web dan ikon aplikasi berbeda byte, sizes yang ditulis dokumen = IHDR sebenarnya, dan permukaan tidak bertukar keluarga', () => {
   const g = cekIkon();
   expect(g.gagal, 'ikon: kembar / sizes bohong / rujukan manifest+index.html hilang').toEqual([]);
   const h = (nama: string) => g.berkas.get(nama)?.hash as string | undefined;

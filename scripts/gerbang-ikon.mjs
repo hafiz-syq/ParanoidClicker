@@ -61,6 +61,21 @@ export const cekIkon = () => {
     rujukan.push({ src: /href="([^"]+)"/.exec(tag)?.[1], sizes: /sizes="([^"]+)"/.exec(tag)?.[1], type: /type="([^"]+)"/.exec(tag)?.[1], dari: `index.html rel="${rel}"` });
   }
   if (!manifest.icons?.some((i) => /\bmaskable\b/.test(i.purpose ?? ''))) gagal.push('manifest: tidak ada ikon purpose maskable');
+
+  // (2b) PEMISAHAN PERMUKAAN. Keputusan pemilik 2026-11-16: "logo WEB pakai mark baru ini;
+  // logo APLIKASI tetap pakai yang lama." Dua keluarga berkas itu hidup di satu folder dan
+  // satu-satunya yang membedakan nama: <link rel=icon> = web (favicon-*, sumber aset/mark-web.png
+  // ber-alpha), manifest + apple-touch-icon = aplikasi (paranoid-*, sumber Paranoid.jpg).
+  // Aturan ini yang menjaga supaya pemindahan arah tidak terjadi diam-diam: kalau seseorang
+  // menunjuk favicon kembali ke paranoid-32.png, atau ikon manifest dibangun dari mark web,
+  // penjaga ini menggigit tanpa perlu membandingkan byte.
+  for (const r of rujukan) {
+    const web = r.dari === 'index.html rel="icon"';
+    const nama = r.src.replace(/^\/ikon\//, '');
+    if (web && !nama.startsWith('favicon-')) gagal.push(`${r.dari}: ${r.src} adalah permukaan WEB — harus favicon-* (mark baru), bukan keluarga paranoid-*`);
+    if (!web && !nama.startsWith('paranoid-')) gagal.push(`${r.dari}: ${r.src} adalah permukaan APLIKASI — harus paranoid-* (mark lama), jangan favicon-*`);
+  }
+
   for (const r of rujukan) {
     const v = berkas.get(r.src.replace(/^\//, ''));
     if (!v) {
