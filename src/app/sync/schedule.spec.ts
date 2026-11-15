@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { beatMs, gridOf, periodOf, retune, type Grid } from '../../shared/tempo';
+import { LEAD_MS, beatIndexAt, beatMs, gridOf, periodOf, retune, type Grid } from '../../shared/tempo';
 import {
   BEATS_PER_BAR,
+  LOOKAHEAD_MS,
   abandonedBeats,
   adoptIndex,
   firstPlayableIndex,
@@ -189,7 +190,7 @@ describe('adoptIndex', () => {
 
   it('tepat waktu: beat pertama grid baru adalah jahitan itu sendiri', () => {
     // Cursor 6 = beat 0..5 grid lama sudah disetel; beat 6 (3000 ms) belum.
-    expect(adoptIndex(lama, 6, baru, serverNow)).toBe(0);
+    expect(adoptIndex(lama, 6, baru, serverNow).index).toBe(0);
     expect(beatMs(baru, 0)).toBe(jahitan);
   });
 
@@ -198,15 +199,48 @@ describe('adoptIndex', () => {
     // Cursor 7 berarti grid lama sudah menyetel oscillator pada 3000 ms. Grid baru yang
     // ikut mulai di 3000 ms menghasilkan klik ganda persis di jahitan — harga yang dibayar
     // di sini adalah beat 0 milik grid baru, bukan bunyi ganda.
-    expect(adoptIndex(lama, 7, baru, serverNow)).toBe(1);
+    expect(adoptIndex(lama, 7, baru, serverNow).index).toBe(1);
     expect(beatMs(baru, 1)).toBeCloseTo(jahitan + periodOf(90), 6);
     // Tanpa beat yang sudah disetel (cursor 0), tidak ada yang boleh dibuang.
-    expect(adoptIndex(lama, 0, baru, serverNow)).toBe(0);
+    expect(adoptIndex(lama, 0, baru, serverNow).index).toBe(0);
   });
 
   it('layar yang belum pernah menyetel apa pun ikut jam server', () => {
-    expect(adoptIndex(null, 0, G120, anchor + 2 * periodOf(120) + 5)).toBe(3);
-    expect(adoptIndex(null, 0, G120, BRIDGE.wallMs + THETA)).toBe(0);
+    expect(adoptIndex(null, 0, G120, anchor + 2 * periodOf(120) + 5).index).toBe(3);
+    expect(adoptIndex(null, 0, G120, BRIDGE.wallMs + THETA).index).toBe(0);
+  });
+
+  it('beat yang tertelan di bawah patokan dilaporkan sebagai angka, bukan hilang diam-diam', () => {
+    // Utang yang dibayar (ADR-0003): frame `state` yang mendarat terlambat membuat beat grid
+    // baru jatuh di dalam sisa antrean grid lama dan beat itu DIBUANG. Sebelumnya hanya
+    // komentarnya yang tahu; `abandonedBeats` mengukur dari serverNow dan melaporkan 0.
+    const lama = gridOf(120, 0);
+    // Beat 0..5 (2500 ms) sudah disetel, jam server 2400 ms → antrean masih memegang 2500 ms.
+    const serverNow = 2_400;
+    const cursor = 6;
+    const baru = gridOf(90, 2_450); // beat 0-nya 2450 ms: di dalam jendela antrean, bukan di jahitan
+    const a = adoptIndex(lama, cursor, baru, serverNow);
+    expect(firstPlayableIndex(baru, serverNow)).toBe(0);
+    expect(a.index).toBe(1);
+    expect(a.swallowed).toBe(1);
+    // Yang dijahit retune bukan lubang: beat 2450 tetap berbunyi dari antrean grid lama di
+    // waktu yang sama persis, jadi yang tertelan nol.
+    const jahitan = adoptIndex(lama, cursor, retune(lama, 90, 2_500), serverNow);
+    expect(jahitan.swallowed).toBe(0);
+  });
+
+  it('jahitan tempo dengan lead server tidak pernah menelan beat, untuk tempo apa pun', () => {
+    // Ini identitas yang membuat ramp (ADR-0002) aman: LEAD_MS 300 > LOOKAHEAD_MS 120, jadi
+    // beat pertama grid baru selalu jatuh sesudah ekor antrean grid lama.
+    const lama = gridOf(120, 0);
+    for (let t = 0; t < 4 * periodOf(120); t += 17) {
+      // Cursor = beat pertama yang belum sempat disetel pada jam server t.
+      const cursor = beatIndexAt(lama, t + LOOKAHEAD_MS) + 1;
+      for (const bpm of [30, 60, 90, 120, 180, 240, 300]) {
+        const baru = retune(lama, bpm, t + LEAD_MS);
+        expect(adoptIndex(lama, cursor, baru, t).swallowed).toBe(0);
+      }
+    }
   });
 });
 
@@ -230,7 +264,7 @@ describe('abandonedBeats', () => {
     const baru = retune(lama, 90, 3_000);
     // adoptIndex membuang beat 0 grid baru (3000 ms), tapi beat itu SUDAH ada di antrean
     // oscillator grid lama — jadi yang hilang tetap nol, bukan satu.
-    expect(adoptIndex(lama, 7, baru, 2_500)).toBe(1);
+    expect(adoptIndex(lama, 7, baru, 2_500).index).toBe(1);
     expect(abandonedBeats(lama, 7, 2_500)).toBe(0);
   });
 });

@@ -6,10 +6,12 @@ import {
   abandonedBeats,
   adoptIndex,
   planBeats,
+  startsLater,
   wallMsOf,
   type BeatJob,
   type ClockBridge,
 } from '../sync/schedule';
+import { servoAdvance, servoIdle, servoSetTarget, type Servo } from '../sync/servo';
 
 const ACCENT_HZ = 1760;
 const CLICK_HZ = 1175;
@@ -37,6 +39,12 @@ export interface ClickStats {
   audioStalled: boolean;
   /** Selisih (ms) antara waktu render yang diminta dan waktu blok terakhir ctx. */
   latencyCompMs: number;
+  /** θ yang SEKARANG dipakai klik — bisa tertinggal dari hasil ukur, karena servo bertingkat. */
+  thetaMs: number;
+  /** Berapa kali θ ditutup sekali lompat (≥ setengah periode): jalur pemulihan, bukan jitter. */
+  thetaJumps: number;
+  /** Beat grid baru yang dibuang di jahitan karena antrean grid lama sudah memegangnya. */
+  swallowed: number;
   /** Berapa milidetik bunyi datang terlambat dari yang diminta — diukur di dalam browser. */
   driftP50Ms: number;
   driftP95Ms: number;
@@ -60,16 +68,24 @@ function contextCtor(): AudioCtor | null {
  * berikutnya yang belum disetel. Semuanya turunan — jam (bridge), θ, dan kompensasi latency
  * boleh berubah kapan saja tanpa ada keadaan yang bisa saling bertentangan.
  *
- * shortcut: tanpa servo (M2). HP yang θ-nya bergeser lebih dari setengah periode akan
- * terdengar tertinggal sampai ping berikutnya menyetel ulang; upgrade saat M2.
+ * θ masuk lewat servo 4 tingkat (ADR-0001): satu tingkat per TICK_MS, jadi satu koreksi
+ * selesai dalam 100 ms — lebih cepat dari satu pong. Jalur wewenangnya NUDGE_ONLY: servo
+ * tidak pernah menulis `anchorMs` dan tidak pernah mengirim frame apa pun.
  */
 export class ClickEngine {
   private ctx: AudioContext | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private live = new Set<OscillatorNode>();
   private grid: Grid | null = null;
+  /**
+   * Grid dari frame `state` yang `anchorMs`-nya masih di depan. Dibunyikannya baru mulai
+   * pada anchor itu (ADR-0004); sampai saat itu grid lama tetap yang dipakai menyetel beat,
+   * karena beat grid lama di antara ekor antrean dan anchor adalah klik yang benar-benar
+   * akan dibunyikan dan tidak boleh dibuang oleh frame yang datang lebih awal.
+   */
+  private pending: Grid | null = null;
   private nextIndex = 0;
-  private thetaMs = 0;
+  private servo: Servo = servoIdle(0);
   private compMs = 0;
   private rate = 1;
   private rateRef: ClockBridge | null = null;
@@ -78,6 +94,8 @@ export class ClickEngine {
   private stalled = false;
   private played = 0;
   private missed = 0;
+  private swallowed = 0;
+  private thetaJumps = 0;
   private drifts: number[] = [];
   private lastKey = '';
 
@@ -108,19 +126,45 @@ export class ClickEngine {
       this.stop();
       return;
     }
-    // Cursor tidak boleh mundur: beat grid lama yang sudah antre di oscillator akan
-    // ditumpuki beat grid baru pada waktu yang sama kalau adopsi mulai dari `now` saja.
+    if (this.grid && startsLater(grid, this.serverNowMs())) {
+      this.pending = grid;
+      return;
+    }
+    this.pending = null;
+    this.adopt(grid);
+  }
+
+  /**
+   * Serah terima yang sebenarnya: cursor lama boleh melompat MAJU, tapi tidak boleh mundur,
+   * karena beat yang sudah sempat disetel masih ada di antrean oscillator.
+   */
+  private adopt(grid: Grid): Grid {
     const serverNow = this.serverNowMs();
     // Lompatan maju itu sendiri membuang klik, dan harus terhitung: frame `state` yang
     // mendarat sesudah tab beku adalah cara paling sering jalur ini dilewati.
     if (this.grid) this.missed += abandonedBeats(this.grid, this.nextIndex, serverNow);
-    this.nextIndex = adoptIndex(this.grid, this.nextIndex, grid, serverNow);
+    const adopt = adoptIndex(this.grid, this.nextIndex, grid, serverNow);
+    // Beat yang tertelan di jahitan bukan klik hilang: ia sudah berbunyi dari antrean grid
+    // lama. Digabung ke `missed` akan mengajari operator mengabaikan angka `0 hilang`.
+    this.swallowed += adopt.swallowed;
+    this.nextIndex = adopt.index;
     this.grid = grid;
     this.startTimer();
+    return grid;
   }
 
   setTheta(thetaMs: number): void {
-    this.thetaMs = thetaMs;
+    // Belum ada satu beat pun yang disetel → tidak ada yang bisa dobel atau ditumpuk, jadi
+    // θ dipakai seketika. Ini jalur 657 ms HP pertama (ADR-0001), bukan servo yang bocor.
+    if (this.nextIndex === 0) {
+      if (Number.isFinite(thetaMs)) this.servo = servoIdle(thetaMs);
+      this.report();
+      return;
+    }
+    const r = servoSetTarget(this.servo, thetaMs, this.grid?.periodMs ?? Number.POSITIVE_INFINITY);
+    if (r.jumped) this.thetaJumps++;
+    this.servo = r.servo;
+    this.report();
   }
 
   setLatencyComp(ms: number): void {
@@ -136,6 +180,8 @@ export class ClickEngine {
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
     this.grid = null;
+    // Frame `state` yang sudah di jalan tidak boleh menyelinap jadi klik setelah Stop.
+    this.pending = null;
     this.silence();
     this.report();
   }
@@ -151,7 +197,7 @@ export class ClickEngine {
   }
 
   private serverNowMs(): number {
-    return Date.now() + this.thetaMs;
+    return Date.now() + this.servo.appliedMs;
   }
 
   private silence(): void {
@@ -203,8 +249,11 @@ export class ClickEngine {
 
   private tick(): void {
     const ctx = this.ctx;
-    const grid = this.grid;
+    let grid = this.grid;
     if (!ctx || !grid) return;
+    // Satu tingkat per tick, di depan segalanya: θ tidak boleh menunggu jam audio sehat,
+    // karena tab yang beku pun terus diberi pong.
+    this.servo = servoAdvance(this.servo);
     if (ctx.state !== 'running') {
       // Konteks beku: jam audio berhenti sementara jam dinding jalan terus. Menyetel beat
       // sekarang sama saja mengumpulkan satu ledakan klik untuk dibunyikan sekaligus saat
@@ -213,6 +262,14 @@ export class ClickEngine {
       this.report();
       return;
     }
+    // Jam server sudah menyentuh anchor grid baru → saatnya serah terima. Sebelum titik ini
+    // grid lama yang berhak menyetel beat, dan sesudahnya grid baru; tidak ada satu pun beat
+    // yang hilang di antaranya.
+    if (this.pending && !startsLater(this.pending, this.serverNowMs())) {
+      const next = this.pending;
+      this.pending = null;
+      grid = this.adopt(next);
+    }
     // Dibaca berdekatan: kesalahan kopling dua jam ini paling besar beberapa perempat
     // milidetik, dan diulang setiap TICK_MS sehingga tidak pernah menumpuk jadi drift.
     const wallMs = Date.now();
@@ -220,7 +277,7 @@ export class ClickEngine {
     const bridge = this.bridge(wallMs, nowAudioMs, ctx.state);
     const plan = planBeats({
       grid,
-      thetaMs: this.thetaMs,
+      thetaMs: this.servo.appliedMs,
       bridge,
       latencyCompMs: this.compMs,
       nowAudioMs,
@@ -285,6 +342,9 @@ export class ClickEngine {
       audioRate: this.rate,
       audioStalled: this.stalled,
       latencyCompMs: this.compMs,
+      thetaMs: this.servo.appliedMs,
+      thetaJumps: this.thetaJumps,
+      swallowed: this.swallowed,
       driftP50Ms: d.p50,
       driftP95Ms: d.p95,
       driftMaxMs: d.max,
@@ -293,7 +353,9 @@ export class ClickEngine {
     // Semua angka yang dibaca panel diagnostik ikut dibandingkan: 40 tick per detik tanpa
     // perubahan tidak perlu membangunkan React, tapi kompensasi yang baru diketik operator
     // harus muncul detik itu juga, bukan pada klik berikutnya.
-    const key = `${s.played}|${s.missed}|${s.ctxState}|${s.driftSamples}|${s.audioRate}|${s.audioStalled}|${s.latencyCompMs}`;
+    const key =
+      `${s.played}|${s.missed}|${s.swallowed}|${s.thetaJumps}|${s.thetaMs.toFixed(3)}|` +
+      `${s.ctxState}|${s.driftSamples}|${s.audioRate}|${s.audioStalled}|${s.latencyCompMs}`;
     if (this.lastKey === key) return;
     this.lastKey = key;
     this.opts.onStats?.(s);

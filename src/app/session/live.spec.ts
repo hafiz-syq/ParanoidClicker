@@ -256,6 +256,26 @@ describe('LiveSession', () => {
     ws.emit('close', { code: 1006 });
   });
 
+  it('NUDGE_ONLY: θ yang bergeser 40 kali tidak pernah mengirim satu frame pun ke server', () => {
+    // ADR-0001 memberi NUDGE_ONLY arti yang bisa diuji: koreksi fase adalah urusan engine lokal,
+    // dan tidak ada jalurnya yang boleh mengubah grid bersama. Kalau suatu saat servo dikirim
+    // frame `tempo` untuk meratakan fase, test ini yang meneriakinya — dua belas HP tidak boleh
+    // punya dua belas dirigen.
+    const h = harness();
+    h.live.connect();
+    const ws = h.ws();
+    ws.open();
+    ws.frame({ t: 'state', bpm: 120, anchorMs: T0 + 3_000, running: true, members: 1 });
+    for (let i = 0; i < 40; i++) {
+      vi.advanceTimersByTime(1_000);
+      answerPing(ws, 600 + i * 3);
+    }
+    const jenis = ws.sent.map((s) => (JSON.parse(s) as { t: string }).t);
+    expect(jenis.filter((t) => t !== 'hello' && t !== 'ping')).toEqual([]);
+    expect(h.states[h.states.length - 1]).toEqual({ bpm: 120, anchorMs: T0 + 3_000, running: true });
+    expect(h.theta.length).toBeGreaterThan(30);
+  });
+
   it('ping yang tidak dijawab tidak menghasilkan sampel', () => {
     const h = harness();
     h.live.connect();

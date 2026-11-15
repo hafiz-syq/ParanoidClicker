@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ClickEngine, type ClickStats } from '../app/audio/click';
 import { LiveSession, rememberTarget, type LiveTarget, type SessionState } from '../app/session/live';
-import { MAX_BPM, MIN_BPM, gridOf, type Grid } from '../shared/tempo';
+import { TICK_MS } from '../app/sync/schedule';
+import { rampStart, rampStep, type RampState } from '../app/sync/ramp';
+import { MAX_BPM, MIN_BPM, parseBpm, gridOf, type Grid } from '../shared/tempo';
 
 export interface ClickRoomProps {
   role: 'leader' | 'follower';
@@ -31,11 +33,15 @@ export function ClickRoom(props: ClickRoomProps) {
   const [comp, setComp] = useState('0');
   const [wake, setWake] = useState('belum diuji');
   const [join, setJoin] = useState<LiveTarget | null>(props.target ?? null);
+  /** bpm tujuan ramp; null = tidak ada ramp berjalan. */
+  const [ramp, setRamp] = useState<number | null>(null);
+  const [rampInput, setRampInput] = useState('100');
 
   const liveRef = useRef<LiveSession | null>(null);
   const engineRef = useRef<ClickEngine | null>(null);
   const sesRef = useRef<SessionState | null>(null);
   const gridRef = useRef<Grid | null>(null);
+  const rampRef = useRef<RampState | null>(null);
   const wakeRef = useRef<WakeLockSentinel | null>(null);
   /** Menyaring ketukan kedua pada tombol mulai: dua tap pernah melahirkan dua sid dan dua socket. */
   const startingRef = useRef(false);
@@ -140,6 +146,32 @@ export function ClickRoom(props: ClickRoomProps) {
     return () => clearInterval(id);
   }, [live]);
 
+  // Ramp (ADR-0002) adalah penebakan frame `tempo` yang sudah ada, di sisi pemimpin: satu
+  // langkah 1 BPM per bar, berhenti sendiri di angka tujuan. Timer ini hanya hidup selama
+  // ramp berjalan.
+  useEffect(() => {
+    if (!live || ramp === null) return;
+    rampRef.current = rampStart(ramp);
+    const id = setInterval(() => {
+      const s = sesRef.current;
+      const state = rampRef.current;
+      if (!s || !s.running || s.anchorMs === null || !state) return;
+      const serverNow = Date.now() + (liveRef.current?.thetaMs() ?? 0);
+      const step = rampStep(state, gridOf(s.bpm, s.anchorMs), serverNow, s.bpm);
+      if (step.bpm === null) {
+        if (s.bpm === ramp) {
+          setRamp(null);
+          say(`ramp selesai di ${ramp} BPM`);
+        }
+        return;
+      }
+      rampRef.current = step.state;
+      // Socket putus di tengah ramp: berhenti, jangan antre dua puluh langkah untuk server.
+      if (!liveRef.current?.tempo(step.bpm)) setRamp(null);
+    }, TICK_MS);
+    return () => clearInterval(id);
+  }, [live, ramp, say]);
+
   // Layar tidur: OS membekukan AudioContext DAN melepas wake lock. Saat kembali, kunci
   // diminta ulang dan θ disegarkan tanpa menunggu interval 1 detik, supaya HP yang baru
   // bangun tidak ikut main di fase yang salah. Klik yang hilang selama tidur sudah
@@ -172,6 +204,22 @@ export function ClickRoom(props: ClickRoomProps) {
     const cur = sesRef.current?.bpm ?? 120;
     const next = Math.min(MAX_BPM, Math.max(MIN_BPM, cur + delta));
     if (next !== cur) liveRef.current?.tempo(next);
+  };
+
+  const startRamp = () => {
+    const goal = parseBpm(Number(rampInput));
+    if (goal === null) {
+      say(`ramp tidak dimulai: bpm harus bulangan ${MIN_BPM}..${MAX_BPM}`);
+      return;
+    }
+    const cur = sesRef.current?.bpm;
+    if (cur === undefined) return;
+    if (cur === goal) {
+      say('ramp tidak perlu: sudah di angka itu');
+      return;
+    }
+    setRamp(goal);
+    say(`ramp ${cur} → ${goal} BPM, satu langkah per bar`);
   };
 
   const applyComp = () => {
@@ -231,6 +279,31 @@ export function ClickRoom(props: ClickRoomProps) {
             </button>
           </p>
 
+          {leader && (
+            <p className="row">
+              <label className="note">
+                Ramp ke BPM{' '}
+                <input
+                  type="number"
+                  value={rampInput}
+                  min={MIN_BPM}
+                  max={MAX_BPM}
+                  onChange={(e) => setRampInput(e.currentTarget.value)}
+                  className="field"
+                />
+              </label>
+              {ramp === null ? (
+                <button onClick={startRamp} disabled={!running} className="btn">
+                  Mulai ramp
+                </button>
+              ) : (
+                <button onClick={() => setRamp(null)} className="btn btn-wide">
+                  Batalkan ramp → {ramp}
+                </button>
+              )}
+            </p>
+          )}
+
           {leader && joinUrl && (
             <>
               <h2>Tautan join (sid {join?.sid})</h2>
@@ -261,6 +334,8 @@ export function ClickRoom(props: ClickRoomProps) {
               `θ = ${theta === null ? 'belum ada sampel' : `${theta.toFixed(1)} ms`} · umur ${
                 Number.isFinite(age) ? `${age.toFixed(0)} ms` : '—'
               }${stale ? ' BASI' : ''}`,
+              `θ dipakai klik = ${stats ? `${f(stats.thetaMs)} ms` : '—'} · lompat ${stats?.thetaJumps ?? 0}× · ` +
+                `beat tertelan di jahitan ${stats?.swallowed ?? 0}`,
               `klik ${stats?.played ?? 0} berbunyi · ${stats?.missed ?? 0} hilang · ctx=${stats?.ctxState ?? '?'}` +
                 ` · laju audio=${stats ? stats.audioRate.toFixed(3) : '?'}× jam dinding` +
                 `${stats?.audioStalled ? ' · JAM AUDIO BEKU (laju terakhir dipakai, jangan percaya laju ini)' : ''}`,

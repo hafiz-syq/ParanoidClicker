@@ -109,20 +109,49 @@ export function firstPlayableIndex(grid: Grid, serverNowMs: number): number {
 /**
  * Tempat melanjutkan diri ketika grid berganti di tengah jalan (join, `retune`, reconnect).
  * Cursor lama boleh melompat MAJU, tapi tidak boleh mundur: beat yang sudah sempat disetel
- * oleh grid lama masih ada di antrean oscillator, dan grid baru yang menyetel beat di waktu
- * yang sama menghasilkan klik ganda persis di jahitan tempo.
+ * masih ada di antrean oscillator, dan grid baru yang menyetel beat pada waktu yang sama
+ * menghasilkan klik ganda persis di jahitan tempo.
  *
- * Bayarannya dibayar sadar: frame `state` yang mendarat lebih dari `LOOKAHEAD_MS` terlambat
- * membuat satu beat grid baru jatuh di dalam antrean grid lama, dan beat itu DIBUANG, bukan
- * dibunyikan dua kali. `abandonedBeats` menghitung lubang yang sama dari sisi grid lama —
- * itu yang besar (tab beku), sementara satu beat jahitan di bawah tidak terhitung dan
- * tetap terdengar seperti satu klik yang hilang di telinga, bukan di angka. `shortcut:`
- * patokannya waktu beat terakhir yang disetel, bukan jendela tetap; upgrade saat servo M2
- * sudah tahu persis berapa banyak antrean yang tertinggal.
+ * `swallowed` adalah harga lompatan maju itu, dan dihitung dari MOMEN, bukan dari selisih
+ * indeks: beat grid baru yang dibuang boleh dilaporkan nol kalau momennya juga beat grid
+ * lama — pada jahitan `retune` klik itu tetap berbunyi dari antrean grid lama. Yang momennya
+ * tidak jatuh di latis lama adalah lubang bunyi sungguhan dan harus dibaca operator sebagai
+ * angka, bukan sebagai `0 hilang`. Indeks negatif tidak ikut diperiksa: sebelum anchor, latis
+ * baru hanya mendeskripsikan waktu yang masih milik grid lama.
  */
-export function adoptIndex(from: Grid | null, fromIndex: number, to: Grid, serverNowMs: number): number {
+export interface Adoption {
+  index: number;
+  /** Beat grid baru yang dibuang dijahit dan pada momennya tidak ada klik lain yang berbunyi. */
+  swallowed: number;
+}
+
+export function adoptIndex(from: Grid | null, fromIndex: number, to: Grid, serverNowMs: number): Adoption {
   const lastArmed = from !== null && fromIndex > 0 ? beatMs(from, fromIndex - 1) : Number.NEGATIVE_INFINITY;
-  return firstPlayableIndex(to, Math.max(serverNowMs, lastArmed));
+  // Grid memang berlaku dua arah, tapi beat di bawah 0 bukan bagian dari perubahan tempo ini:
+  // beat 0 adalah jahitannya, dan momen sebelum itu adalah milik grid lama sepenuhnya.
+  const mulai = Math.max(0, firstPlayableIndex(to, serverNowMs));
+  const index = Math.max(mulai, firstPlayableIndex(to, Math.max(serverNowMs, lastArmed)));
+  // Yang diperiksa hanya beat yang masih bisa berbunyi saat frame ini mendarat — dari beat
+  // yang memayungi `serverNowMs` sampai cursor baru. Sisanya sudah jadi lubang sebelum frame
+  // itu lahir dan dihitung di `abandonedBeats`, bukan dua kali di sini.
+  let swallowed = 0;
+  for (let i = Math.max(0, beatIndexAt(to, serverNowMs)); i < index; i++) {
+    const at = beatMs(to, i);
+    const tetangga = from === null ? Number.NaN : beatMs(from, Math.round((at - from.anchorMs) / from.periodMs));
+    if (Math.abs(at - tetangga) > 1) swallowed++;
+  }
+  return { index, swallowed };
+}
+
+/**
+ * Grid baru hampir selalu mulai di depan — `retune` menaruh `anchorMs` ≥ `LEAD_MS` dari
+ * sekarang — jadi frame yang mendarat sekarang TIDAK boleh langsung menggantikan grid yang
+ * sedang berbunyi. Beat grid lama di antara ekor antrean dan anchor itu masih akan dibunyikan,
+ * dan membuangnya sekarang sama dengan satu klik bolong di tengah bar. Serah terima
+ * ditunda sampai jam server menyentuh anchor (ADR-0004).
+ */
+export function startsLater(grid: Grid, serverNowMs: number): boolean {
+  return grid.anchorMs > serverNowMs;
 }
 
 /**
