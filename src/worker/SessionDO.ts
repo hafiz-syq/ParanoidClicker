@@ -97,7 +97,12 @@ export class SessionDO extends DurableObject<Env> {
       })
     );
     // Yang baru masuk harus langsung sephase, bukan menunggu perubahan tempo berikutnya.
-    ws.send(this.stateFrame(this.readTempo()));
+    const teks = this.stateFrame(this.readTempo());
+    ws.send(teks);
+    // Nomor orang lain juga harus tahu ada yang baru, TAPI hanya kalau benar-benar ada
+    // anggota baru: hello ulang dari HP yang sama (reconnect, tab bangun dari latar) tidak
+    // boleh mengirim dua belas frame ke ruangan yang sedang menghitung beat.
+    if (cursor.rowsWritten > 0) this.sendToRoom(teks, ws);
   }
 
   // Dibaca dari tabel, bukan dari memori: DO boleh dievict di tengah lagu dan dibangun ulang
@@ -125,13 +130,23 @@ export class SessionDO extends DurableObject<Env> {
   }
 
   private stateFrame(state: TempoState): string {
-    return JSON.stringify({ t: 'state', bpm: state.bpm, anchorMs: state.anchorMs, running: state.running });
+    // `members` ikut di frame ini, bukan cuma di welcome: HP yang sudah duduk di ruangan
+    // tidak pernah hello ulang selama lagu berjalan, jadi frame inilah satu-satunya jalan
+    // 'N HP' di layar pemimpin bisa naik. Angkanya dibaca dari SQL, bukan dihitung
+    // `total + 1` seperti di hello — yang ditolak FULL tidak boleh menambah satu HP hantu.
+    const members = this.sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM member').one().n;
+    return JSON.stringify({ t: 'state', bpm: state.bpm, anchorMs: state.anchorMs, running: state.running, members });
   }
 
   private broadcast(state: TempoState): void {
-    const text = this.stateFrame(state);
+    this.sendToRoom(this.stateFrame(state));
+  }
+
+  // Satu loop untuk semua siaran, supaya frame yang disiarkan karena orang baru masuk
+  // benar-benar teks yang sama — dua HP dengan dua versi teks = dua versi kebenaran.
+  private sendToRoom(text: string, kecuali?: WebSocket): void {
     for (const peer of this.ctx.getWebSockets()) {
-      if (peer.readyState === WebSocket.OPEN) peer.send(text);
+      if (peer !== kecuali && peer.readyState === WebSocket.OPEN) peer.send(text);
     }
   }
 

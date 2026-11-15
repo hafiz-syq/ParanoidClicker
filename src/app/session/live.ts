@@ -189,6 +189,11 @@ export class LiveSession {
         return;
       }
       case 'state': {
+        // Dibaca sebelum gerbang grid: jumlah HP adalah informasi independen, dan
+        // membekukannya hanya karena satu field tempo terlihat cacat adalah persis pola
+        // bug yang membuat angka di layar pemimpin berhenti di '1 HP'.
+        const n = Number(frame.members);
+        if (Number.isFinite(n)) this.opts.onMembers(n);
         const bpm = parseBpm(frame.bpm);
         const anchorMs = frame.anchorMs === null ? null : Number(frame.anchorMs);
         // Server sudah membatasi bpm, tapi kepercayaan tidak diwarisi: `bpm: 0` membuat

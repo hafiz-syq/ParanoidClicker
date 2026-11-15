@@ -151,6 +151,22 @@ describe('LiveSession', () => {
     ]);
   });
 
+  it('state yang membawa members menyegarkan hitungan HP', () => {
+    const h = harness();
+    h.live.connect();
+    const ws = h.ws();
+    ws.open();
+    ws.frame({ t: 'welcome', sid: 'ABCD', members: 1, serverNow: T0 + 657 });
+    // Pemimpin tidak pernah hello ulang seumur lagunya: kalau `members` hanya dibaca di
+    // jalur welcome, layarnya membeku pada angka waktu ia masuk.
+    ws.frame({ t: 'state', bpm: 120, anchorMs: null, running: false, members: 2 });
+    expect(h.members).toEqual([1, 2]);
+    // Frame tanpa members (server lama) tidak boleh menghapus angka yang sudah benar.
+    ws.frame({ t: 'state', bpm: 90, anchorMs: null, running: true });
+    expect(h.members).toEqual([1, 2]);
+    expect(h.states).toHaveLength(2);
+  });
+
   it('bpm jaringan yang tidak sah tidak pernah dibiarkan masuk ke grid', () => {
     const h = harness();
     h.live.connect();

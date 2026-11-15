@@ -246,7 +246,8 @@ murni (jam server → jam dinding → jam audio), `src/app/audio/click.ts` Web A
 latensi + probe drift, `src/app/session/live.ts` klien sesi (θ bergulir, freewheel, backoff),
 `src/screens/ClickRoom.tsx` + `Start.tsx` layarnya.
 
-Enam keputusan yang tidak terlihat di diff tapi menentukan bunyi:
+Enam keputusan yang tidak terlihat di diff tapi menentukan bunyi, plus satu yang menentukan angka
+di baris status:
 
 1. **`ClockBridge` membawa `rate`, bukan asumsi 1,00.** Terukur: `ctx.currentTime` tidak selalu
    berdetak secepat jam dinding (0,994–1,008× pada dua tab hari ini; spike headless terdahulu
@@ -270,7 +271,18 @@ Enam keputusan yang tidak terlihat di diff tapi menentukan bunyi:
    `anchorMs` wajib berada dalam ±12 jam dari jam dinding HP; sisanya dibuang dengan
    `state cacat`. Server sudah membatasi angkanya, tapi kepercayaan tidak diwarisi: `bpm: 0`
    memberi periode tak hingga (klik bisu, nol error), dan anchor jam 2001 membuat scheduler
-   menyisir jutaan beat sebelum menyentuh horizon.
+   menyisir jutaan beat sebelum menyentuh horizon. `members` dibaca SEBELUM gerbang itu — jumlah HP
+   informasi yang berdiri sendiri, dan membekukannya karena satu field tempo mencurigakan adalah
+   variasi lain dari bug yang sama.
+7. **Anggota baru disiarkan ke seluruh ruangan, bukan cuma ke yang masuk.** `members` ikut di frame
+   `state` dan `live.ts` memanggil `onMembers` di jalur `state` juga: HP yang sudah duduk di ruangan
+   tidak pernah `hello` ulang selama lagu, jadi kalau angkanya hanya lewat `welcome`, layar pemimpin
+   membeku di `1 HP` selamanya. Siaran ini hanya jalan kalau `INSERT OR IGNORE` benar-benar menulis
+   (`rowsWritten > 0`) — dua belas HP yang reload serentak tidak boleh mengirim dua belas frame ke
+   ruangan yang sedang menghitung beat. Angkanya dibaca ulang dari `SELECT COUNT(*) FROM member`,
+   bukan `total + 1` seperti di `welcome`, supaya orang ke-13 yang ditolak `FULL` tidak menambah
+   satu HP hantu. `proto` di `/health` tetap 2: key ekstra diabaikan klien lama, dan klien baru
+   tetap benar kalau server lama tidak mengirimnya.
 
 Sudah dibuktikan (15 Nov 2026, dua tab Chromium + worker lokal `:8787`; semua angka dibaca oleh
 sampler yang berjalan di dalam halaman, bukan dari DOM yang dibaca lewat round-trip):
@@ -289,9 +301,13 @@ sampler yang berjalan di dalam halaman, bukan dari DOM yang dibaca lewat round-t
 | tombol pemimpin di layar pengikut | `-5 -1 +1 +5` dan `Start`/`Stop` semuanya `disabled` |
 | `laju audio` yang terukur | 0,994–1,008× jam dinding |
 
-`npm run check` hijau (exit 0): typecheck, `lint:arch` 2 berkas `src/app/sync`, **62 tes unit**
+`npm run check` hijau (exit 0; 9,1 s dan 9,2 s pada dua jalan berturut-turut, 7,2 s pada tree
+sebelum T6 — naik ~2 s, dan tambahan itu TIDAK dipisahkan per langkah: suite worker sekarang 2,4 s
+untuk 20 tes penuh vs 1,6 s kalau hanya satu tes ringan yang dijalankan, jadi seluruh isi suite
+worker masih di bawah 1 s): typecheck, `lint:arch` 2 berkas `src/app/sync`, **63 tes unit**
 (17 di antaranya aritmetika jadwal — rate 2,5, jahitan, `adoptIndex`, `abandonedBeats`, grid
-jahat — dan 2 gerbang bukti `scripts/gerbang.spec.ts`: kutipan README + ikon kembar) + 17 tes worker.
+jahat — 2 gerbang bukti `scripts/gerbang.spec.ts`: kutipan README + ikon kembar — dan 15 tes klien
+sesi) + **20 tes worker**.
 `npm run smoke` lulus (rtt ≤ 8 ms, offset 0,00 ms) dan `npm run attack`
 lulus di worker lokal (T5/T6/T7/T9).
 
@@ -317,12 +333,12 @@ BELUM / batas yang diketahui:
 - Belum ada servo: lompatan θ lebih dari setengah periode akan terdengar tertinggal sampai ping
   berikutnya menyetel ulang → M2.
 - Join masih lewat tautan, belum QR (M4) — dan tautan itu sendiri adalah kunci sesi.
-- Penghitungan member sudah bisa dibuktikan dari browser — dua *context* yang terisolasi punya dua
-  `did`, dan layar pengikut menampilkan `2 HP`. Yang BELUM: **pemimpin tidak pernah melihat angkanya
-  naik**. `members` cuma dikirim di frame `welcome` (`src/worker/SessionDO.ts:89-98`) dan tidak ada
-  broadcast perubahan anggota, jadi pemimpin tetap tertulis `1 HP` (`bukti/b3-pemimpin.png`) padahal
-  pengikut di sesi yang sama sudah `2 HP` (`bukti/b4-pengikut.png`). Belum dibereskan karena itu
-  perubahan protokol WS, bukan kosmetik.
+- Penghitung HP sekarang disegarkan oleh server — `members` ikut di frame `state` dan disiarkan
+  begitu ada `did` baru masuk, jadi layar pemimpin tidak lagi membeku pada angka waktu ia masuk
+  (buktinya di **Bukti di browser**, `bukti/b6-pemimpin-2hp.png`). Yang BELUM: angkanya adalah
+  *riwayat orang yang pernah masuk*, bukan yang sedang terhubung — `webSocketClose` hanya menutup
+  socket dan tidak menghapus baris `member`, jadi HP yang pulang tetap terhitung. Cara membaca
+  angka itu diputuskan di M3 bersama otoritas pemimpin.
 - Ikon: `paranoid-32.png` dipakai apa adanya di tab, dan OS menyusunkannya ke 16 px. Belum ada
   versi 16 px yang digambar ulang untuk ukuran itu, dan "Add to Home Screen" di HP asli belum
   diukur — lihat **Ikon & shell PWA**.
@@ -435,6 +451,8 @@ d6dadb64b182d0d16032b6690b5f3a4d9ea51a39680e6eca3ecd49d29c6234a9  bukti/b1-start
 c50fc319c08c5dc8d73532f5e543a4b50fa6777dfa67c257e483b5e3f95b7535  bukti/b3-pemimpin.png
 0df3a74eae20ae7681e3ef3d0fec207dcc9a70a04a3fedf3e4038e1f995d26be  bukti/b4-pengikut.png
 03d45264bf327aaa794d9da80648933e6f326f2f8cc9733d1433d566f5a55655  bukti/b5-alat-ukur.png
+62661b5a69fd95b7f36686bc0b4bd62f7beadfccd4725db819311d5debb10f62  bukti/b6-pemimpin-2hp.png
+f92f3bf401826e1ae1b68931b86aa7834f66c6659206b794221a1818f034fdda  bukti/b7-pengikut-2hp.png
 ```
 
 - `b1-start.png` — layar Start di atas `#0b0b0f` dengan teks `#eee` dan tautan `#9cf`: bukti visual
@@ -444,9 +462,19 @@ c50fc319c08c5dc8d73532f5e543a4b50fa6777dfa67c257e483b5e3f95b7535  bukti/b3-pemim
 - `b3-pemimpin.png` / `b4-pengikut.png` — satu sesi yang sama, dua *context* browser terisolasi
   (dua `did` berbeda). Baris grid-nya identik: `bpm=120 anchor=1794714353561 running=true` di dua
   layar; tombol tempo aktif di pemimpin dan mati (`:disabled`) di pengikut. Angka `1 HP` vs `2 HP`
-  di dua layar itu bukan salah potong — itu bug yang ditulis di **Keterbatasan**.
+  di dua layar itu bukan salah potong — itu potret BUG-nya, diambil pada tree sebelum T6 dibereskan;
+  versi sesudahnya `b6`/`b7`. Mengambil ulang resep di bawah hari ini akan memberi `2 HP` di `b3`.
 - `b5-alat-ukur.png` — DebugScope: `secureContext=true`, `wakeLock=true`, `serviceWorker=true` di
   browser bukti (di HP asli wake lock pernah `NotAllowedError`, dan itu yang belum terukur).
+- `b6-pemimpin-2hp.png` / `b7-pengikut-2hp.png` — bukti bahwa angka HP bukan lagi snapshot. Sesi
+  yang sama, dua *context* terisolasi: pemimpin menekan **Start** lebih dulu, pengikut masuk
+  belakangan. Status pemimpin `120 BPM · jalan · 1 HP` → `120 BPM · jalan · 2 HP`, dan yang
+  membuktikan ia TIDAK sambung ulang adalah pencatat di dalam context-nya:
+  `opened=1, welcome=1, state=[1,1,2]` (satu socket, satu welcome, tiga state — join dirinya,
+  siaran Start, siaran join pengikut) sementara diagnostiknya terus menghitung
+  `klik 5 berbunyi · 0 hilang` → `klik 12 berbunyi · 0 hilang` dengan
+  `anchor=1794715757496` yang sama persis di kedua layar. `tok` pada tautan join disensor di DOM
+  sebelum potret diambil — tautan itu kunci sesi — `sid` sengaja dibiarkan.
 
 Artefak ini juga yang menemukan satu bug: `b5` pertama kali keluar 792×1658, artinya kontennya
 melebar 6 px dari viewport. Penyebabnya `textarea.fill { width: 100% }` tanpa `box-sizing`, jadi
@@ -457,7 +485,11 @@ Cara mengambil ulang, urut persis seperti yang dijalankan (viewport 390×844, ds
 (1) `/` → `b1`; (2) `/?sid=AB&tok=zz` → `b2`; (3) kembali ke `/`, klik **"Buat sesi baru (saya
 pemimpin)"**, klik **"Buat sesi & bunyikan klik"**, baca `p.pre` pertama = tautan join; (4) context
 KEDUA (terisolasi, jadi `did`-nya beda) buka tautan itu, klik **"Masuk ke sesi …"**; (5) klik
-**"Start"** di pemimpin, tunggu, → `b3` dan `b4`; (6) `/?layar=ukur` → `b5`. `playwright` sengaja
+**"Start"** di pemimpin, tunggu, → `b3` dan `b4`; (6) `/?layar=ukur` → `b5`; (7) untuk `b6`/`b7`:
+ulangi (3)–(5) dengan `window.WebSocket` dibungkus pencatat frame lewat `addInitScript` di KEDUA
+context, pemimpin menekan **Start** SEBELUM pengikut masuk (kalau tidak, siaran join-nya terlewat
+dari yang sedang dilihat), tunggu dua detik, sensor `tok` di `p.pre`, lalu potret kedua layar.
+`playwright` sengaja
 tidak dijadikan dependency proyek — ia alat bukti, bukan bagian dari runtime aplikasi — jadi yang
 dipakai adalah browser yang sudah ada di mesin ini. Mesin ini PUNYA jalur browser, jadi tidak ada
 KETERBATASAN "tidak bisa menjalankan browser" di gerbang ini; yang belum terukur adalah HP asli

@@ -158,6 +158,8 @@ interface Peer {
   frames: string[];
   send(frame: unknown): void;
   until(count: number): Promise<string[]>;
+  states(): string[];
+  untilStates(n: number): Promise<string[]>;
 }
 
 async function openPeer(sid: string): Promise<Peer> {
@@ -187,6 +189,18 @@ async function openPeer(sid: string): Promise<Peer> {
       if (frames.length < count) throw new Error(`baru ${frames.length} frame masuk, butuh ${count}`);
       return frames;
     },
+    states: () => frames.filter((f) => body(f).t === 'state'),
+    // Dipisah dari `until` karena satu orang baru masuk = satu frame state ekstra untuk
+    // SEMUA socket yang sudah terbuka; menghitung total frame akan membuat indeks tes
+    // lain bergantung pada urutan join.
+    untilStates: async (n) => {
+      let got: string[] = [];
+      for (let tries = 0; (got = frames.filter((f) => body(f).t === 'state')).length < n && tries < 200; tries++) {
+        await new Promise((r) => setTimeout(r, 5));
+      }
+      if (got.length < n) throw new Error(`baru ${got.length} frame state masuk, butuh ${n}`);
+      return got;
+    },
   };
 }
 
@@ -199,25 +213,100 @@ it('hello dibalas welcome lalu state, supaya pengikut baru langsung sephase', as
   const frames = await peer.until(2);
   expect(body(frames[0]).t).toBe('welcome');
   // DO belum pernah melihat satu pun perubahan: keadaan idle, bukan kosong tanpa frame.
-  expect(frames[1]).toBe('{"t":"state","bpm":120,"anchorMs":null,"running":false}');
+  // `members` ada di sini supaya HP yang sudah di ruangan bisa tahu ada orang baru, tanpa
+  // harus hello ulang — jadi teks frame ini adalah bagian dari kontrak, bukan detail.
+  expect(frames[1]).toBe('{"t":"state","bpm":120,"anchorMs":null,"running":false,"members":1}');
   peer.ws.close();
 });
+
+it('anggota kedua dilihat oleh koneksi PERTAMA, tanpa ia sambung ulang', async () => {
+  // Inti T6: `members` cuma ada di frame welcome, dan welcome hanya dikirim saat hello.
+  // Pemimpin yang tidak hello ulang therefore membeku pada angka waktu ia masuk — layar
+  // '1 HP' sementara HP ke-2 sudah berbunyi sephase di ruangan yang sama.
+  const a = await openPeer('TMPH');
+  a.send({ t: 'hello', sid: 'TMPH', did: 'devPemimpin' });
+  const awal = await a.untilStates(1);
+  expect(body(awal[0])).toMatchObject({ t: 'state', members: 1 });
+
+  const b = await openPeer('TMPH');
+  b.send({ t: 'hello', sid: 'TMPH', did: 'devPengikut' });
+  await b.untilStates(1);
+
+  // a TIDAK mengirim hello kedua dan tidak pernah menutup socketnya: satu-satunya cara
+  // angka itu bisa sampai ke dia adalah server yang mengulangnya.
+  const setelah = await a.untilStates(2);
+  expect(body(setelah[1])).toMatchObject({ t: 'state', members: 2 });
+  expect(a.frames.filter((f) => body(f).t === 'welcome')).toHaveLength(1);
+  a.ws.close();
+  b.ws.close();
+});
+
+it('hello ulang dari HP yang sama tidak menyiarkan angka ke seluruh ruangan', async () => {
+  // Join kembali setelah putus harus tidak boleh mengirim frame ekstra ke HP lain: dua
+  // belas HP reload serentak = dua belas broadcast per HP, dan klik sedang berjalan.
+  const a = await openPeer('TMPL');
+  a.send({ t: 'hello', sid: 'TMPL', did: 'devSatu' });
+  await a.untilStates(1);
+  const b = await openPeer('TMPL');
+  b.send({ t: 'hello', sid: 'TMPL', did: 'devDua' });
+  await a.untilStates(2);
+  const jumlah = a.states().length + b.states().length;
+
+  b.send({ t: 'hello', sid: 'TMPL', did: 'devDua' });
+  await b.untilStates(2);
+  expect(body(b.states()[1])).toMatchObject({ members: 2 });
+  expect(a.states()).toHaveLength(2);
+  expect(a.states().length + b.states().length).toBe(jumlah + 1);
+  a.ws.close();
+  b.ws.close();
+});
+
+it('orang ke-13 ditolak FULL tanpa membuat hitungan HP jadi 13', async () => {
+  // MAX_MEMBERS dijaga di hello(); kalau frame state ikut menghitung "total + 1" seperti
+  // welcome, ruangan yang penuh melaporkan satu HP hantu ke sebelas HP yang sudah di dalam.
+  const peers: Peer[] = [];
+  for (let i = 0; i < MAX_MEMBERS; i++) {
+    const p = await openPeer('TMPJ');
+    p.send({ t: 'hello', sid: 'TMPJ', did: `dev${i}` });
+    peers.push(p);
+  }
+  // Tiap orang yang sudah masuk ikut menyiarkan, jadi HP pertama melihat 1..12 berjalan.
+  await peers[0]!.untilStates(MAX_MEMBERS);
+  const sebelum = peers.map((p) => p.frames.length);
+
+  const penolak = await openPeer('TMPJ');
+  penolak.send({ t: 'hello', sid: 'TMPJ', did: 'devTerlalu' });
+  await penolak.until(1);
+  expect(body(penolak.frames[0])).toMatchObject({ t: 'error', code: 'FULL' });
+  // Yang sudah di dalam: tidak ada frame baru sama sekali, dan angka terakhir tetap 12 —
+  // bukan 13 (HP hantu) dan bukan 11 (jumlah sebelum orang terakhir).
+  await new Promise((r) => setTimeout(r, 40));
+  expect(peers.map((p) => p.frames.length)).toEqual(sebelum);
+  for (const p of peers) {
+    expect(body(p.states().at(-1)!).members).toBe(MAX_MEMBERS);
+  }
+  for (const p of peers) p.ws.close();
+  penolak.ws.close();
+});
+
 
 it('start menyebarkan anchor yang sama persis ke semua socket terbuka', async () => {
   const a = await openPeer('TMPB');
   const b = await openPeer('TMPB');
   a.send({ t: 'hello', sid: 'TMPB', did: 'devA' });
   b.send({ t: 'hello', sid: 'TMPB', did: 'devB' });
-  await a.until(2);
-  await b.until(2);
+  // a sudah berdiri ketika b masuk, jadi ia punya satu frame state ekstra — itu justru
+  // yang dituntut T6. Karena itu yang dibandingkan frame TERAKHIR, bukan indeks mentah.
+  await a.untilStates(2);
+  await b.untilStates(1);
 
   a.send({ t: 'start' });
-  const framesA = await a.until(3);
-  const framesB = await b.until(3);
+  const lastA = (await a.untilStates(3)).at(-1)!;
+  const lastB = (await b.untilStates(2)).at(-1)!;
   // Byte-identik: kalau dua HP menerima teks berbeda, ada dua versi kebenaran di ruangan.
-  expect(framesA[2]).toBe(framesB[2]);
-  const state = statesOf(framesA)[1];
-  expect(state).toMatchObject({ t: 'state', bpm: 120, running: true });
+  expect(lastA).toBe(lastB);
+  const state = body(lastA);
+  expect(state).toMatchObject({ t: 'state', bpm: 120, running: true, members: 2 });
   expect(Number(state.anchorMs)).toBeGreaterThan(Date.now());
   a.ws.close();
   b.ws.close();
@@ -254,11 +343,22 @@ it('tempo cacat hanya menjawab pengirimnya, tidak menyentuh HP lain', async () =
   await b.until(2);
 
   const cacat = [137.5, 29, 301, '120', null];
+  // Tunggu sampai KEDUA join benar-benar selesai sebelum menghitung jawaban: b membuka
+  // socketnya sebelum hello, jadi ia ikut kebagian siaran join a (satu state ekstra), dan
+  // frame itu tidak boleh disalahartikan sebagai respons tempo cacat.
+  await a.untilStates(2);
+  await b.untilStates(2);
+  const sebelumB = b.frames.length;
   for (const bpm of cacat) a.send({ t: 'tempo', bpm });
-  const framesA = await a.until(2 + cacat.length);
-  expect(framesA.slice(2).map((f) => body(f).code)).toEqual(cacat.map(() => 'BAD_BPM'));
-  // b diam-diam saja: tidak ada frame ketiga sama sekali.
-  expect(b.frames.length).toBe(2);
+  // 2 siaran join + welcome + 1 state miliknya sendiri = 3 frame dasar, lalu 5 error.
+  const framesA = await a.until(3 + cacat.length);
+  expect(framesA).toHaveLength(3 + cacat.length);
+  expect(framesA.filter((f) => body(f).t === 'error').map((f) => body(f).code)).toEqual(
+    cacat.map(() => 'BAD_BPM')
+  );
+  // b diam-diam saja: tidak ada satu frame pun baru sesudah kedua orang masuk.
+  await new Promise((r) => setTimeout(r, 40));
+  expect(b.frames.length).toBe(sebelumB);
   a.ws.close();
   b.ws.close();
 });
