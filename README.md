@@ -34,10 +34,10 @@ di HP lain jadi pengikut. Alat ukur spike M0 masih di `?layar=ukur`.
 | `npm run test:worker` | Worker + Durable Object di runtime workerd asli |
 | `npm run typecheck` | TS app dan TS worker |
 | `npm run lint:arch` | `src/app/sync/` tetap murni: tanpa impor bare, tanpa API browser, tanpa layer lain |
-| `npm run cek:ikon` | ikon: tidak ada file kembar, `sizes` = IHDR, rujukan manifest/`index.html` ada |
+| `npm run cek:ikon` | versi CLI penjaga ikon (cetak tabel sha + IHDR); assertion-nya sendiri jalan di `npm run test` |
 | `npm run cek:ikon:http` | versi served: `content-type: image/png` + sha256 body, butuh server; status 200 TIDAK dipakai sebagai bukti |
-| `npm run cek:kontras` | `scripts/cr.mjs`: CR tiap pasangan warna + penjaga kutipan README |
-| `npm run check` | keenamnya berurutan (typecheck, lint:arch, cek:ikon, cek:kontras, test, test:worker) — gerbang sebelum commit |
+| `npm run cek:kontras` | versi CLI `scripts/cr.mjs` (cetak semua CR + penjaga kutipan); assertion-nya jalan di `npm run test` |
+| `npm run check` | typecheck → lint:arch → test (62, termasuk 2 gerbang bukti di `scripts/gerbang.spec.ts`) → test:worker (17) — gerbang sebelum commit |
 | `npm run smoke` | jalur WebSocket asli, butuh `npm run dev:worker` |
 | `npm run attack` | tes serangan T5/T6/T7/T9, butuh `npm run dev:worker` |
 
@@ -289,10 +289,10 @@ sampler yang berjalan di dalam halaman, bukan dari DOM yang dibaca lewat round-t
 | tombol pemimpin di layar pengikut | `-5 -1 +1 +5` dan `Start`/`Stop` semuanya `disabled` |
 | `laju audio` yang terukur | 0,994–1,008× jam dinding |
 
-`npm run check` hijau (exit 0): typecheck, `lint:arch` 2 berkas `src/app/sync`, `cek:ikon`,
-`cek:kontras`, **60 tes unit**
+`npm run check` hijau (exit 0): typecheck, `lint:arch` 2 berkas `src/app/sync`, **62 tes unit**
 (17 di antaranya aritmetika jadwal — rate 2,5, jahitan, `adoptIndex`, `abandonedBeats`, grid
-jahat) + 17 tes worker. `npm run smoke` lulus (rtt ≤ 8 ms, offset 0,00 ms) dan `npm run attack`
+jahat — dan 2 gerbang bukti `scripts/gerbang.spec.ts`: kutipan README + ikon kembar) + 17 tes worker.
+`npm run smoke` lulus (rtt ≤ 8 ms, offset 0,00 ms) dan `npm run attack`
 lulus di worker lokal (T5/T6/T7/T9).
 
 BELUM / batas yang diketahui:
@@ -352,13 +352,15 @@ W3C Recommendation 12 Dec 2024) dan yang dipetik adalah **MIN 3,29**, bukan `vsL
 paling memuji; empat permukaan tempat border itu tergambar memberi 3,29–3,61:1. Border `1px` di
 layar ini tergambar dengan coverage 0,8, jadi pikselnya = 0,8×warna + 0,2×latar — itu sebabnya
 calon `#6b6b78` gugur di MIN 2,56 dan yang dipakai `#808088`. Kalau menambah warna, tambahkan
-barisnya ke script itu dulu, baru ke dokumen — dan itu bukan imbauan lagi: `node scripts/cr.mjs`
-menutup dengan `penjaga kutipan`, yang memindai SEMUA blok berpayung di README, mengambil baris
-yang berbentuk seperti outputnya (`#xxx di #yyy = …` dan `#xxx: tergambar …`), lalu exit 1 kalau
-salah satunya tidak ada verbatim di output itu sendiri — jadi blok palsu di halaman lain ikut
-tertangkap, bukan hanya blok yang ditunjuk lewat nama (dijaga hanya saat `COV` tidak diubah;
-`COV=1` mencetak baris lain, jadi penjaganya bilang DILEWATI, bukan lulus). Border tombol
-`:disabled` (`#55555f`) sengaja di bawah 3:1 karena 1.4.11 mengecualikan komponen non-aktif.
+barisnya ke script itu dulu, baru ke dokumen — dan itu bukan imbauan lagi: `penjaga kutipan`
+(`cekKutipanREADME` di `scripts/cr.mjs`) memindai SEMUA blok berpayung di README, mengambil baris
+yang berbentuk seperti outputnya (`#xxx di #yyy = …` dan `#xxx: tergambar …`), lalu membuat
+tes gagal kalau salah satunya tidak ada verbatim di output itu sendiri — jadi blok palsu di
+halaman lain ikut tertangkap, bukan hanya blok yang ditunjuk lewat nama. Di jalur yang ditegakkan
+itu `barisOutput(0.8)` dipanggil dengan angka tertulis, supaya `COV=…` di environment tidak bisa
+membungkam penjaga; di CLI, `COV=1` tetap mencetak DILEWATI karena di situ memang operator yang
+mengubah parameternya. Border tombol `:disabled` (`#55555f`) sengaja di bawah 3:1 karena 1.4.11
+mengecualikan komponen non-aktif.
 
 ## Ikon & shell PWA
 
@@ -390,9 +392,12 @@ di manifest), dan `npm run check` hijau dengan 0 error console.
 
 ## Gerbang ikon: tidak ada kembar, tidak ada bukti status
 
-`scripts/gerbang-ikon.mjs` adalah penjaga yang dijalankan, bukan yang diklaim. Ia ikut jalan di
-`npm run check` lewat `npm run cek:ikon`, dan `npm run cek:kontras` (penjaga kutipan `scripts/cr.mjs`)
-juga ikut di sana — dulu keduanya hanya script yang harus diingat orang.
+`scripts/gerbang-ikon.mjs` dan penjaga kutipan di `scripts/cr.mjs` adalah fungsi yang diimpor
+`scripts/gerbang.spec.ts`, jadi keduanya jalan di dalam `npm run test` — dan karena itu di
+`npm run check` — tanpa perlu ada yang mengingat perintahnya. `npm run cek:ikon` dan
+`npm run cek:kontras` tetap ada sebagai CLI (tabel sha/IHDR dan semua CR tercetak di sana), tapi
+mereka bukan tempat penegakan lagi: sebelumnya mereka memang berdiri sendiri di `check`, dan itu
+masih bisa "dijanjikan lalu dilupakan" kalau satu langkah dihapus dari rantai.
 
 Yang dijaga, dan kenapa:
 
@@ -465,7 +470,7 @@ URL asli. Akun Workers Free cukup — tidak ada yang perlu dibayar.
 
 ```
 npm run login                    # buka browser, otorisasi OAuth; cek: npx wrangler whoami
-npm run check                    # typecheck + lint:arch + cek:ikon + cek:kontras + 60 tes unit + 17 tes worker, harus hijau
+npm run check                    # typecheck + lint:arch + 62 tes unit + 17 tes worker, harus hijau
 npm run secret                   # tempel satu baris hex 64, lihat catatan asal-usul di bawah
 npm run deploy                   # = vite build && wrangler deploy; cetak URL workers.dev
 curl https://paranoidclick.<akun>.workers.dev/health
