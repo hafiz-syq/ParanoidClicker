@@ -176,27 +176,69 @@ Soal log, pertanyaan yang tadi belum terbukti dua arah sekarang punya jawaban �
 lebih baik dari yang dijanjikan dokumen. `wrangler tail --format json` di produksi **mencetak
 URL lengkap**, termasuk query string: `event.request.url` berisi
 `https://…workers.dev/ws?sid=NCFB&tok=REDACTED`. Cloudflare sendiri yang mengganti nilai `tok`
-dengan teks `REDACTED` sebelum entri sampai ke kita. Pengukurannya pada jendela log run ini
-(200.403 byte, 42 field `url`): `tok=` muncul 21 kali, `tok=REDACTED` 21 kali, dan
-`tok=[0-9a-f]` (nilai hex asli) **0** kali. `sid=NCFB` muncul 10 kali, jadi kendali positif T9c
-hidup: log ini memang merekam URL, dan token tetap tidak ikut. Rantai 64 karakter hex yang
-tersisa di log sudah diatribusi per field, bukan token — 11 di antaranya `durableObjectId`,
-sisanya hash handshake TLS (96 hex).
+dengan teks `REDACTED` sebelum entri sampai ke kita.
 
-Dua catatan yang menahan diri supaya tidak overclaim. Pertama, `wrangler tail` itu stream
-best-effort, bukan audit log: 31 permintaan `/create` dikirim, hanya 21 yang muncul di log
-(`200` 8x + `429` 13x), dan 30 sid palsu dikirim tapi `403` tercatat 11x. Buktinya jadi
-"semua kemunculan token di-log disensor", bukan "tidak ada token di log" — dan untuk
-`resumeToken`/`leaderToken` yang belum pernah dikirim, nol kemunculan di stream yang bocor itu
-tidak membuktikan apa pun. Kedua, memindahkan token ke header juga tidak otomatis menyelamatkan
-log: entri tail ikut mencetak request header, `cf-connecting-ip` tercatat 42 kali di jendela yang
-sama.
+**KOREKSI 16 Nov.** Versi paragraf ini menjahit dua jendela berbeda dalam satu kalimat, dan dua
+angkanya tidak bisa diturunkan dari artefak mana pun. Yang ada di disk sekarang hanya tiga:
+`prod-attack.log` 773 B, `tail.log` 454.711 B, `tail2.log` 433.156 B — gitignored lewat aturan
+pemilik (`tail*.log`), jadi bukti ini memang hidup di luar git dan angka di bawah hanya bisa
+diulang kalau berkasnya masih ada. Window yang dipakai **seluruh berkas**, bukan prefix byte.
+Satu baris = satu perintah yang saya jalankan dan mencetak angka di kolom kanan:
+
+| Angka | Perintah pada `tail.log` | Output |
+|---|---|---|
+| entri tercetak | `grep -c '"eventTimestamp":' tail.log` | 163 |
+| jendela waktu capture | min/max `"eventTimestamp"` (epoch ms) | 2026-11-13T06:38:21.631Z … 07:37:32.039Z = 13 Nov 13:38–14:37 WIB |
+| handshake `/ws` yang tercatat | `grep -oE '"url": *"[^"]*/ws\?[^"]*"' tail.log \| wc -l` | 33 |
+| `tok=` di URL itu | `grep -o 'tok=' tail.log \| wc -l` | 33 |
+| …semuanya hasil sensor platform | `grep -o 'tok=REDACTED' tail.log \| wc -l` | 33 |
+| `tok` hex mentah | `grep -oE 'tok=[0-9a-f]' tail.log \| wc -l` | **0** |
+| kendali positif: `sid` tetap tercetak | `grep -o 'sid=NCFB' tail.log \| wc -l` | 10, dari 14 sid unik di 33 URL `/ws` |
+| header klien juga tercetak | `grep -o 'cf-connecting-ip' tail.log \| wc -l` | 88 = persis jumlah field `"url"` |
+| status per path | `node -e` yang memasangkan `"url"` → `"status"` di entri yang sama | `/create` 200×18 + 405×2 + 429×26 · `/health` 200×5 · `/ws` 200×4 + 403×11 |
+
+`tail2.log` (158 entri, 06:42:08Z … 07:37:32Z) bukan run kedua — itu instance `wrangler tail`
+kedua yang jalan **paralel di capture yang sama**, buktinya entri terakhir keduanya punya
+`eventTimestamp` yang identik sampai milidetik. Empat angka token-nya identik (33 / 33 / 0 dan
+`sid=NCFB` 10). Karena jendelanya tumpang tindih, kedua berkas TIDAK boleh dijumlahkan.
+
+Angka sisi penyerang tidak diambil dari log, tapi dari stdout script itu sendiri
+(`prod-attack.log`): `T5a 30 create dari 1 IP → 7 lulus, 23 429` dan `T5b 30 sid palsu → status
+unik 403`. Ditemani tabel di atas, tail menangkap 11 dari 30 percobaan sid palsu — inilah alasan
+stream ini disebut best-effort, bukan audit log, dan klaim yang sah tetap "setiap kemunculan
+token di stream ini disensor", BUKAN "tidak ada token di log". Untuk `resumeToken` /
+`leaderToken`, yang belum pernah dikirim sama sekali, nol kemunculan tidak membuktikan apa pun.
+Memindahkan token ke header juga tidak otomatis menyelamatkan log: entri tail ikut mencetak
+request header, dan `cf-connecting-ip` tercatat 88 kali — sebanyak field `url`-nya.
+
+Tiga angka dari versi lama yang saya nyatakan sendiri di sini, bukan dihilangkan diam-diam:
+`tok= 21` tidak berasal dari jendela mana pun (whole-file 33, prefix 200.403 byte 10), `200 8x`
+tidak juga (whole-file `/create 200×18`, prefix memberi `200×17`), dan `31 permintaan /create`
+salah — `prod-attack.log` menulis 30. `sid=NCFB 10` dan `403 11×` yang tadi disebut "di jendela
+ini" ternyata angka whole-file, sedangkan `200.403 byte / 42 field url / 42 cf-connecting-ip`
+adalah jendela prefix; keduanya memang tidak pernah satu jendela. Yang bertahan utuh dari
+kalimat lama cuma dua: `403` 11× dan `tok=hex` 0.
+
+Atribusi rantai hex dikoreksi dengan cara yang sama. Di `tail.log` utuh ada **428** rantai
+64 karakter, per field: `clientHandshake` 86, `serverHandshake` 86, `clientFinished` 86,
+`serverFinished` 86, `durableObjectId` 84 (3 nilai unik). `tlsClientRandom` justru bukan hex —
+44 karakter base64 — jadi "sisanya hash handshake TLS (96 hex)" salah dua-duanya. Dua dari tiga
+`durableObjectId` bisa dipasangkan ke sid di entri yang sama (`87a6c836db96`→`B298`,
+`e15fad11e8f6`→`NCFB`); yang ketiga (`5d773e62017a`, 62 kemunculan) tidak memuat sid di entri
+yang sama, jadi pasangnya tidak saya klaim.
 
 Serangan ini bukan tanpa jejak di akun sendiri. Sekali jalan di produksi, ia meninggalkan sesi
-DO sungguhan (run ini `NCFB`, sebelumnya `7ND3` dan `B298`) dan membuat IP aslimu menyentuh
-`CREATE_LIMITER` selama 60 detik — jadi `npm run attack` terhadap URL produksi bukan sesuatu yang
-dijalankan berkali-kali sambil mencari-cari, dan jangan dijalankan dari IP yang sama saat band
-sedang mencoba masuk.
+DO sungguhan dan membuat IP aslimu menyentuh `CREATE_LIMITER` selama 60 detik. Yang bisa
+dibuktikan dari artefak di disk: `prod-attack.log` menulis `sesi uji sid=NCFB`, kedua tail
+mencetak `sid=NCFB` 10 kali, dan `B298` juga punya DO sendiri di capture yang sama (10 kali,
+`durableObjectId 87a6c836db96`). `7ND3` — yang disebut versi paragraf ini sebagai sesi
+sebelumnya — **tidak muncul di artefak mana pun** yang tersisa, jadi angka itu saya tarik
+kembali. Semua jejak di atas berasal dari capture **13 Nov 2026 13:38–14:37 WIB**, bukan dari
+15/16 Nov: tidak ada artefak produksi pada dua tanggal itu, dan capture baru berarti
+lalu-lintas sungguhan ke produksi — itu keputusan pemilik, bukan keputusan saya atau checker.
+Kesimpulannya tidak berubah: `npm run attack` terhadap URL produksi bukan sesuatu yang dijalankan
+berkali-kali sambil mencari-cari, dan jangan dijalankan dari IP yang sama saat band sedang
+mencoba masuk.
 
 Kalau `SESSION_SIGNING_KEY` lupa dipasang, `/create` dan `/ws` menjawab `500 {"error":"NO_KEY"}`
 dan `/health` menjawab `keyPresent: false`. Sengaja gagal tertutup: token yang di-mint dari kunci
@@ -645,10 +687,26 @@ terjawab pada deploy pertama di `https://paranoidclick.hafizsyq.workers.dev`:
    npx wrangler tail --format json > tail.log
    PC_BASE_URL=https://paranoidclick.<akun>.workers.dev PC_LOG_FILE=tail.log npm run attack
    ```
-   Baris `T9c` menjawab `BUKTI`, dan angka-angkanya ada di bagian "Gerbang keamanan M0" di atas:
-   URL lengkap tercatat tetapi nilainya `tok` diganti `REDACTED` oleh Cloudflare sendiri, 21 dari
-   21 kemunculan. Catatan penting dari ukur yang sama: stream `wrangler tail` bocor (hanya
-   sebagian entri sampai), jadi tes ini tidak boleh dibaca sebagai audit log.
+   Lalu **analisisnya** — ini bagian yang dulu tidak tertulis, sehingga angkanya tidak bisa
+   diulang orang lain. Semua perintah di bawah jalan ke `tail.log` hasil langkah pertama, dan
+   window yang dipakai adalah seluruh berkas:
+   ```
+   stat -c%s tail.log                            # ukuran artefak, supaya window-nya jelas
+   grep -c '"eventTimestamp":' tail.log          # jumlah entri yang benar-benar tertangkap
+   grep -oE '"url": *"[^"]*/ws\?[^"]*"' tail.log | wc -l     # handshake yang membawa query string
+   grep -o 'tok=' tail.log | wc -l               # semua kemunculan tok
+   grep -o 'tok=REDACTED' tail.log | wc -l       # ...yang tersensor platform
+   grep -oE 'tok=[0-9a-f]' tail.log | wc -l      # kendali negatif: harus 0
+   grep -o 'sid=NCFB' tail.log | wc -l           # kendali positif: URL memang tercatat
+   grep -o 'cf-connecting-ip' tail.log | wc -l   # header ikut tercetak = jumlah field "url"
+   grep -oE '"status": *[0-9]+' tail.log | sort | uniq -c    # bauran status whole-file
+   ```
+   Empat angka terakhir itu adalah T9c. Capture 13 Nov 2026 yang tersisa di disk menjawab
+   33 / 33 / **0** untuk tiga baris token dan 10 untuk kendali positif; tabel lengkap, status
+   per path, dan angka sisi penyerang (`prod-attack.log`) ada di bagian **Gerbang keamanan M0**
+   di atas. Catatan penting dari ukur yang sama: stream `wrangler tail` bocor (hanya sebagian
+   entri sampai), jadi tes ini tidak boleh dibaca sebagai audit log — dan kalau dua instance
+   tail jalan paralel seperti `tail.log` + `tail2.log`, angka keduanya tidak boleh dijumlahkan.
 3. **Angka lapangan.** Buka URL itu di **setiap** HP band, jalankan layar "Ukur 60 ping", salin
    kotak Hasil (jitter p95 per HP) ke tabel keputusan di atas. Satu HP bukan bukti lima HP.
    Ini yang masih belum ada angkanya.
