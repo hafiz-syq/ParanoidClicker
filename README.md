@@ -488,6 +488,44 @@ BELUM / batas yang diketahui di M2:
     jadi di atas kertas marginnya 17×; belum diukur pada tab yang benar-benar seret.
 - Otoritas pemimpin masih di sisi layar saja → M3.
 
+## Antrean defect yang belum punya gerbang
+
+Ditulis di sini supaya tidak menguap jadi log percakapan. Tidak satu pun boleh masuk changelog
+M3a sebagai "diperbaiki" tanpa tes, dan angka yang bukan hasil ukur saya sendiri saya labeli
+sumbernya.
+
+1. **`scripts/**` tidak masuk project tsconfig mana pun.** `tsconfig.app.json` hanya mengambil
+   `src/app|screens|shared`, `tsconfig.worker.json` hanya `src/worker|shared` plus dua `.d.ts`,
+   dan `tsconfig.json` di root isinya cuma `references` ke dua berkas itu — dibaca langsung,
+   16 Nov 2026. Jadi `scripts/attack.ts`, `smoke-ws.ts`, `lint-arch.ts`, dan `gerbang.spec.ts`
+   tidak pernah di-typecheck oleh `npm run check`. **Keputusan pemilik 2026-11-16: `@types/node`
+   jangan dipasang, tunda.** Jumlah error-nya tergantung siapa yang mengetik flag — itu sendiri
+   bukti tidak ada project file yang menaungi `scripts/`: `tsserver` melaporkan 34 error di
+   `attack.ts` (angka pelapor, TIDAK saya reproduksi), sedangkan
+
+   ```
+   npx tsc --noEmit --strict --target ES2022 --module esnext --moduleResolution bundler \
+     --skipLibCheck scripts/attack.ts scripts/smoke-ws.ts
+   ```
+
+   memberi **8** — 7 di `attack.ts`, 1 di `smoke-ws.ts`, semuanya TS2307/TS2580/TS7006 karena
+   deklarasi Node tidak ada. Bagian yang masih bisa dikerjakan tanpa dependensi baru: menaruh
+   `scripts` di project tsconfig sendiri dengan `types: []`, lalu membereskan error yang tersisa
+   dan melaporkan angkanya.
+2. **Tidak ada gerbang yang menjamin bundel JS disajikan sebagai JavaScript.** `cek:ikon:http`
+   hanya mengawal ikon. Worker lama melayani `/assets/index-<hash>.js` yang tidak dikenalnya
+   sebagai `200 text/html` lewat SPA fallback → layar putih dengan satu-satunya gejala di konsol
+   (module-MIME error); ini sudah menabrak saya sekali, lihat jebakan snapshot `dist/` di bagian
+   M2. Bentuk perbaikan yang sah = assert `content-type` untuk `assets/index-*.js`, bukan status
+   200 — pelajaran TEMUAN 4 berlaku lagi di sini.
+3. **Klik pertama ±600 ms sesudah Stop/idle/Start.** Diukur pada DUA build: 613,0 ms (build M2)
+   dan 642,9 ms (build pra-M2), jadi ia sudah ada sebelum servo dan bukan regresi M2. Kedua angka
+   itu hasil ukur pelapor, BUKAN saya — saya belum mereproduksinya, dan tidak ada satu pun tes
+   yang menjaganya.
+4. **`rowsWritten` di panel diagnostik** pernah dilaporkan menampilkan "2 baris ditulis" untuk
+   satu anggota. Ini masih DUGAAN dan belum diukur ulang oleh siapa pun, jadi tidak saya sentuh
+   dan tidak saya tulis sebagai bug.
+
 ## Warna layar: satu tempat, kontras dihitung
 
 

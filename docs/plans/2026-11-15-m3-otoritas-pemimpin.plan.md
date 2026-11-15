@@ -80,10 +80,11 @@ paling bawah di Baris persetujuan dicentang — pemilik menjawab *"Setuju, tapi 
    **2c.** `webSocketClose` `:202-207` menyiarkan `state` supaya kursi yang baru kosong tidak
    menunggu frame berikutnya.
 
-   **Tafsir yang saya pasang di jawaban §6.2 — mohon dikoreksi kalau salah**: yang dihitung adalah
-   **`did` berbeda di antara socket hidup**, bukan jumlah socket mentah. Tanpa itu, satu HP yang
-   network-nya flap membuka dua socket dan memakan dua kursi — persis skenario "banjir reload"
-   yang saya khawatirkan sendiri waktu bertanya.
+   **Tafsir §6.2 — DIKONFIRMASI pemilik, 2026-11-16**: yang dihitung adalah **`did` berbeda di
+   antara socket hidup**, bukan jumlah socket mentah. Tanpa itu, satu HP yang network-nya flap
+   membuka dua socket dan memakan dua kursi — persis skenario "banjir reload" yang saya
+   khawatirkan sendiri waktu bertanya. Konsekuensi yang sekarang resmi: satu orang dengan dua
+   tab terhitung SATU kursi selama `did`-nya sama (dan `did` memang per-browser, `live.ts:269`).
 3. `src/shared/limits.ts` — **TIDAK disentuh.** Butir ini saya tulis salah di versi pertama
    rencana ini: `FrameCode` (`limits.ts:7`) adalah daftar penolakan *bentuk frame*
    (`TOO_BIG`/`TOO_DEEP`/`BAD_KEY`/`BAD_TYPE`), bukan daftar kode error di wire. Kode wire
@@ -166,7 +167,7 @@ hidup tidak perlu dihancurkan.
 | # | Pertanyaan | Jawaban pemilik | Jadi di rencana |
 |---|---|---|---|
 | 1 | Perlu `proto` naik 3? | **"Setuju, tapi jangan kode dulu"** | `proto` tetap 2, `lk` key opsional di `hello`; dan TIDAK ada satu baris kode pun ditulis sebelum kotak terakhir Baris persetujuan dicentang |
-| 2 | Dasar kapasitas 12 HP: socket hidup atau riwayat? | **"Socket hidup (getWebSockets)"** | §4 butir 2b–2c; tabel `member` tetap untuk `rowsWritten`; tafsir "per `did` berbeda" dicatat sendiri di butir 2b supaya bisa dikoreksi |
+| 2 | Dasar kapasitas 12 HP: socket hidup atau riwayat? | **"Socket hidup (getWebSockets)"**, dan ditafsirkan **per `did` unik** ketika ditanya ulang 2026-11-16 | §4 butir 2b–2c; tabel `member` tetap untuk `rowsWritten` |
 | 3 | Rebut pemimpin: boleh? | **"Rebut dengan lk, eksplisit"** | §3 butir rebut + frame `claim` (§4 butir 2a) + 2 tes baru + kolom `lk_hint` di §5 |
 | 4 | Setlist di M3 atau dipecah? | **"M3b terpisah"** | §4 "Keluar dari M3a" |
 
@@ -190,11 +191,12 @@ Pemilik sudah membaca rencana ini; jawabannya dicatat apa adanya (2026-11-15):
 
 - [x] **§3 kunci pemimpin (`lk` dari `/create`, tidak lewat tautan join)** sebagai desain M3a — *"Setuju"*
 - [x] **§6.1** `proto` tetap 2, `lk` opsional di `hello` — *"Setuju"*
-- [x] **§6.2** dasar kapasitas: **socket hidup (`getWebSockets`)** — tafsir "per `did` berbeda" masih menunggu koreksi
+- [x] **§6.2** dasar kapasitas: **socket hidup (`getWebSockets`)**, dihitung per **`did` unik** —
+      tafsir dikonfirmasi pemilik 2026-11-16
 - [x] **§6.3** rebut pemimpin: **dengan `lk`, eksplisit** (tombol "Ambil kendali")
 - [x] **§6.4** setlist dipecah ke **M3b** (M3a saja dulu)
 - [ ] **Boleh menyentuh `src/worker/**` dan `src/app/**`** untuk irisan yang tercantum di §4 —
-  TETAP KOSONG: *"jangan kode dulu"*
+  **DITANYA ULANG 2026-11-16, jawaban pemilik tetap: "Tahan dulu, tetap docs-only"**
 
 Persetujuan pemilik (kotak terakhir, yang membuka kode): `________________________`  Tanggal: `____________`
 
