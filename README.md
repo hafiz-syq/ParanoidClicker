@@ -3,9 +3,10 @@
 Metronom sinkron untuk band Paranoid: beberapa HP mengikut satu tempo, HP yang membagi
 QR jadi leader, lengkap dengan setlist dan hitungan suara.
 
-Status: **M1b** — klik sudah berbunyi di beberapa perangkat dari satu grid tempo, dan shell PWA
-sudah ada (ikon + manifest). Belum otoritas pemimpin di server (M3), ramp/servo (M2), QR (M4),
-suara hitungan (M5), kalibrasi akustik (M6), service worker + offline (M7).
+Status: **M2** — servo koreksi θ 4 tingkat, ramp tempo per bar, dan beat tertelan di jahitan
+sudah berbunyi dan punya angka; belum otoritas pemimpin di server (M3), QR (M4), suara hitungan
+(M5), kalibrasi akustik (M6), service worker + offline (M7). Semua angka M2 di bawah masih
+**lokal** — tidak ada satu pun perubahan M2 yang dikirim ke produksi.
 
 ## Menjalankan
 
@@ -37,7 +38,7 @@ di HP lain jadi pengikut. Alat ukur spike M0 masih di `?layar=ukur`.
 | `npm run cek:ikon` | versi CLI penjaga ikon (cetak tabel sha + IHDR); assertion-nya sendiri jalan di `npm run test` |
 | `npm run cek:ikon:http` | versi served: `content-type: image/png` + sha256 body, butuh server; status 200 TIDAK dipakai sebagai bukti |
 | `npm run cek:kontras` | versi CLI `scripts/cr.mjs` (cetak semua CR + penjaga kutipan); assertion-nya jalan di `npm run test` |
-| `npm run check` | typecheck → lint:arch → test (62, termasuk 2 gerbang bukti di `scripts/gerbang.spec.ts`) → test:worker (17) — gerbang sebelum commit |
+| `npm run check` | typecheck → lint:arch → test (100, termasuk 2 gerbang bukti di `scripts/gerbang.spec.ts`) → test:worker (20) — gerbang sebelum commit |
 | `npm run smoke` | jalur WebSocket asli, butuh `npm run dev:worker` |
 | `npm run attack` | tes serangan T5/T6/T7/T9, butuh `npm run dev:worker` |
 
@@ -323,9 +324,10 @@ BELUM / batas yang diketahui:
 - **Satu lonjakan drift pernah terlihat**: maks 78,5 ms dan sekali 360,7 ms dalam jendela 240 klik,
   keduanya di sekitar pergantian tab, sementara p95 tetap < 8,2 ms. Kandidatnya `onended` yang
   terlambat di-dispatch (probe-nya JavaScript), bukan bunyi yang terlambat — belum dibuktikan.
-- `abandonedBeats` menghitung lubang dari sisi grid yang sedang playing; satu beat grid baru yang
-  tertelan antrean grid lama di jahitan tidak terhitung (yang itu tetap berbunyi dari antrean
-  lama). Angka `hilang` bisa kurang satu klik per seam yang frame-nya mendarat >170 ms terlambat.
+- `abandonedBeats` menghitung lubang dari sisi grid yang sedang playing. **Ditutup di M2**: beat
+  grid baru yang tertelan di jahitan sekarang punya angkanya sendiri (`jahitan` / `swallowed`,
+  ADR-0003) dan serah terima grid ditunda sampai anchor (ADR-0004), jadi `hilang` tidak bisa
+  lagi kurang satu klik per seam.
 - Otoritas pemimpin masih cuma di sisi layar; server belum memeriksa siapa yang boleh mengirim
   `tempo`/`start`/`stop` → M3.
 - Kompensasi latensi baru `baseLatency + outputLatency` (angka itu tidak ada di semua browser dan
@@ -343,7 +345,91 @@ BELUM / batas yang diketahui:
   versi 16 px yang digambar ulang untuk ukuran itu, dan "Add to Home Screen" di HP asli belum
   diukur — lihat **Ikon & shell PWA**.
 
+## M2: servo θ 4 tingkat, ramp per bar, dan angka jahitan
+
+Empat keputusan ditulis di `docs/adr/`: [0001](docs/adr/0001-servo-empat-tingkat.md) servo 4
+tingkat (bukan servo bebas), [0002](docs/adr/0002-ramp-tempo-per-bar.md) ramp = frame `tempo`
+biasa satu langkah per bar, [0003](docs/adr/0003-adopt-index-ekor-antrean.md) `adoptIndex`
+melaporkan beat yang tertelan, [0004](docs/adr/0004-serah-terima-grid-pada-anchor.md) grid baru
+diambil alih pada anchor-nya. Tidak ada perubahan kontrak `state` di DO: `proto` tetap 2, tidak
+ada kolom baru, tidak ada frame baru — klien lama yang sudah ter-install tetap memahami setiap
+byte yang dikirim.
+
+Yang baru di layar kedua peran: baris `θ dipakai klik = … ms · lompat N× · beat tertelan di
+jahitan N` di panel diagnostik, dan satu baris **Ramp ke BPM / Mulai ramp** khusus pemimpin.
+
+### Baseline pra-M2
+
+Angka ini punya sesi pemeriksa (@ParanoidClicks), bukan aku — kutipan persis dari layarnya, belum
+kuukur ulang di mesin yang sama, dan `max` pengikut memang tidak dilaporkan:
+
+| Yang diukur | Angka persis |
+|---|---|
+| pemimpin | `klik 34 berbunyi · 0 hilang · ctx=running · laju audio=1.000×` · meleset **p50 0,9 / p95 1,5 / max 2,0 ms** |
+| pengikut | `klik 18 berbunyi · 0 hilang · ctx=running · laju audio=0,993×` · meleset **p50 0,4 / p95 10,7 / max —** |
+| kedua perangkat | `anchor=1794714006409` **identik**, θ −0,5 ms keduanya |
+| environment | Chromium, viewport 390×844, dua `isolatedContexts`, worker lokal `:8787` |
+
+### Sesudah servo (kuukur sendiri, environment-nya berbeda — jangan dibandingkan baris per baris)
+
+Chromium 157.0.8103.51 lewat Playwright MCP, dua konteks terisolasi 390×844 `isMobile` + `hasTouch`,
+app hasil `npm run build` disajikan `wrangler dev --assets=dist --local` di `:8788`. Semua angka
+dibaca dari teks panel diagnostik di layar, bukan dari sampler di dalam halaman — jadi `klik N`
+bisa tertinggal beberapa detik (batas yang sudah dicatat di M1b).
+
+| Yang diukur | Pemimpin | Pengikut |
+|---|---|---|
+| 20 s pertama, 120 bpm | `klik 41 · 0 hilang · laju 0,997×` · p50 −6,1 / p95 3,8 / max 4,5 ms | `klik 40 · 0 hilang · laju 1,000×` · p50 4,4 / p95 5,0 / max 5,0 ms |
+| θ vs θ yang dipakai klik | −0,5 vs −0,5 ms | +0,5 vs +0,5 ms |
+| `lompat` / `tertelan` | 0× / 0 | 0× / 0 |
+| ram 120 → 110 selesai | `110 BPM · ramp selesai di 110 BPM` · `klik 194 · 0 hilang` · p50 −2,7 / p95 4,5 / max 8,5 ms | `klik 193 · 0 hilang` · p50 3,8 / p95 4,8 / max 7,0 ms |
+| anchor sesudah 10 jahitan | `1794720798569.0852` | `1794720798569.0852` (identik) |
+| 24 s mantap di 110 bpm | **+44 klik** (harapan 44,0) · `0 hilang` → `0 hilang` · `tertelan` 0 → 0 | **+44 klik** · `0 hilang` → `0 hilang` · `tertelan` 0 → 0 |
+| drift jendela 240 klik | p50 −0,4 / p95 4,9 / max 9,1 ms | p50 3,5 / p95 6,2 / max 7,9 ms |
+
+Delta klik = 44 di kedua layar untuk 44 beat yang diharapkan adalah bukti live bahwa tidak ada
+beat yang hilang **dan** tidak ada yang terdobel selama 10 jahitan ramp; `0 hilang` dan
+`tertelan 0` menutup sisi yang lain.
+
+### Kontrol pra-M2 di environment yang sama
+
+Supaya angka "sesudah" tidak dibandingkan dengan angka dari mesin orang: `HEAD` (93f4d87, tanpa
+servo/ramp) dibuild ke `dist/` di worktree terpisah dan disajikan di `:8789`, browser dan viewport
+yang sama, 24 s pada 120 bpm.
+
+| Yang diukur | Pemimpin | Pengikut |
+|---|---|---|
+| klik dalam 24 s | +48 (harapan 48,0) · `0 hilang` | +48 · `0 hilang` |
+| meleset | p50 4,4 / p95 5,5 / **max 6,1 ms** | p50 −4,5 / p95 −4,2 / **max 51,0 ms** |
+| kompensasi otomatis | 50,0 ms | 10,0 ms |
+| anchor | `1794720920209` | identik |
+
+Dua hal yang harus dibaca jujur dari tabel ini. (1) `kompensasi latensi` default adalah
+`baseLatency + outputLatency` milik konteks itu sendiri, dan Chromium ini memberi 50 ms ke satu
+konteks dan 10 ms ke konteks lain — jadi p50 absolut antar-run di mesin ini tidak sebanding
+langsung, dan itu sebabnya p50−/p95 kontrol dan p50−/p95 M2 tidak bisa dikurangi menjadi "servo
+memindahkan X ms". (2) Satu lonjakan `max 51,0 ms` muncul di kontrol pra-M2; aku **tidak**
+mengklaim servo menghapusnya — penyebab lonjakan itu belum dibuktikan (dugaan terkuat tetap
+dispatch `onended` yang terlambat, bukan bunyi yang terlambat) dan aku hanya punya satu run kontrol.
+
+`npm run check` hijau sesudah M2 (exit 0): typecheck, `lint:arch OK — 4 berkas src/app/sync
+bersih`, **100 tes unit** dalam 9 berkas (`servo.spec` 9, `ramp.spec` 11, `click.spec` 14,
+`schedule.spec` 19, `live.spec` 16, `offset.spec` 13, `tempo.spec` 6, `limits.spec` 10,
+`gerbang.spec` 2) + **20 tes worker**, 699 ms + 2,61 s.
+
+BELUM / batas yang diketahui di M2:
+
+- Angka di atas diukur di **browser desktop**, bukan HP. `0 hilang`, anchor identik dan delta klik
+  yang sama adalah jaminan pipa sinkron, bukan jaminan akustik di sepuluh HP.
+- Jalur bangun-dari-tidur (`visibilitychange` → `pingNow()` + lompatan servo) belum pernah
+  diuji dengan tab yang benar-benar dibekukan OS; yang teruji adalah unit test-nya.
+- Ramp 120 → 110 butuh ±21 s dan 120 → 100 butuh **43,6 s** (20 bar, terhitung dari
+  `4·60000/bpm`). Kalau band butuh lebih cepat, yang diubah ukuran langkahnya — itu keputusan UI,
+  bukan arsitektur (ADR-0002).
+- Otoritas pemimpin masih di sisi layar saja → M3.
+
 ## Warna layar: satu tempat, kontras dihitung
+
 
 `src/global.css` adalah satu-satunya tempat warna dasar dan komponen (`#0b0b0f` / `#eee`, dan
 `theme-color` di `index.html` sekarang benar-benar dipakai). Layar memakai kelas, bukan
@@ -502,7 +588,7 @@ URL asli. Akun Workers Free cukup — tidak ada yang perlu dibayar.
 
 ```
 npm run login                    # buka browser, otorisasi OAuth; cek: npx wrangler whoami
-npm run check                    # typecheck + lint:arch + 62 tes unit + 17 tes worker, harus hijau
+npm run check                    # typecheck + lint:arch + 100 tes unit + 20 tes worker, harus hijau
 npm run secret                   # tempel satu baris hex 64, lihat catatan asal-usul di bawah
 npm run deploy                   # = vite build && wrangler deploy; cetak URL workers.dev
 curl https://paranoidclick.<akun>.workers.dev/health
