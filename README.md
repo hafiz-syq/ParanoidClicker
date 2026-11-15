@@ -327,12 +327,26 @@ BELUM / batas yang diketahui:
 seluruh aplikasi dirender di atas putih bawaan browser dan tautan `#9cf` cuma 1,69:1.
 
 Angkanya tidak dinilai dengan mata: `node scripts/cr.mjs` menghitung luminansi relatif WCAG untuk
-setiap pasangan yang dikirim (teks 6,54–16,93:1, butuh 4,5; border 3,19–3,74:1, butuh 3 — WCAG
-2.2, W3C Recommendation 12 Dec 2024, SC 1.4.11). Kalau menambah warna, tambahkan barisnya ke
-script itu dulu. Satu hal yang bikin tertipu: border `1px` tergambar dengan coverage 0,8 di layar
-ini, jadi pikselnya = 0,8×warna + 0,2×latar — `#6b6b78` yang tertulis 3,4:1 terukur `#595965` =
-2,85:1, dan itu sebabnya border yang dipakai `#808088`. Border tombol `:disabled` (`#55555f`)
-sengaja di bawah 3:1 karena 1.4.11 mengecualikan komponen non-aktif.
+setiap pasangan yang dikirim. Baris yang dipakai di layar, dipetik apa adanya dari outputnya:
+
+```
+#eee di #0b0b0f = 16.93:1  [AA teks]  teks layar di atas latar global
+#9a9ab0 di #16161c = 6.54:1  [AA teks]  label tombol disabled (vs bg disabled)
+#808088 di #0b0b0f = 5.02:1  [AA teks]  border komponen vs latar halaman
+  #808088: tergambar #696970/#6c6c74 -> vsLayar 3.61 vsTombol 3.29 vsField 3.51 vsPanel 3.53 · MIN 3.29 LOLOS
+  #6b6b78: tergambar #585863/#5b5b67 -> vsLayar 2.80 vsTombol 2.56 vsField 2.76 vsPanel 2.74 · MIN 2.56 kurang
+```
+
+Teks butuh 4,5:1 dan yang terukur 6,54–16,93:1. Border non-teks butuh 3:1 (SC 1.4.11, WCAG 2.2,
+W3C Recommendation 12 Dec 2024) dan yang dipetik adalah **MIN 3,29**, bukan `vsLayar` 3,61 yang
+paling memuji; empat permukaan tempat border itu tergambar memberi 3,29–3,61:1. Border `1px` di
+layar ini tergambar dengan coverage 0,8, jadi pikselnya = 0,8×warna + 0,2×latar — itu sebabnya
+calon `#6b6b78` gugur di MIN 2,56 dan yang dipakai `#808088`. Kalau menambah warna, tambahkan
+barisnya ke script itu dulu, baru ke dokumen — dan itu bukan imbauan lagi: `node scripts/cr.mjs`
+menutup dengan `penjaga kutipan`, yang exit 1 kalau salah satu baris blok di atas tidak ada
+verbatim di outputnya sendiri (dijaga hanya saat `COV` tidak diubah; `COV=1` mencetak baris lain,
+jadi penjaganya bilang DILEWATI, bukan lulus). Border tombol `:disabled` (`#55555f`) sengaja di
+bawah 3:1 karena 1.4.11 mengecualikan komponen non-aktif.
 
 ## Ikon & shell PWA
 
