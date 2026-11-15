@@ -43,6 +43,15 @@ for (const [fg, bg, what] of PAIRS) {
   const teks = v >= 4.5 ? 'AA teks' : v >= 3 ? 'hanya non-teks' : 'GAGAL';
   say(`${fg} di ${bg} = ${v.toFixed(2)}:1  [${teks}]  ${what}`);
 }
+// --- latar LAMA #ffffff ---
+// Ini alasan palet gelap dipasang, dan README mengutip angkanya. Dulu angka itu dihitung
+// tangan di luar script, jadi tidak ada command yang bisa mengulangnya. Sekarang dicetak
+// di sini: setiap CR yang disebut dokumen berasal dari tool yang sama.
+say('\nlatar LAMA #ffffff (sebelum global.css ada):');
+for (const [fg, what] of [['#9cf', 'tautan lama'], ['#f99', 'peringatan lama'], ['#eee', 'teks lama']]) {
+  say(`  ${fg} di #ffffff = ${cr(fg, '#ffffff').toFixed(2)}:1  ${what}`);
+}
+
 say('\ncalon border (butuh >=3.0 terhadap #0b0b0f):');
 for (const g of ['#444444', '#555555', '#5e5e5e', '#636363', '#808088', '#707070']) {
   say(`  ${g} vs #0b0b0f = ${cr(g, '#0b0b0f').toFixed(2)}:1 · vs #1b1b22 = ${cr(g, '#1b1b22').toFixed(2)}:1`);
@@ -82,35 +91,42 @@ for (const cov of [Number(process.env.COV ?? 0.8)]) {
 // Aturan di README: angka yang tidak diukur tidak boleh masuk dokumen. Dulu aturan itu
 // cuma tulisan, dan README sendiri akhirnya memuat rentang border yang tidak pernah
 // dicetak script ini (3,19-3,74) serta satu hex (#595965) yang tidak ada di output.
-// Sekarang dijaga mesin: setiap baris blok kutipan harus ada verbatim di `keluar`.
+// Sekarang dijaga mesin: setiap baris README yang berbentuk seperti output script ini
+// harus ada verbatim di `keluar`.
+// Yang dicari adalah BENTUK baris output script ini (`#abc di #def = ...` dan
+// `#abc: tergambar ...`) di SEMUA blok berpayung README, bukan satu blok yang ditunjuk
+// lewat nama — kalau tidak, blok palsu kedua di halaman lain tidak akan pernah diperiksa.
 // Kalau COV diubah lewat env, baris coverage yang dicetak bukan baris yang dipakai
 // dokumen, jadi penjaga ini dilewati dengan sengaja — bukan dianggap lulus.
 if (process.env.COV) {
   console.log(`\npenjaga kutipan: DILEWATI (COV=${process.env.COV}, dokumen mengutip COV=0,8)`);
 } else {
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8').split(/\r?\n/);
-  const blok = [];
-  let cur = null;
-  for (const l of readme) {
+  const bentukOutput = /^\s+#[0-9a-f]{3,8}: tergambar |^\s*#[0-9a-f]{3,8} di #[0-9a-f]{3,8} = /i;
+  const kutip = [];
+  let dalamBlok = false;
+  for (const [i, l] of readme.entries()) {
     if (l.startsWith('```')) {
-      if (cur) {
-        blok.push(cur);
-        cur = null;
-      } else cur = [];
+      dalamBlok = !dalamBlok;
       continue;
     }
-    if (cur) cur.push(l);
+    if (dalamBlok && bentukOutput.test(l)) kutip.push({ n: i + 1, l });
   }
-  const kutipan = blok.filter((b) => b.some((l) => l.trimStart().startsWith('#eee di #0b0b0f')));
-  if (kutipan.length !== 1) {
-    console.error(`penjaga kutipan: ditemukan ${kutipan.length} blok angka CR di README, harus tepat 1`);
+  if (!kutip.length) {
+    console.error('penjaga kutipan: README tidak mengutip satu pun baris output script ini');
     process.exit(1);
   }
-  const palsu = kutipan[0].filter((l) => !keluar.includes(l));
+  const palsu = kutip.filter(({ l }) => !keluar.includes(l));
   if (palsu.length) {
     console.error(`penjaga kutipan: ${palsu.length} baris README tidak ada di output script ini:`);
-    for (const l of palsu) console.error('  |' + l + '|');
+    for (const { n, l } of palsu) console.error(`  README:${n} |${l}|`);
     process.exit(1);
   }
-  console.log(`\npenjaga kutipan: ${kutipan[0].length} baris README = verbatim output di atas`);
+  const blok = new Set();
+  for (const { n } of kutip) {
+    let b = n;
+    while (b > 1 && !readme[b - 2].startsWith('```')) b--;
+    blok.add(b);
+  }
+  console.log(`\npenjaga kutipan: ${kutip.length} baris README di ${blok.size} blok = verbatim output di atas`);
 }
