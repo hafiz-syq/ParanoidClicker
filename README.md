@@ -3,7 +3,9 @@
 Metronom sinkron untuk band Paranoid: beberapa HP mengikut satu tempo, HP yang membagi
 QR jadi leader, lengkap dengan setlist dan hitungan suara.
 
-Status: **spike M0** — mengukur RTT/jitter jaringan asli sebelum ada satupun fitur janji.
+Status: **M1b** — klik sudah berbunyi di beberapa perangkat dari satu grid tempo. Belum ada
+otoritas pemimpin di server (M3), ramp/servo (M2), QR (M4), suara hitungan (M5), kalibrasi
+akustik (M6), PWA (M7).
 
 ## Menjalankan
 
@@ -19,7 +21,9 @@ di produksi. Produksi memasang nilainya sendiri lewat `npm run secret` (`wrangle
 SESSION_SIGNING_KEY`), yang meminta satu baris hex 64 dari perintah `node -e` di atas. Cara
 memastikan kunci menempel: `GET /health` menjawab `keyPresent: true`.
 
-Buka http://localhost:5173 (atau :8787 untuk build yang sama seperti produksi).
+Buka http://localhost:5173 (atau :8787 untuk build yang sama seperti produksi). Dari menu di
+halaman itu: **Buat sesi baru** jadi pemimpin (tautan join muncul di layar), tautan itu dibuka
+di HP lain jadi pengikut. Alat ukur spike M0 masih di `?layar=ukur`.
 
 | Perintah | Fungsi |
 | --- | --- |
@@ -226,9 +230,92 @@ karena tidak ada log yang ditangkap). Penjaga `start` ulang diuji dengan melepas
 tesnya merah, karena anchor bergeser dan baris SQLite tertulis dua kali — itu juga yang membakar
 kuota "rows written" plan gratis.
 
-BELUM ada: satu HP yang membunyikan klik (M1b: Web Audio + layar), otoritas pemimpin (siapa pun
-di dalam sesi boleh mengirim `tempo`/`start`/`stop` — ditutup M3), dan batas laju perubahan
-keadaan. `proto` di `/health` naik 1 → 2; produksi masih serving proto 1 sampai deploy berikut.
+BELUM ada waktu itu: satu HP yang membunyikan klik — ditutup di M1b di bawah. Yang masih terbuka:
+otoritas pemimpin (siapa pun di dalam sesi boleh mengirim `tempo`/`start`/`stop` — ditutup M3),
+dan batas laju perubahan keadaan. `proto` di `/health` naik 1 → 2; produksi masih serving proto 1
+sampai deploy berikut.
+
+## M1b: klik yang terdengar
+
+Satu HP membuka sesi (pemimpin) atau masuk lewat tautan join (pengikut), lalu membunyikan grid
+dari `anchorMs` tanpa mengirim apa pun per beat. Bagiannya: `src/app/sync/schedule.ts` aritmetika
+murni (jam server → jam dinding → jam audio), `src/app/audio/click.ts` Web Audio + kompensasi
+latensi + probe drift, `src/app/session/live.ts` klien sesi (θ bergulir, freewheel, backoff),
+`src/screens/ClickRoom.tsx` + `Start.tsx` layarnya.
+
+Enam keputusan yang tidak terlihat di diff tapi menentukan bunyi:
+
+1. **`ClockBridge` membawa `rate`, bukan asumsi 1,00.** Terukur: `ctx.currentTime` tidak selalu
+   berdetak secepat jam dinding (0,994–1,008× pada dua tab hari ini; spike headless terdahulu
+   2,3×). Sebelum ini diperbaiki, pemimpin membunyikan **65 klik dalam ~11 detik pada 120 bpm** —
+   scheduler menyangka jendela lookahead-nya masih panjang. Sekarang laju diukur ulang tiap ≥1 s,
+   di-clamp 0,25..4, dan dipakai dua arah (pengali untuk menyetel, pembalik untuk mengukur drift).
+   Jam audio yang sama sekali tidak maju ditandai `audioStalled` di diagnostik, bukan dipaksa
+   menjadi laju 0,25 — angka laju lama lebih jujur daripada clamp bawah.
+2. **Satu cursor: indeks beat berikutnya.** θ, rate, dan kompensasi boleh berubah kapan saja;
+   yang disimpan hanya `nextIndex`, jadi tidak ada keadaan yang bisa saling bertentangan.
+3. **Stop membungkam yang sudah disetel.** Beat di dalam jendela 120 ms sudah menjadi oscillator;
+   `silence()` memanggil `stop(now)` supaya tombol Stop tidak melahirkan klik terakhir.
+4. **Drift diukur, bukan diperkirakan.** `osc.onended` dibandingkan dengan waktu dinding yang
+   diminta; operator yang bilang "klikku beda sendiri" sekarang punya angka p50/p95/max di layar.
+5. **Ganti grid tidak boleh mengundur cursor.** `adoptIndex()` mulai dari beat berikutnya sesudah
+   beat terakhir yang SUDAH disetel grid lama, jadi satu klik tidak pernah ditumpuki klik kedua
+   pada waktu yang sama di jahitan tempo. Beat grid lama yang ditinggalkan lompatan itu dihitung
+   `abandonedBeats` dan masuk ke `hilang` — tanpa itu, tab yang beku lalu menerima frame `state`
+   melaporkan 0 hilang padahal seluruh lubang bunyi sudah dibuang di dalam adopsi.
+6. **Frame `state` dari server melewati gerbang klien juga.** `bpm` wajib integer 30..300 dan
+   `anchorMs` wajib berada dalam ±12 jam dari jam dinding HP; sisanya dibuang dengan
+   `state cacat`. Server sudah membatasi angkanya, tapi kepercayaan tidak diwarisi: `bpm: 0`
+   memberi periode tak hingga (klik bisu, nol error), dan anchor jam 2001 membuat scheduler
+   menyisir jutaan beat sebelum menyentuh horizon.
+
+Sudah dibuktikan (15 Nov 2026, dua tab Chromium + worker lokal `:8787`; semua angka dibaca oleh
+sampler yang berjalan di dalam halaman, bukan dari DOM yang dibaca lewat round-trip):
+
+| Yang diukur | Angka |
+|---|---|
+| panjang sesi pemimpin | 467 klik (sesi 1) & 303 klik (sesi 2), **0 hilang** |
+| seam 120 → 125 bpm (`+5`) | jarak klik 500 ms → 480 ms; tidak ada selang ≈0 (klik ganda), tidak ada selang ≈2 periode (beat hilang) |
+| 5 seam beruntun 120→121→122→127→128→133 | 0 hilang di kedua layar, `abandonedBeats` tidak menangis serigala |
+| laju pada 125 bpm, jendela 40,3 s | 84 klik = **2,084 klik/detik** (harapan 2,083) |
+| layar pengikut di latar selama 122,9 s | 245 klik, 0 hilang, nol selang > 900 ms, selang terpanjang 525 ms |
+| probe drift pemimpin | p50 −0,2 … −2,1 · p95 7,4 … 8,2 · maks 9,2 ms (jendela 240 klik) |
+| probe drift pengikut | p50 −0,8 · p95 8,0 · maks 9,9 ms |
+| beda fase dua layar | anchor identik; θ +0,5 vs −0,5 ms → **≈1 ms** |
+| Stop | 0 klik tambahan dalam 1,5 s sesudah tombol; kedua layar `running=false` |
+| tombol pemimpin di layar pengikut | `-5 -1 +1 +5` dan `Start`/`Stop` semuanya `disabled` |
+| `laju audio` yang terukur | 0,994–1,008× jam dinding |
+
+`npm run check` hijau (exit 0): typecheck, `lint:arch` 2 berkas `src/app/sync`, **60 tes unit**
+(17 di antaranya aritmetika jadwal — rate 2,5, jahitan, `adoptIndex`, `abandonedBeats`, grid
+jahat) + 17 tes worker. `npm run smoke` lulus (rtt ≤ 8 ms, offset 0,00 ms) dan `npm run attack`
+lulus di worker lokal (T5/T6/T7/T9).
+
+BELUM / batas yang diketahui:
+
+- **Teks diagnostik di DOM basi kalau dibaca lewat round-trip.** Counter `klik N` tertinggal
+  beberapa detik saat tab berpindah; semua angka di atas diambil dengan sampler yang berjalan di
+  dalam halaman. Ini alat ukur yang salah, bukan engine yang salah — tapi gampang menipu.
+- **Tab yang tidak di-depan TIDAK melambat di Chromium ini** (245 klik / 122,9 s, 0 hilang).
+  Angka itu bukan jaminan untuk HP: layar mati, iOS Safari yang membuang AudioContext, dan mode
+  hemat baterai punya aturan sendiri, dan belum satu pun yang diukur di perangkat nyata
+  (tugas lapangan M0 masih terbuka).
+- **Satu lonjakan drift pernah terlihat**: maks 78,5 ms dan sekali 360,7 ms dalam jendela 240 klik,
+  keduanya di sekitar pergantian tab, sementara p95 tetap < 8,2 ms. Kandidatnya `onended` yang
+  terlambat di-dispatch (probe-nya JavaScript), bukan bunyi yang terlambat — belum dibuktikan.
+- `abandonedBeats` menghitung lubang dari sisi grid yang sedang playing; satu beat grid baru yang
+  tertelan antrean grid lama di jahitan tidak terhitung (yang itu tetap berbunyi dari antrean
+  lama). Angka `hilang` bisa kurang satu klik per seam yang frame-nya mendarat >170 ms terlambat.
+- Otoritas pemimpin masih cuma di sisi layar; server belum memeriksa siapa yang boleh mengirim
+  `tempo`/`start`/`stop` → M3.
+- Kompensasi latensi baru `baseLatency + outputLatency` (angka itu tidak ada di semua browser dan
+  buta terhadap delay TWS/Bluetooth) → kalibrasi akustik M6; input manual sudah tersedia di layar.
+- Belum ada servo: lompatan θ lebih dari setengah periode akan terdengar tertinggal sampai ping
+  berikutnya menyetel ulang → M2.
+- Join masih lewat tautan, belum QR (M4) — dan tautan itu sendiri adalah kunci sesi.
+- Dua tab memakai satu profil browser → satu `did`, jadi "1 HP" di layar; penghitungan member
+  tidak bisa dibuktikan dari browser (`shortcut:` sewa member baru ada di M3).
+- `favicon.ico` 404 di dev: kosmetik, dibersihkan bersama ikon PWA (M7).
 
 ## Deploy spike ke akun sendiri (M0 lapangan)
 
@@ -237,7 +324,7 @@ URL asli. Akun Workers Free cukup — tidak ada yang perlu dibayar.
 
 ```
 npm run login                    # buka browser, otorisasi OAuth; cek: npx wrangler whoami
-npm run check                    # typecheck + lint:arch + 29 tes unit + 17 tes worker, harus hijau
+npm run check                    # typecheck + lint:arch + 60 tes unit + 17 tes worker, harus hijau
 npm run secret                   # tempel satu baris hex 64, lihat catatan asal-usul di bawah
 npm run deploy                   # = vite build && wrangler deploy; cetak URL workers.dev
 curl https://paranoidclick.<akun>.workers.dev/health
