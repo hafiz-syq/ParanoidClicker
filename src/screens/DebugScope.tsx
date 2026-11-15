@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { genDid } from '../shared/ids';
 import { parseFrame } from '../shared/limits';
 import {
@@ -329,70 +329,51 @@ export function DebugScope() {
   );
 
   return (
-    <main style={{ fontFamily: 'system-ui', padding: 16, maxWidth: 720 }}>
-      <h1 style={{ fontSize: 18 }}>ParanoidClick — spike M0</h1>
-      <ul style={{ fontSize: 13, lineHeight: 1.5 }}>
+    <main className="wide">
+      <h1>ParanoidClick — spike M0</h1>
+      <ul className="note">
         {envLines().map((l) => (
           <li key={l}>{l}</li>
         ))}
       </ul>
 
-      <p style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button onClick={measure} disabled={running} style={btn}>
+      <p className="row">
+        <button onClick={measure} disabled={running} className="btn">
           {running ? 'Mengukur…' : `Ukur ${PING_COUNT} ping`}
         </button>
-        <button onClick={probeAudio} style={btn}>
+        <button onClick={probeAudio} className="btn">
           Ukur audio
         </button>
       </p>
 
-      <p style={{ fontSize: 13 }}>
+      <p className="note">
         {running ? `sampel ${count}/${PING_COUNT}` : verdict} · run tersimpan: {runs.length}
       </p>
-      <p style={{ fontSize: 13 }}>{wake}</p>
+      <p className="note">{wake}</p>
 
       {audio.map((l) => (
-        <p key={l} style={{ fontSize: 13, margin: 2 }}>
+        <p key={l} className="note tight">
           {l}
         </p>
       ))}
 
-      <h2 style={{ fontSize: 15 }}>Log</h2>
-      <pre style={pre}>{log.join('\n')}</pre>
+      <h2>Log</h2>
+      <pre className="pre">{log.join('\n')}</pre>
 
-      <h2 style={{ fontSize: 15 }}>Hasil (salin ke catatan)</h2>
+      <h2>Hasil (salin ke catatan)</h2>
       <textarea
         readOnly
         rows={12}
         value={exportJson}
-        style={{ ...pre, width: '100%' }}
+        className="pre fill"
         onFocus={(e) => e.currentTarget.select()}
       />
       <button
         onClick={() => void navigator.clipboard.writeText(exportJson).then(() => say('hasil disalin'))}
-        style={btn}
+        className="btn"
       >
         Salin
       </button>
     </main>
   );
 }
-
-const btn: CSSProperties = {
-  padding: '10px 14px',
-  fontSize: 15,
-  background: '#1b1b22',
-  color: '#eee',
-  border: '1px solid #444',
-  borderRadius: 8,
-};
-
-const pre: CSSProperties = {
-  background: '#111',
-  color: '#8f8',
-  fontSize: 12,
-  padding: 10,
-  borderRadius: 8,
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-all',
-};

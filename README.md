@@ -3,9 +3,9 @@
 Metronom sinkron untuk band Paranoid: beberapa HP mengikut satu tempo, HP yang membagi
 QR jadi leader, lengkap dengan setlist dan hitungan suara.
 
-Status: **M1b** — klik sudah berbunyi di beberapa perangkat dari satu grid tempo. Belum ada
-otoritas pemimpin di server (M3), ramp/servo (M2), QR (M4), suara hitungan (M5), kalibrasi
-akustik (M6), PWA (M7).
+Status: **M1b** — klik sudah berbunyi di beberapa perangkat dari satu grid tempo, dan shell PWA
+sudah ada (ikon + manifest). Belum otoritas pemimpin di server (M3), ramp/servo (M2), QR (M4),
+suara hitungan (M5), kalibrasi akustik (M6), service worker + offline (M7).
 
 ## Menjalankan
 
@@ -315,7 +315,52 @@ BELUM / batas yang diketahui:
 - Join masih lewat tautan, belum QR (M4) — dan tautan itu sendiri adalah kunci sesi.
 - Dua tab memakai satu profil browser → satu `did`, jadi "1 HP" di layar; penghitungan member
   tidak bisa dibuktikan dari browser (`shortcut:` sewa member baru ada di M3).
-- `favicon.ico` 404 di dev: kosmetik, dibersihkan bersama ikon PWA (M7).
+- Ikon: `paranoid-32.png` dipakai apa adanya di tab, dan OS menyusunkannya ke 16 px. Belum ada
+  versi 16 px yang digambar ulang untuk ukuran itu, dan "Add to Home Screen" di HP asli belum
+  diukur — lihat **Ikon & shell PWA**.
+
+## Warna layar: satu tempat, kontras dihitung
+
+`src/global.css` adalah satu-satunya tempat warna dasar dan komponen (`#0b0b0f` / `#eee`, dan
+`theme-color` di `index.html` sekarang benar-benar dipakai). Layar memakai kelas, bukan
+`style={{...}}` yang ditempel per layar — dulu tidak ada yang menyetel latar sama sekali, jadi
+seluruh aplikasi dirender di atas putih bawaan browser dan tautan `#9cf` cuma 1,69:1.
+
+Angkanya tidak dinilai dengan mata: `node scripts/cr.mjs` menghitung luminansi relatif WCAG untuk
+setiap pasangan yang dikirim (teks 6,54–16,93:1, butuh 4,5; border 3,19–3,74:1, butuh 3 — WCAG
+2.2, W3C Recommendation 12 Dec 2024, SC 1.4.11). Kalau menambah warna, tambahkan barisnya ke
+script itu dulu. Satu hal yang bikin tertipu: border `1px` tergambar dengan coverage 0,8 di layar
+ini, jadi pikselnya = 0,8×warna + 0,2×latar — `#6b6b78` yang tertulis 3,4:1 terukur `#595965` =
+2,85:1, dan itu sebabnya border yang dipakai `#808088`. Border tombol `:disabled` (`#55555f`)
+sengaja di bawah 3:1 karena 1.4.11 mengecualikan komponen non-aktif.
+
+## Ikon & shell PWA
+
+Sumber: `public/ikon/Paranoid.jpg` — grayscale JPEG 480×480, `sha256=ca56e5ff…374491a`, 14120 B,
+disimpan apa adanya (tidak di-encode ulang). Enam PNG-nya ikut di-commit, bukan dihasilkan saat
+build: `scripts/buat-ikon.ps1` merender semuanya dengan System.Drawing (mesin ini tidak punya
+`magick`/`ffmpeg`/`cwebp`, dan `convert` di PATH adalah utilitas disk FAT→NTFS Windows, jadi
+jangan pernah memanggilnya). Mark putih di atas hitam pekat, jadi komposisi yang jujur ke latar
+`#0b0b0f` adalah SCREEN, bukan tempel.
+
+Yang bisa salah dan sudah pernah salah: `Marshal.Copy(dd.Scan0, db, …)` itu MEMBACA ke array
+managed; hasil komposisi harus disalin balik (`Marshal.Copy(db, 0, dd.Scan0, …)`) sebelum
+`UnlockBits`, dan kalau lupa, GDI+ tidak memberi error — enam ikon pertama yang "berhasil"
+ternyata kanvas rata tanpa mark. Sekarang script membuka lagi berkas yang baru ditulis dan
+gagal kalau tidak ada satu pun piksel >48 (`pxTerang=` di setiap baris log), dan
+`scripts/cek-ikon.ps1` mencetak min/max tiap kanal sebagai bukti.
+
+Maskable (`paranoid-maskable-512.png`) menahan mark di 60% tinggi kanvas — zona aman versi web.dev
+adalah lingkaran berjari-jari 40% lebar dan "outer 10% edge might be cropped" — terukur mark
+229×307 di tengah (setengah diagonal 191 px < 205 px). `paranoid-180.png` untuk iOS dan semuanya
+ber-alpha penuh (min=max=255), jadi tidak ada kanal transparan yang bisa diinterpretasi lain.
+Ukuran/tipe di `public/manifest.webmanifest` diambil dari `file` pada berkasnya, bukan diketik.
+
+BELUM di diff ini: service worker dan offline (M7), mark logo di dalam layar (putuskan bersama
+tema M7), dan `paranoid-1024.png` yang baru disimpan untuk cadangan M8 — tidak dirujuk manifest.
+Tab dengan favicon dan "Add to Home Screen" di HP asli belum terukur; yang terukur adalah
+Chromium sendiri meminta `/ikon/paranoid-32.png` dan `/ikon/paranoid-192.png` (ikon itu hanya ada
+di manifest), dan `npm run check` hijau dengan 0 error console.
 
 ## Deploy spike ke akun sendiri (M0 lapangan)
 

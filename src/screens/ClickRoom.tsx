@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ClickEngine, type ClickStats } from '../app/audio/click';
 import { LiveSession, rememberTarget, type LiveTarget, type SessionState } from '../app/session/live';
 import { MAX_BPM, MIN_BPM, gridOf, type Grid } from '../shared/tempo';
@@ -185,12 +185,12 @@ export function ClickRoom(props: ClickRoomProps) {
   const joinUrl = join ? `${location.origin}${location.pathname}?sid=${join.sid}&tok=${join.tok}` : '';
 
   return (
-    <main style={{ fontFamily: 'system-ui', padding: 16, maxWidth: 520 }}>
-      <h1 style={{ fontSize: 18 }}>ParanoidClick — {leader ? 'Pemimpin' : 'Pengikut'}</h1>
+    <main>
+      <h1>ParanoidClick — {leader ? 'Pemimpin' : 'Pengikut'}</h1>
 
       {!live && (
         <>
-          <p style={{ fontSize: 14 }}>
+          <p className="status">
             Browser hanya mengizinkan suara keluar sesudah gestur pengguna — karena itu ada tombol ini, bukan
             karena aplikasi memilihnya.
           </p>
@@ -202,7 +202,7 @@ export function ClickRoom(props: ClickRoomProps) {
                 startingRef.current = false;
               });
             }}
-            style={{ ...btn, fontSize: 18 }}
+            className="btn btn-lg"
           >
             {props.target ? `Masuk ke sesi ${props.target.sid}` : 'Buat sesi & bunyikan klik'}
           </button>
@@ -211,21 +211,21 @@ export function ClickRoom(props: ClickRoomProps) {
 
       {live && (
         <>
-          <p style={{ fontSize: 14, margin: '4px 0' }}>
+          <p className="status">
             <b>{ses?.bpm ?? '–'} BPM</b> · {running ? 'jalan' : 'diam'} · {members} HP ·{' '}
-            <span style={{ color: stale ? '#f88' : '#8f8' }}>{status}</span>
+            <span className={stale ? 'bad' : 'ok'}>{status}</span>
           </p>
 
-          <p style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <p className="row">
             {STEPS.map((s) => (
-              <button key={s} onClick={() => nudge(s)} disabled={!leader} style={btn}>
+              <button key={s} onClick={() => nudge(s)} disabled={!leader} className="btn">
                 {s > 0 ? `+${s}` : s}
               </button>
             ))}
             <button
               onClick={() => void liveRef.current?.transport(!running)}
               disabled={!leader}
-              style={{ ...btn, minWidth: 110 }}
+              className="btn btn-wide"
             >
               {running ? 'Stop' : 'Start'}
             </button>
@@ -233,15 +233,15 @@ export function ClickRoom(props: ClickRoomProps) {
 
           {leader && joinUrl && (
             <>
-              <h2 style={{ fontSize: 15 }}>Tautan join (sid {join?.sid})</h2>
-              <p style={{ fontSize: 11, ...pre }}>{joinUrl}</p>
-              <p style={{ fontSize: 12 }}>
+              <h2>Tautan join (sid {join?.sid})</h2>
+              <p className="pre">{joinUrl}</p>
+              <p className="small">
                 Kirim tautan ini ke HP lain (QR menyusul di M4). Tautan = kunci sesi: siapa pun yang
                 membukanya bisa masuk ke ruangan ini.
               </p>
               <button
                 onClick={() => void navigator.clipboard.writeText(joinUrl).then(() => say('tautan disalin'))}
-                style={btn}
+                className="btn"
               >
                 Salin tautan
               </button>
@@ -249,14 +249,14 @@ export function ClickRoom(props: ClickRoomProps) {
           )}
 
           {!leader && (
-            <p style={{ fontSize: 13 }}>
+            <p className="note">
               Hanya pemimpin yang mengubah tempo. Server baru memeriksa itu mulai M3 — hari ini tombolnya
               dimatikan di sisi pengikut supaya tidak ada dua HP yang saling menimpa.
             </p>
           )}
 
-          <h2 style={{ fontSize: 15 }}>Diagnostik</h2>
-          <pre style={pre}>
+          <h2>Diagnostik</h2>
+          <pre className="pre">
             {[
               `θ = ${theta === null ? 'belum ada sampel' : `${theta.toFixed(1)} ms`} · umur ${
                 Number.isFinite(age) ? `${age.toFixed(0)} ms` : '—'
@@ -276,48 +276,22 @@ export function ClickRoom(props: ClickRoomProps) {
             ].join('\n')}
           </pre>
 
-          <p style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <label style={{ fontSize: 13 }}>
+          <p className="row">
+            <label className="note">
               Kompensasi latensi (ms){' '}
-              <input type="number" value={comp} onChange={(e) => setComp(e.currentTarget.value)} style={field} />
+              <input type="number" value={comp} onChange={(e) => setComp(e.currentTarget.value)} className="field" />
             </label>
-            <button onClick={applyComp} style={btn}>
+            <button onClick={applyComp} className="btn">
               Terapkan
             </button>
           </p>
         </>
       )}
 
-      <p style={{ fontSize: 12, marginTop: 20 }}>
-        <a href="/" style={{ color: '#9cf' }}>
-          ← halaman depan
-        </a>{' '}
-        ·{' '}
-        <a href="/?layar=ukur" style={{ color: '#9cf' }}>
-          alat ukur spike M0
-        </a>
+      <p className="foot">
+        <a href="/">← halaman depan</a> ·{' '}
+        <a href="/?layar=ukur">alat ukur spike M0</a>
       </p>
     </main>
   );
 }
-
-const btn: CSSProperties = {
-  padding: '10px 14px',
-  fontSize: 15,
-  background: '#1b1b22',
-  color: '#eee',
-  border: '1px solid #444',
-  borderRadius: 8,
-};
-
-const field: CSSProperties = { width: 72, background: '#111', color: '#8f8', border: '1px solid #444', borderRadius: 6, padding: 6 };
-
-const pre: CSSProperties = {
-  background: '#111',
-  color: '#8f8',
-  fontSize: 12,
-  padding: 10,
-  borderRadius: 8,
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-all',
-};

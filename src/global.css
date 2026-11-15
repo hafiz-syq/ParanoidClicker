@@ -1,0 +1,148 @@
+/*
+ * SATU tempat untuk warna dasar dan komponen yang sama. Dulu tiap layar menempel
+ * <main style={{...}}> sendiri-sendiri dan tidak ada yang menyetel latar sama sekali:
+ * seluruh aplikasi dirender di atas putih bawaan browser, sementara index.html sudah
+ * menjanjikan theme-color #0b0b0f. Akibatnya tautan #9cf di atas putih = 1,69:1 dan
+ * peringatan #f99 = 2,05:1, di bawah ambang 4,5:1 WCAG 2.2 untuk teks kecil.
+ *
+ * Angka kontras tiap pasangan di file ini dihitung dengan scripts/cr.mjs (rumus
+ * luminance relatif WCAG) terhadap #0b0b0f: teks 6,5–16,9:1 (butuh 4,5), border
+ * komponen 3,3–3,6:1 (butuh 3). Border sengaja #808088, bukan #6b6b78: di layar bukti
+ * garis 1px tergambar dengan coverage 0,8 sehingga pikselnya = 0,8*warna + 0,2*latar,
+ * dan #6b6b78 jatuh ke 2,6–2,8:1 setelah campuran itu. Kalau menambah warna, tambahkan
+ * barisnya ke script itu dulu — jangan mengira mata bisa menilai 4,5:1.
+ */
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  background: #0b0b0f;
+  color: #eee;
+}
+
+body {
+  font-family: system-ui, sans-serif;
+}
+
+/* Elemen, bukan kelas: tiap layar merender tepat satu <main>, dan `.wide` satu-satunya
+   yang boleh menyimpang dari lebar baca. */
+main {
+  padding: 16px;
+  max-width: 520px;
+}
+
+main.wide {
+  max-width: 720px;
+}
+
+h1 {
+  font-size: 20px;
+}
+
+h2 {
+  font-size: 15px;
+}
+
+a {
+  color: #9cf;
+}
+
+.btn {
+  padding: 10px 14px;
+  font-size: 15px;
+  background: #1b1b22;
+  color: #eee;
+  border: 1px solid #808088;
+  border-radius: 8px;
+}
+
+.btn-lg {
+  padding: 12px 16px;
+  font-size: 18px;
+}
+
+/* Tombol Start/Stop jangan ikut menyusut saat labelnya berganti "Stop" -> "Start". */
+.btn-wide {
+  min-width: 110px;
+}
+
+/* Tombol pengikut memang mati (hanya pemimpin yang mengubah tempo) — labelnya tetap
+   harus terbaca: #9a9ab0 di #16161c = 6,54:1. Membedakan dengan opasitas saja akan
+   menurunkannya ke bawah ambang. */
+.btn:disabled {
+  background: #16161c;
+  color: #9a9ab0;
+  border-color: #55555f;
+}
+
+.field {
+  width: 72px;
+  background: #0f0f14;
+  color: #8f8;
+  border: 1px solid #808088;
+  border-radius: 6px;
+  padding: 6px;
+}
+
+/* Panel diagnostik. Tanpa border, isinya nyaris tidak berbeda dari latar (#101016 vs
+   #0b0b0f = 1,04:1) — panelnya ditandai oleh garis tepi, bukan oleh warna isi. */
+.pre {
+  background: #101016;
+  color: #8f8;
+  font-size: 12px;
+  padding: 10px;
+  border: 1px solid #808088;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.note {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.status {
+  font-size: 14px;
+  margin: 4px 0;
+}
+
+.foot {
+  font-size: 12px;
+  margin-top: 20px;
+}
+
+.small {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.tight {
+  margin: 2px;
+}
+
+.fill {
+  width: 100%;
+}
+
+.warn {
+  color: #f99;
+}
+
+.ok {
+  color: #8f8;
+}
+
+.bad {
+  color: #f88;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
