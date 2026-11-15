@@ -437,6 +437,13 @@ BELUM / batas yang diketahui di M2:
 - Ramp 120 → 110 butuh ±21 s dan 120 → 100 butuh **43,6 s** (20 bar, terhitung dari
   `4·60000/bpm`). Kalau band butuh lebih cepat, yang diubah ukuran langkahnya — itu keputusan UI,
   bukan arsitektur (ADR-0002).
+  - Angkanya dihitung ulang dengan command, bukan dipegang dari kepala: 20 bar pada bpm
+    120..101 = **43,558 s** dan 10 bar pada 120..111 = **20,792 s**. Batas waktunya cuma jumlah
+    bar, karena server menaruh jahitan di awal bar — bukan di saat frame dikirim.
+  - Satu-satunya hal yang bisa memanjangkannya: langkah yang tidak terlihat saat sebuah bar
+    start masih kurang dari `LEAD_MS + bar/4` (= 425 ms di 120 BPM) dari sekarang akan menunggu
+    bar BERIKUTNYA, jadi +0,5 s. Timer ramp berdenyut tiap `TICK_MS` = 25 ms (`ClickRoom.tsx`),
+    jadi di atas kertas marginnya 17×; belum diukur pada tab yang benar-benar seret.
 - Otoritas pemimpin masih di sisi layar saja → M3.
 
 ## Warna layar: satu tempat, kontras dihitung
