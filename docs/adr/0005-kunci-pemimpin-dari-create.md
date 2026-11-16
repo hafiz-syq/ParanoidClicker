@@ -94,6 +94,75 @@ kedaluwarsa token dibereskan — pekerjaan yang sampai hari ini masih berupa sat
 dari HP yang memegang `lk` yang sama — itu memang desainnya (dua HP pemimpin = rebut eksplisit,
 bukan dua-dua diam). Tidak ada revocation di M3a; yang ada cuma kunci.
 
+## Batas yang terukur di ronde M3a #3: sesudah podium terikat, `did` ikut membawa otoritas
+
+**Bukan regresi `a6ea775`, dan bukan temuan yang baru lahir ronde ini — ini perilaku yang ada sejak
+otoritas dibuat.** `assertLeader` (`SessionDO.ts:200` di `343a020`) menjawab "pemimpin" dengan membandingkan
+`did` hasil `hello` yang tersimpan di attachment terhadap `leaderDid()`:
+
+```
+if (peer && this.leaderDid() === peer.did) return true;
+```
+
+Yang dibandingkan adalah **`did`**, dan `did` diambil dari frame kiriman klien (`:107`; yang dijaga server
+cuma panjang 1–32 karakter, tidak ada charset). Karena itu, sesudah satu `lk` pernah mengikat podium,
+socket KEDUA yang mengaku `did` yang sama — tanpa membawa `lk` — lulus `assertLeader` dan boleh menulis
+keadaan ruangan. Diukur dua kali, di dua worktree, dengan kunci yang berbeda:
+
+```
+# pc-verify3 (pemeriksa, sid JRX5) — 3 passed (3), EXIT=0, 3944ms
+P3 welcome peniru = {"t":"welcome","sid":"JRX5","did":"lead0013","serverNow":1794866070972,"members":2,"rowsWritten":0}
+P3 frame baru untuk peniru ber-did sama = [{"t":"state","bpm":177,"anchorMs":null,"running":false,"members":2}]
+P3 tempo 177 diterima tanpa lk = true
+
+# pc-exec-r3 (saya, sid 7TS5, .dev.vars sintetis 64 nol — bukan salinan tree utama) — 3 passed (3), EXIT=0, 3878ms
+P3 welcome peniru = {"t":"welcome","sid":"7TS5","did":"lead0013","serverNow":1794867241599,"members":2,"rowsWritten":0}
+P3 frame baru untuk peniru ber-did sama = [{"t":"state","bpm":177,"anchorMs":null,"running":false,"members":2}]
+P3 tempo 177 diterima tanpa lk = true
+```
+
+Urutan probe-nya: pemimpin `hello` ber-`lk` (did `lead0013`) → `tempo 140` diterima → socket baru `hello`
+dengan `did: 'lead0013'` TANPA `lk` → `tempo 177` → diterima dan disiarkan ke ruangan.
+
+Asal-usulnya saya ukur di git, bukan disimpulkan: `git show b9fc0f3:src/worker/SessionDO.ts` mencetak baris
+pembandingan yang sama di `:184`, dan `git show 178e1e9:src/worker/SessionDO.ts` tidak punya `assertLeader`,
+`leaderDid`, maupun `NOT_LEADER` sama sekali (`grep -c` = 0). Perbaikan attachment hanya memindah TEMPAT
+`did` disimpan; aturan "siapa yang boleh memerintah" tidak ikut berubah.
+
+**Prasyarat yang saya ukur supaya lubang ini tidak dibesar-besarkan dan tidak dikecilkan.** `did` adalah 8
+byte acak jadi 16 hex (`genDid()` di `src/shared/ids.ts:32-36`), dibaca dari `localStorage` (`live.ts:295`,
+kunci `paranoidclick.did`), dan tidak pernah disiarkan: `welcome` hanya dikirim ke socket pengirimnya
+(`SessionDO.ts:144-153`), frame `state` tidak memuat `did` (`:251-257`), dan `grep -rn "\bdid\b" src/screens`
+mencetak 3 baris — dua komentar (`ClickRoom.tsx:35`, `:61`) dan satu pengiriman `hello`
+(`DebugScope.tsx:205`); tidak satu pun menampilkan `did` pemimpin. Jadi yang cuma memegang `sid` + `tok` —
+orang yang membuka tautan join — tidak memakai jalur ini. Yang bisa: pihak yang sudah tahu `did` pemimpin
+(HP dipakai bersama, akses fisik, XSS di satu layar, atau mengetik sendiri di DevTools HP pemimpin).
+
+**Kenapa ini wajib tercatat di ADR dan bukan di log percakapan.** Bagian "Alternatif" di atas menolak
+"otoritas tanpa kunci" dengan alasan "`did` adalah string klien", dan bagian "Keputusan" menyebut `lk`
+sebagai kapabilitas pemimpin. Kode hari ini membuat `did` ikut menjadi pembawa otoritas untuk socket mana
+pun yang cocok, sesudah `lk` dipakai satu kali. Kontrak dan implementasi tidak bercerita hal yang sama.
+Kata "aman" dan "cukup" sengaja tidak dipakai di bagian ini: yang ditulis di atas adalah apa yang dilakukan
+kode, bukan penilaian terhadapnya.
+
+**Dua model yang tersedia, dan tidak satu pun saya pilih.** Kotak ini bukan keputusan saya — [TANYA]
+pemilik, dua opsi disajikan apa adanya:
+
+- **(a) Terima perilaku sekarang.** `did` yang cocok = boleh memerintah. Dikunci dengan tes permanen yang
+  MENUNTUT `tempo 177` diterima di jendela socket ber-`did` sama tanpa `lk` — yaitu mengunci perilaku ini
+  sebagai desain, supaya kalau nanti dibalik, yang berubah adalah tesnya dan perubahannya terlihat.
+- **(b) Ikat otoritas pada flag di attachment** yang hanya ditulis ketika `verifyLeaderKey` lulus (di
+  `hello` maupun `claim`), sehingga `assertLeader` menuntut flag itu DAN `leaderDid() === peer.did`. Socket
+  tanpa `lk` tidak pernah boleh memerintah walau `did`-nya benar. Pemeriksa merekomendasikan (b) dan sudah
+  mengukur bahwa jalan pulang pemimpin tidak terputus olehnya: `live.ts:94`
+  `if (this.target.lk) hello.lk = this.target.lk;` mengirim `lk` di SETIAP `hello` selama target punya
+  kunci, dan "Lanjut ke sesi" memulihkan `lk` dari `localStorage` — jadi reconnect pemimpin pasca-evict
+  tetap bekerja.
+
+Sampai ada jawaban, **tidak ada tes yang saya tulis untuk salah satu model**: tes untuk (a) mengunci
+perilaku yang mungkin dibalik, dan tes untuk (b) hari ini masih merah. Probe yang menghasilkan angka P3 di
+atas ada di worktree pemeriksa dan sengaja tidak di-commit ke tree ini.
+
 ## Test
 
 `src/worker/session.spec.ts` (+5): pengikut tanpa `lk` yang mengirim `tempo` ditolak dan grid
@@ -106,3 +175,34 @@ punya kunci, dan `NOT_LEADER` terlihat di status sehingga "Ambil kendali" bukan 
 Sisi stack hidup: `scripts/attack.ts` T12c/T12a/T12b — `leaderKey` 64 karakter dan tidak ada di
 `wsPath`; 11 anggota × `tempo` → 11 `NOT_LEADER` dengan teks state pemimpin identik byte; 100×
 `claim` tanpa `lk` → 100 `NOT_LEADER` dan bpm pemimpin tetap 118.
+
+**Pagarnya dibaca per jendela, bukan per riwayat (ronde M3a #3).** Assertion claim di tes D
+`eviction.spec.ts` dulu memakai `cari()`, yang memindai seluruh `frames` dari indeks 0, sementara baris
+`tempo` di atasnya sudah memproduksi satu `NOT_LEADER` — jadi ia lulus tanpa pernah membaca jawaban claim.
+Perbaikannya test-only (`a99a1a4`): jendela diambil dengan `sejak(dasar)` sesudah `tempo` ditolak, dan yang
+dituntut adalah TEPAT SATU `error NOT_LEADER` (`:159-162`) plus NOL `state` (`:163-166`) di jendela itu.
+Gerbang mutasinya diukur di worktree `pc-exec-r3`, dua mutan yang tidak menyentuh verifikasi kripto dan
+tidak memindahkan podium — M1 menyalahlabel kode jawaban di jalur tolak `claim`, M2 membuat jalur tolak itu
+membocorkan satu siaran `state`:
+
+```
+M1 + D lama  → EXIT=0  4 passed (4)  2793ms   ← bukti pagar lama vacuous
+M1 + D baru  → EXIT=1  1 failed | 3 passed (4)  5.29s
+   AssertionError: claim tanpa lk harus dijawab TEPAT SATU NOT_LEADER,
+   dapat [{"t":"error","code":"INTERNAL"}]: expected +0 to be 1   (eviction.spec.ts:162)
+M2 + D baru  → EXIT=1  1 failed | 3 passed (4)  5.36s (D 1329ms)
+   AssertionError: claim tanpa lk tidak boleh menyiarkan apa pun,
+   dapat [{"t":"error","code":"NOT_LEADER"},{"t":"state","bpm":120,…,"members":2}]: expected 1 to be 0
+M1 / M2 + session.spec.ts → 1 failed | 26 passed (27), keduanya tes yang sama:
+   `claim dengan lk memindahkan podium, claim tanpa lk tidak menggeser apa pun` (:537)
+   M1 jatuh di :553 (filter error kosong), M2 jatuh di :555 (frame-count leaders/anggota 5,4 ≠ 4,3)
+   durasi session.spec.ts di bawah M2: 3.07s; di bawah M1: assertion [INTERNAL] ≠ [NOT_LEADER]
+pulihkan SessionDO.ts → EXIT=0  4 passed (4)  tests 4037ms, Duration 5.31s
+pulihkan + kedua berkas worker → EXIT=0  31 passed (31), Duration 5.46s
+```
+
+Angka itu bukan mutasi yang diminta pemeriksa: mutasi `claim` menerima frame tanpa `lk` (fail-open sungguhan)
+**ditolak permission layer** dengan pesan `[Security Weaken]` dan penjelasan bahwa niat pengguna tidak bisa
+membukanya, jadi pagar jalur claim pasca-evict hari ini terbukti mengikat pada dua mutan di atas, bukan pada
+fail-open. Peta cakupannya tetap: jalur claim pra-evict dijaga `session.spec.ts:537`, jalur pasca-evict baru
+dijaga D sejak `a99a1a4`.
