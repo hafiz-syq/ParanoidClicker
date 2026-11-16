@@ -58,7 +58,19 @@ async function buka(sid: string) {
     await new Promise((r) => setTimeout(r, ms));
   };
   const sejak = (n: number) => frames.slice(n).map(json);
-  return { stub, ws, frames, kirim: (f: unknown) => ws.send(JSON.stringify(f)), cari, tenang, sejak };
+  // Versi jendela dari `cari`. Pelajaran TEMUAN 5: `cari` memindai dari indeks 0, jadi sebuah
+  // penolakan dari langkah SEBELUMNYA bisa membuat assertion "harus ada NOT_LEADER" lulus tanpa
+  // pernah membaca jawaban langkah ini. Di E satu-satunya hal yang boleh ditunggu adalah frame
+  // yang lahir sesudah indeks diambil.
+  const nungguDalam = async (dari: number, pred: (f: Record<string, unknown>) => boolean, ms = 3000) => {
+    for (let i = 0; i < ms / 10; i++) {
+      const hit = frames.slice(dari).map(json).find(pred);
+      if (hit) return hit;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    return null;
+  };
+  return { stub, ws, frames, kirim: (f: unknown) => ws.send(JSON.stringify(f)), cari, tenang, sejak, nungguDalam };
 }
 
 const kerangka = (baru: Record<string, unknown>[]) => JSON.stringify(baru.filter((f) => f.t === 'error' || f.t === 'state'));
@@ -168,4 +180,83 @@ it('D — fail-closed: pengikut tanpa lk tetap NOT_LEADER sesudah evict, di temp
 
   pemimpin.ws.close();
   pengikut.ws.close();
+});
+
+// E = TEMUAN 4, dijawab pemilik dengan model (b) — "Ikat ke lk terverifikasi", 2026-11-16T23:06:05.165Z
+// (`call_8f1f79b4baf847cfb47cecaf`, kanal sesi checker 2d6f4ca7-3aba-44e4-ab8d-470daf00b560; alamat
+// lengkapnya di docs/plans/2026-11-15-m3-otoritas-pemimpin.plan.md §8.2 baris `S8`).
+// E tidak menguji hibernasi sebagai subjek: ia menuntut SIFAT yang membuat perbaikan TEMUAN 1 aman —
+// identitas di attachment ikut membawa bukti kripto, bukan cuma string yang bisa dikarang klien.
+// Fase 2 (sesudah evict) ada di sini justru karena jalur itu sekarang berbagi satu tempat penyimpanan
+// dengan otoritas; memisahkannya jadi tes sendiri cuma mengulang A.
+it('E — socket ber-did pemimpin tanpa lk tidak boleh memerintah, sebelum maupun sesudah evict', async () => {
+  const { sid, lk } = await lahir('205');
+  const pemimpin = await buka(sid);
+  pemimpin.kirim({ t: 'hello', sid, did: 'lead0005', lk });
+  await pemimpin.cari((f) => f.t === 'welcome');
+
+  const peniru = await buka(sid);
+  // `did` pemimpin murni dikarang dari frame: yang dijaga server cuma panjang 1..32
+  // (`SessionDO.ts:110`), tidak ada charset dan tidak ada bukti apa pun. Sebelum (b), string
+  // yang cocok itulah satu-satunya yang diperiksa `assertLeader`.
+  peniru.kirim({ t: 'hello', sid, did: 'lead0005' });
+  await pemimpin.cari((f) => f.t === 'state' && f.members === 2);
+
+  // Kontrol, bukan serangan: kalau 140 saja tidak diterima, yang merah nanti adalah tes yang
+  // kebalikannya (semua orang ditolak) dan itu tetap lulus sebagai "peniru ditolak".
+  pemimpin.kirim({ t: 'tempo', bpm: 140 });
+  expect(await pemimpin.cari((f) => f.t === 'state' && f.bpm === 140), 'tempo 140 dari pemimpin sah harus diterima SEBELUM serangan').not.toBeNull();
+
+  const serang = async (bpm: number, label: string) => {
+    const dasarPemimpin = pemimpin.frames.length;
+    const dasarPeniru = peniru.frames.length;
+    peniru.kirim({ t: 'tempo', bpm });
+    const jawab = await peniru.nungguDalam(dasarPeniru, (f) => f.t === 'error' || f.t === 'state');
+    const jendelaPeniru = peniru.sejak(dasarPeniru);
+    expect(jawab, `${label}: peniru harus mendapat jawaban di jendelanya sendiri, dapat ${kerangka(jendelaPeniru)}`).not.toBeNull();
+    expect(
+      jawab && jawab.t,
+      `${label}: peniru ber-did sama tanpa lk harus DITOLAK, bukan dilayani, dapat ${kerangka(jendelaPeniru)}`
+    ).toBe('error');
+    expect(
+      jendelaPeniru.filter((f) => f.t === 'error' && f.code === 'NOT_LEADER').length,
+      `${label}: harus dijawab TEPAT SATU NOT_LEADER, dapat ${kerangka(jendelaPeniru)}`
+    ).toBe(1);
+    expect(
+      jendelaPeniru.filter((f) => f.t === 'state').length,
+      `${label}: peniru tidak boleh melihat state, dapat ${kerangka(jendelaPeniru)}`
+    ).toBe(0);
+    // Pemimpin sah dibaca SESUDAH jawaban peniru terlihat: keputusan siaran diambil di DO yang
+    // sama dan di putaran yang sama, jadi kalau penolakannya sudah ada, tidak ada lagi yang bisa
+    // mendarat di layar pemimpin dari frame ini.
+    await pemimpin.tenang(400);
+    const jendelaPemimpin = pemimpin.sejak(dasarPemimpin);
+    expect(
+      jendelaPemimpin.filter((f) => f.t === 'state').length,
+      `${label}: bpm ${bpm} tidak boleh disiarkan ke SIAPA PUN, termasuk pemimpin sah, dapat ${kerangka(jendelaPemimpin)}`
+    ).toBe(0);
+  };
+
+  await serang(177, 'fase 1 (sebelum evict)');
+
+  await evictDurableObject(pemimpin.stub);
+  await serang(188, 'fase 2 (sesudah evict)');
+
+  // Angka serangan tidak pernah muncul di SATU PUN layar, di seluruh riwayat kedua socket —
+  // termasuk kalau penyerang mengulang berkali-kali.
+  const siaran = [...pemimpin.frames, ...peniru.frames]
+    .map(json)
+    .filter((f) => f.t === 'state' && (f.bpm === 177 || f.bpm === 188));
+  expect(siaran, `bpm serangan tidak boleh pernah muncul di kedua socket, dapat ${kerangka(siaran)}`).toEqual([]);
+
+  // Sifat yang harus bertahan: penolakan peniru tidak boleh memutus jalan pemimpin sah.
+  const dasarKembali = pemimpin.frames.length;
+  pemimpin.kirim({ t: 'tempo', bpm: 199 });
+  expect(
+    await pemimpin.nungguDalam(dasarKembali, (f) => f.t === 'state' && f.bpm === 199),
+    'pemimpin sah harus tetap boleh memerintah sesudah evict dan sesudah dua penolakan'
+  ).not.toBeNull();
+
+  pemimpin.ws.close();
+  peniru.ws.close();
 });
