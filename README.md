@@ -648,6 +648,29 @@ berpindah tangan **atau ter-evict**" — dibayar oleh tombol yang tidak bisa bek
   ukur — dua belas HP terkunci di antara lagu, ping berhenti, DO tidur, bangun, dan pemimpin
   kehilangan podiumnya. Jalur pulih yang dijanjikan §6.3 (rebut dengan `lk` lewat tombol
   "Ambil kendali") sekarang benar-benar menutupnya, dan itu yang dites di **B**.
+- **Lampiran checker menyusul setelah perintahnya**, dan satu langkah memang hilang dari versi saya
+  sebelum berkas itu datang. Perbandingan `diff` antara lampiran
+  `C:/Users/LENOVO/AppData/Local/Temp/pc-verify/src/worker/eviction.spec.ts` (117 baris) dan
+  `src/worker/eviction.spec.ts` yang saya commit (150 → **158** baris sesudah langkah itu masuk):
+  **154 baris berbeda**, jadi tidak ada satu byte pun yang saya salin dari worktree — sesuai
+  syaratnya. Peta keempat tesnya ke tes saya: A ↔ **A**, B ↔ **B**, "hello ulang … jalur pulih" ↔
+  **C**, dan "kursi (members) sesudah evict: apakah `getWebSockets` bertahan" (berkas mereka `:98`)
+  juga **C** (`:128`), sementara **D** saya (`:138`) adalah tes fail-closed yang Anda bilang belum
+  ada di berkas itu dan harus saya tambah sendiri. Yang hilang sebelum lampiran masuk: urutan
+  bangkitnya DO lewat **socket pengikut** — di berkas mereka `q.kirim({t:'ping'})` di `:109`
+  mendahului `hello` pemimpin. Versi saya membangunkan DO lewat socket pemimpin saja, yang masih
+  membuktikan cacatnya tapi bukan urutan yang terjadi di ruangan sungguhan. Sekarang ikut di tes
+  **C** (`eviction.spec.ts:120-122`): ping pengikut harus dijawab `pong` lebih dulu, baru `hello`
+  pemimpin, dan `members` harus tetap 2. Ini **kontrol positif yang lahir setelah hijau**, bukan
+  reproduksi MERAH — yang MERAH tetap A dan B di `297428a`. Ukur ulang sesudah langkah itu:
+  `npx vitest run --config vitest.worker.config.ts src/worker/eviction.spec.ts` → **4 passed (4)**,
+  2,82 s (EXIT=0), dan `npm run check` → **EXIT=0**, `real 0m9.387s`, 103 unit + 31 worker.
+- **`.dev.vars` sintetis di worktree tidak mengubah apa pun, dan itu terukur, bukan diasumsikan.**
+  Anda menyebut `lk` di worktree ditandatangani dengan kunci yang dibuat di sana, bukan salinan tree
+  utama. `lk` di semua tes ini tidak pernah diketik tangan: ia keluar dari `/create` di proses yang
+  sama dan diverifikasi dengan kunci yang sama, jadi nilai kuncinya tidak bisa memilih hasil — dan
+  buktinya adalah RED yang identik di dua tempat: **2 failed | 2 passed (4)** di worktree Anda, dan
+  **2 failed | 2 passed (4)** yang saya reproduce di tree utama dengan kunci `.dev.vars` sungguhan.
 
 ### TEMUAN 2 ronde kedua: ditutup dengan bukti, bukan dengan diam
 

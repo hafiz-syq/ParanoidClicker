@@ -112,6 +112,14 @@ it('C — kontrol positif: hello ulang sesudah evict memulihkan kendali dan kurs
   await p.cari((f) => f.t === 'state' && f.members === 2);
 
   await evictDurableObject(p.stub);
+  // Bangkitnya DO lewat socket LAIN dulu, bukan lewat pemimpin: ping pengikut harus dijawab
+  // `pong`, baru kemudian pemimpin hello ulang. Urutan ini yang meniru ruangan sungguhan — yang
+  // membangunkan DO biasanya trafik orang lain, bukan orang yang kehilangan podium — dan langkah
+  // ini yang hilang dari versi saya sebelum lampiran checker ronde ini masuk (tes ke-4 mereka,
+  // `kursi (members) sesudah evict: apakah getWebSockets bertahan`, `:109`).
+  q.kirim({ t: 'ping', nonce: 1, t1: Date.now() });
+  const pong = await q.cari((f) => f.t === 'pong' && f.nonce === 1, 1500);
+  expect(pong, 'pengikut harus tetap dilayani sesudah DO di-evict').not.toBeNull();
   p.kirim({ t: 'hello', sid, did: 'lead0003', lk });
   // `welcome` adalah jawaban dari socket yang SUDAH dikenal DO sebelum evict: kursinya harus
   // tetap 2 — getWebSockets() bertahan lintas hibernasi, dan itulah alasan angka kursi tidak

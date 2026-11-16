@@ -112,6 +112,17 @@ tersendiri, itu keputusan dia/pemilik — [TANYA], saya berhenti di teks.
   **D** pagar fail-closed — pengikut tanpa `lk` tetap `NOT_LEADER` di `tempo` maupun `claim`, dan
   `bpm` 180 tidak pernah disiarkan. MERAH yang difoto sebelum kode: **2 failed | 2 passed (4)**,
   4,07 s, 2026-11-16T21:11:12Z. Hijau sesudah `a6ea775`: **4 passed (4)**.
+- **Lampiran checker menyusul sesudah perintahnya**, dan isinya tidak saya commit mentah-mentah
+  (`diff` dengan berkas di worktree = 154 baris berbeda). Pemetaan: keempat tes mereka = A, B,
+  "hello ulang", dan "kursi (`getWebSockets` bertahan)" → tes A, B, C saya; tes D saya (fail-closed)
+  adalah yang mereka minta saya tambahkan sendiri. Satu langkah mereka yang belum ada di versi saya:
+  DO dibangunkan lewat **socket pengikut** (`q.kirim({t:'ping'})`) sebelum `hello` pemimpin — kini
+  di `eviction.spec.ts:120-122`, dengan `pong` pengikut sebagai syarat sebelum kursi diperiksa. Ia
+  kontrol positif yang lahir sesudah hijau, bukan reproduksi MERAH.
+- Nilai `SESSION_SIGNING_KEY` tidak memilih hasil tes ini: `lk` selalu dibuat `/create` di proses yang
+  sama dan diverifikasi dengan kunci yang sama. Buktinya RED yang identik di dua lingkungan dengan
+  kunci berbeda (worktree checker `.dev.vars` sintetis, tree utama `.dev.vars` sungguhan): sama-sama
+  **2 failed | 2 passed (4)**.
 - `src/worker/session.spec.ts:610` — `webSocketError menurunkan kursi karena webSocketClose menyusul,
   bukan karena diam`: memanggil `instance.webSocketError(target, …)` dari dalam `runInDurableObject`
   dan menuntut frame `state` dengan `members: 1` mendarat di HP yang masih masuk. Socket korban

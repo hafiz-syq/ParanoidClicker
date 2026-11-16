@@ -418,8 +418,24 @@ menjadi jalur buntu. Rantai yang saya kutip sebagai janji ada di `live.ts:146-15
   `npm run check` → **EXIT=0**, `real 0m9.125s`; `npm run attack` di `wrangler dev --local --port
   8791` (sid `VD2V`) → nol GAGAL, termasuk T12a dan T12b.
 - Yang masih DEDUKSI dan saya labeli begitu: bahwa evict terjadi di perangkat nyata.
-  `PING_INTERVAL_MS = 1000` (`live.ts:32`) membuat klien berlayar-depan membangunkan DO tiap detik,
-  jadi evict di semua tes ini dipaksa lewat `evictDurableObject` API tes.
+  `PING_INTERVAL_MS = 1000` (`live.ts:32`) mengirim **frame teks** `{"t":"ping"}` (`live.ts:278`),
+  yang masuk lewat `webSocketMessage` dan membangunkan DO — ini bukan control-frame RFC 6455, dan
+  bedanya penting karena vendor menulis *"Ping/pong handling does not interrupt hibernation"* untuk
+  frame protokol yang ditangani runtime. Jadi evict di semua tes ini dipaksa lewat
+  `evictDurableObject` API tes, bukan diamati.
+- **Lampiran checker datang menyusul**, sesudah perintah dan sesudah commit saya. Tidak satu byte
+  pun saya salin dari worktree: `diff` berkas mereka (117 baris) dengan `src/worker/eviction.spec.ts`
+  saya = **154 baris berbeda**, dan berkas saya sekarang 158 baris. Pemetaan keempat tes mereka ke
+  saya = A→A, B→B, "hello ulang"→C, "kursi/`getWebSockets` bertahan"→C; **D** saya (fail-closed)
+  adalah yang mereka minta saya tambah sendiri. Yang belum ada di versi saya sebelum lampiran masuk:
+  DO dibangunkan lebih dulu lewat socket **pengikut** (`q.kirim({t:'ping'})`, berkas mereka `:109`)
+  sebelum `hello` pemimpin — sekarang di `eviction.spec.ts:120-122` dengan syarat `pong` pengikut
+  lebih dulu. Kontrol positif ini lahir **sesudah** hijau, jadi ia tidak saya klaim sebagai RED;
+  yang RED tetap A/B di `297428a`. Ukur ulang: `4 passed (4)`, 2,82 s; `npm run check` **EXIT=0**,
+  `real 0m9.387s`, 103 unit + 31 worker.
+- `.dev.vars` sintetis di worktree Anda dan `.dev.vars` nyata di tree utama menghasilkan RED yang
+  sama persis (**2 failed | 2 passed (4)**), dan itu memang konsekuensi desain: `lk` tidak pernah
+  diketik tangan, ia dicetak `/create` dan diverifikasi dengan kunci yang sama di proses yang sama.
 
 **TEMUAN 2 (tidak blokir) ditutup sebagai bukan-defect dengan bukti runtainya.** Pertanyaannya bukan
 "perlu beres-beres di `webSocketError` tidak ya" tapi "apakah `webSocketClose` menyusul". Probe
