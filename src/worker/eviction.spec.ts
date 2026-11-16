@@ -148,9 +148,22 @@ it('D — fail-closed: pengikut tanpa lk tetap NOT_LEADER sesudah evict, di temp
 
   pengikut.kirim({ t: 'tempo', bpm: 180 });
   expect(await pengikut.cari((f) => f.t === 'error' && f.code === 'NOT_LEADER'), 'tempo dari pengikut harus tetap ditolak').not.toBeNull();
+  const dasar = pengikut.frames.length;
   pengikut.kirim({ t: 'claim' });
-  const jawab = await pengikut.cari((f) => f.t === 'error' && f.code === 'NOT_LEADER', 3000);
-  expect(jawab, 'claim tanpa lk harus tetap ditolak').not.toBeNull();
+  await pengikut.tenang();
+  // Jendela TERPISAH, bukan `cari`: `cari` memindai `frames` dari indeks 0, sementara baris
+  // `tempo` di atas sudah memproduksi satu NOT_LEADER — jadi assertion claim yang lama dijamin
+  // lulus tanpa pernah membaca jawaban claim. Angka itu terukur (checker ronde ini: 1 NOT_LEADER
+  // sudah ada sebelum claim dikirim), dan bug-nya ada di pagarnya, bukan di perilakunya.
+  const jendela = pengikut.sejak(dasar);
+  expect(
+    jendela.filter((f) => f.t === 'error' && f.code === 'NOT_LEADER').length,
+    `claim tanpa lk harus dijawab TEPAT SATU NOT_LEADER, dapat ${kerangka(jendela)}`
+  ).toBe(1);
+  expect(
+    jendela.filter((f) => f.t === 'state').length,
+    `claim tanpa lk tidak boleh menyiarkan apa pun, dapat ${kerangka(jendela)}`
+  ).toBe(0);
   expect(pengikut.frames.map(json).filter((f) => f.t === 'state' && f.bpm === 180), 'bpm 180 tidak boleh pernah disiarkan').toEqual([]);
 
   pemimpin.ws.close();
