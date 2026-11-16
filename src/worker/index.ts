@@ -1,48 +1,10 @@
 import { genSid, isSid } from '../shared/ids';
+import { leaderKey, sessionToken, verifySessionToken } from './keys';
 import { SessionDO } from './SessionDO';
 
 export { SessionDO };
 
 const IP = 'CF-Connecting-IP';
-const enc = new TextEncoder();
-
-// Memo per nilai kunci: `wrangler secret put` boleh diganti tanpa restart, dan kunci lama
-// tidak pernah dipakai lagi setelah isolate berikutnya bangun.
-let cachedKey: { secret: string; key: Promise<CryptoKey> } | null = null;
-
-function signingKey(env: Env): Promise<CryptoKey> {
-  const secret = env.SESSION_SIGNING_KEY ?? '';
-  // DataError dari WebCrypto ("key length 0") tidak menyebut apa pun yang bisa dibaca
-  // operator di `wrangler tail`, jadi namanya yang kusebut.
-  if (secret.length === 0) {
-    throw new Error('SESSION_SIGNING_KEY kosong: isi .dev.vars (lokal) atau `npm run secret` (produksi)');
-  }
-  if (!cachedKey || cachedKey.secret !== secret) {
-    cachedKey = {
-      secret,
-      key: crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
-        'sign',
-        'verify',
-      ]),
-    };
-  }
-  return cachedKey.key;
-}
-
-function toHex(buf: ArrayBuffer): string {
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function createToken(sid: string, env: Env): Promise<string> {
-  return toHex(await crypto.subtle.sign('HMAC', await signingKey(env), enc.encode(sid)));
-}
-
-function parseHex(text: string): Uint8Array | null {
-  if (!/^[0-9a-f]{64}$/.test(text)) return null;
-  const out = new Uint8Array(32);
-  for (let i = 0; i < 32; i++) out[i] = Number.parseInt(text.slice(i * 2, i * 2 + 2), 16);
-  return out;
-}
 
 // Tanpa kunci, token apa pun yang kami mint bisa dihitung ulang oleh siapa pun, jadi dua rute
 // di bawah harus menolak, bukan melayani sesi yang gerbangnya tidak ada.
@@ -71,8 +33,10 @@ export default {
       if (!success) return json({ error: 'RATE_LIMITED' }, 429);
       // Sengaja tidak menyentuh DO di sini: badai /create tidak boleh melahirkan DO kosong.
       const sid = genSid();
-      const token = await createToken(sid, env);
-      return json({ sid, token, wsPath: `/ws?sid=${sid}&tok=${token}` });
+      const token = await sessionToken(sid, env);
+      // `leaderKey` hanya keluar di JSON ini. `wsPath` — yang disalin ke tautan join dan
+      // nanti jadi QR — sengaja TIDAK memuatnya: yang dibagikan tetap cuma kapabilitas sesi.
+      return json({ sid, token, leaderKey: await leaderKey(sid, env), wsPath: `/ws?sid=${sid}&tok=${token}` });
     }
 
     if (url.pathname === '/ws') {
@@ -88,8 +52,8 @@ export default {
       // sampai 1.048.576 kali. Token membuktikan sid benar-benar keluar dari /create.
       // shortcut: kapabilitas sekali-pakai ini ikut di query string (browser tidak bisa
       // mengirim header WS). Cabut kalau nanti pindah ke WebSocket over fetch/headers.
-      const tok = parseHex(url.searchParams.get('tok') ?? '');
-      if (!tok || !(await crypto.subtle.verify('HMAC', await signingKey(env), tok, enc.encode(sid)))) {
+      const tok = url.searchParams.get('tok') ?? '';
+      if (!(await verifySessionToken(sid, tok, env))) {
         return json({ error: 'NO_TOKEN' }, 403);
       }
       return env.SESSION.get(env.SESSION.idFromName(sid)).fetch(request);

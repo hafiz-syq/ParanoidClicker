@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { FrameReject, MAX_MEMBERS, parseFrame } from '../shared/limits';
 import { isSid } from '../shared/ids';
+import { verifyLeaderKey } from './keys';
 import { DEFAULT_BPM, LEAD_MS, gridOf, parseBpm, retune, type Grid } from '../shared/tempo';
 
 /** Keadaan sesi yang sebenarnya: satu grid klik, bukan daftar "tick yang sudah dikirim". */
@@ -10,9 +11,23 @@ interface TempoState {
   running: boolean;
 }
 
+/** Identitas hasil `hello` yang berhasil, per socket. */
+interface Peer {
+  sid: string;
+  did: string;
+}
+
 export class SessionDO extends DurableObject<Env> {
   // Pola resmi Cloudflare: this.sql = ctx.storage.sql (basis data SQLite, bukan KV).
   private readonly sql: SqlStorage;
+  /**
+   * Kursi = socket hidup (§6.2), dan `did` yang mengikatnya dibaca dari SINI — bukan dari
+   * frame perintah: `did` di dalam frame bisa dikarang siapa pun yang punya socket sesi,
+   * dan justru itulah yang ditutup M3. Kosong untuk socket yang belum pernah hello.
+   * Hilang saat DO di-evict; `leader` tetap terbaca dari SQLite, jadi pemimpin yang
+   * menyambung ulang mendapat kendalinya kembali tanpa `/create` baru.
+   */
+  private readonly peers = new Map<WebSocket, Peer>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -21,6 +36,12 @@ export class SessionDO extends DurableObject<Env> {
     // CHECK(id = 1) memaksa satu baris: keadaan tempo tidak boleh bercabang jadi dua sejarah.
     this.sql.exec(
       'CREATE TABLE IF NOT EXISTS tempo (id INTEGER PRIMARY KEY CHECK (id = 1), bpm INTEGER NOT NULL, anchor_ms INTEGER NOT NULL, running INTEGER NOT NULL)'
+    );
+    // Baris tunggal yang sama untuk podium: `lk` adalah kapabilitas, dan satu ruangan cuma
+    // boleh punya satu pemimpin. `lk_hint` = 8 hex pertama — cukup untuk membuktikan rebut
+    // yang misterius memakai kunci mana, tidak cukup untuk merebut apa pun.
+    this.sql.exec(
+      'CREATE TABLE IF NOT EXISTS leader (id INTEGER PRIMARY KEY CHECK (id = 1), did TEXT NOT NULL, lk_hint TEXT, claimed_at INTEGER NOT NULL)'
     );
   }
 
@@ -52,33 +73,44 @@ export class SessionDO extends DurableObject<Env> {
         return this.hello(ws, frame);
       case 'ping':
         return this.pong(ws, frame);
+      case 'claim':
+        return this.claim(ws, frame);
       case 'tempo':
         return this.setTempo(ws, frame);
       case 'start':
-        return this.transport(true);
+        return this.transport(ws, true);
       case 'stop':
-        return this.transport(false);
+        return this.transport(ws, false);
       default:
         ws.send(JSON.stringify({ t: 'error', code: 'PROTO' }));
     }
   }
 
   // Satu-satunya jalur tulis SQLite di spike ini: transisi keanggotaan, bukan heartbeat.
-  private hello(ws: WebSocket, frame: Record<string, unknown>): void {
+  // (Tabel `leader` juga ditulis, tapi hanya saat hello/claim — peristiwa yang sama jarangnya.)
+  private async hello(ws: WebSocket, frame: Record<string, unknown>): Promise<void> {
     const did = typeof frame.did === 'string' ? frame.did : '';
     const sid = typeof frame.sid === 'string' ? frame.sid : '';
+    const lk = typeof frame.lk === 'string' ? frame.lk : '';
     if (!isSid(sid) || did.length === 0 || did.length > 32) {
       ws.send(JSON.stringify({ t: 'error', code: 'PROTO' }));
       return;
     }
     // Dibaca dari tabel, bukan dari memori: DO boleh dievict kapan saja dan dibangun ulang.
     // Generik <{n:number}> wajib: tanpa itu .one() bertipe SqlStorageValue (boleh null).
-    const total = this.sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM member').one().n;
-    const known = this.sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM member WHERE did = ?', did).one().n > 0;
-    if (!known && total >= MAX_MEMBERS) {
+    // Yang tersisa dari tabel `member` cuma ini — jumlah KURSI sudah pindah ke socket hidup.
+    const terdaftar = this.sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM member WHERE did = ?', did).one().n > 0;
+    // Socket mentah: yang buka koneksi lalu tidak pernah hello pun sudah memakan satu kursi,
+    // dan ia ikut menghitung dirinya sendiri (karenanya `total + 1` yang lama hilang).
+    const kursi = this.seatCount();
+    if (!terdaftar && kursi > MAX_MEMBERS) {
       ws.send(JSON.stringify({ t: 'error', code: 'FULL' }));
       return;
     }
+    // Socket ini dihitung "baru" kalau DO belum pernah melihat hello darinya: itu yang membuat
+    // HP yang berpindah rute (socket baru, `did` lama) ikut menyiarkan angkanya ke ruangan.
+    const baru = !this.peers.has(ws);
+    this.peers.set(ws, { sid, did });
     // OR IGNORE, bukan OR REPLACE: hello ulang dari HP yang sama tidak boleh membayar
     // kuota "rows written" dua kali dan tidak boleh menggeser joined_at aslinya.
     const cursor = this.sql.exec(
@@ -86,23 +118,87 @@ export class SessionDO extends DurableObject<Env> {
       did,
       Date.now()
     );
+    // `lk` diverifikasi tiap hello, bukan dipercaya dari hasil sebelumnya. Kunci yang sama di
+    // dua HP hanya mengikat SATU kali: sesudah podium terisi, jalurnya adalah rebut eksplisit.
+    // reconnect pemimpin TIDAK menulis ulang — `claimed_at` tetap jam podium benar-benar direbut,
+    // dan hello ulang tidak membayar kuota tulis lagi (yang dibutuhkan cuma `peers` di atas).
+    if (lk && (await verifyLeaderKey(sid, lk, this.env)) && this.leaderDid() === null) {
+      this.bindLeader(did, lk);
+    }
     ws.send(
       JSON.stringify({
         t: 'welcome',
         sid,
         did,
         serverNow: Date.now(),
-        members: known ? total : total + 1,
+        members: kursi,
         rowsWritten: cursor.rowsWritten,
       })
     );
     // Yang baru masuk harus langsung sephase, bukan menunggu perubahan tempo berikutnya.
     const teks = this.stateFrame(this.readTempo());
     ws.send(teks);
-    // Nomor orang lain juga harus tahu ada yang baru, TAPI hanya kalau benar-benar ada
-    // anggota baru: hello ulang dari HP yang sama (reconnect, tab bangun dari latar) tidak
-    // boleh mengirim dua belas frame ke ruangan yang sedang menghitung beat.
-    if (cursor.rowsWritten > 0) this.sendToRoom(teks, ws);
+    // Nomor orang lain juga harus tahu ada yang baru, TAPI hanya kalau kursinya benar-benar
+    // bergerak: hello ulang di socket yang sama (tab bangun dari latar) tidak boleh mengirim
+    // dua belas frame ke ruangan yang sedang menghitung beat.
+    if (baru || cursor.rowsWritten > 0) this.sendToRoom(teks, ws);
+  }
+
+  /**
+   * Kursi = socket yang masih OPEN di DO ini. ANGKA MENTAH, tanpa deduplikasi `did`:
+   * satu HP yang jaringan-nya flap atau reload sebelum socket lama terdeteksi tutup memakan
+   * dua kursi, jadi ruangan 12 bisa menjawab FULL dengan 11 HP nyata. Itu konsekuensi yang
+   * dipilih (§4 butir 2b) dan masih [TANYA] untuk diubah jadi hitungan per `did`.
+   */
+  private seatCount(): number {
+    let n = 0;
+    for (const peer of this.ctx.getWebSockets()) {
+      if (peer.readyState === WebSocket.OPEN) n++;
+    }
+    return n;
+  }
+
+  /** `did` yang sedang memegang podium, atau null kalau belum ada kunci yang mengikat. */
+  private leaderDid(): string | null {
+    const row = this.sql.exec<{ did: string }>('SELECT did FROM leader WHERE id = 1').toArray()[0];
+    return row ? row.did : null;
+  }
+
+  private bindLeader(did: string, lk: string): void {
+    this.sql.exec(
+      `INSERT INTO leader (id, did, lk_hint, claimed_at) VALUES (1, ?, ?, ?)
+       ON CONFLICT (id) DO UPDATE SET did = excluded.did, lk_hint = excluded.lk_hint, claimed_at = excluded.claimed_at`,
+      did,
+      lk.slice(0, 8),
+      Date.now()
+    );
+  }
+
+  /**
+   * Gagal tertutup: tanpa baris `leader` — sesi yang belum pernah menyambut HP berkunci —
+   * TIDAK ada yang boleh memerintah. Bukan "siapa saja sampai ada yang klaim": §3 menolak
+   * otoritas tanpa kunci. Kunci identitas diambil dari socket, bukan dari frame.
+   */
+  private assertLeader(ws: WebSocket): boolean {
+    const peer = this.peers.get(ws);
+    if (peer && this.leaderDid() === peer.did) return true;
+    ws.send(JSON.stringify({ t: 'error', code: 'NOT_LEADER' }));
+    return false;
+  }
+
+  /**
+   * Rebut kendali (ADR-0005): `lk` diverifikasi ULANG dari frame ini, hasil `hello` tidak
+   * dipercaya. Yang tidak membawa kunci dijawab `NOT_LEADER` dan ruangan tidak melihat apa pun.
+   */
+  private async claim(ws: WebSocket, frame: Record<string, unknown>): Promise<void> {
+    const peer = this.peers.get(ws);
+    const lk = typeof frame.lk === 'string' ? frame.lk : '';
+    if (!peer || !lk || !(await verifyLeaderKey(peer.sid, lk, this.env))) {
+      ws.send(JSON.stringify({ t: 'error', code: 'NOT_LEADER' }));
+      return;
+    }
+    this.bindLeader(peer.did, lk);
+    this.broadcast(this.readTempo());
   }
 
   // Dibaca dari tabel, bukan dari memori: DO boleh dievict di tengah lagu dan dibangun ulang
@@ -132,10 +228,17 @@ export class SessionDO extends DurableObject<Env> {
   private stateFrame(state: TempoState): string {
     // `members` ikut di frame ini, bukan cuma di welcome: HP yang sudah duduk di ruangan
     // tidak pernah hello ulang selama lagu berjalan, jadi frame inilah satu-satunya jalan
-    // 'N HP' di layar pemimpin bisa naik. Angkanya dibaca dari SQL, bukan dihitung
-    // `total + 1` seperti di hello — yang ditolak FULL tidak boleh menambah satu HP hantu.
-    const members = this.sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM member').one().n;
-    return JSON.stringify({ t: 'state', bpm: state.bpm, anchorMs: state.anchorMs, running: state.running, members });
+    // 'N HP' di layar pemimpin bisa naik — dan sejak §6.2 juga satu-satunya jalan angka itu
+    // TURUN. Angkanya adalah kursi (socket OPEN), bukan riwayat: HP yang ditolak FULL pun sudah
+    // memegang satu socket, jadi ia ikut terhitung di siaran BERIKUTNYA (penolakannya sendiri
+    // tidak menyiarkan apa pun). Itu konsekuensi socket mentah yang sama dengan di seatCount().
+    return JSON.stringify({
+      t: 'state',
+      bpm: state.bpm,
+      anchorMs: state.anchorMs,
+      running: state.running,
+      members: this.seatCount(),
+    });
   }
 
   private broadcast(state: TempoState): void {
@@ -157,8 +260,10 @@ export class SessionDO extends DurableObject<Env> {
   }
 
   /**
-   * shortcut: siapa pun yang punya socket sesi boleh mengganti tempo, belum ada otoritas
-   * pemimpin. Ditutup di M3 (leader token + PIN join), bukan di sini.
+   * Otoritas pemimpin dijaga di sini sejak M3a (`assertLeader`). Urutan penjaga bukan detail:
+   * bpm diperiksa lebih dulu supaya frame cacat tetap dijawab `BAD_BPM` (tes 'tempo cacat'
+   * mengirimnya dari socket yang bukan pemimpin), dan `NOT_LEADER` tidak pernah menyentuh
+   * keadaan ruangan.
    */
   private setTempo(ws: WebSocket, frame: Record<string, unknown>): void {
     const bpm = parseBpm(frame.bpm);
@@ -167,6 +272,7 @@ export class SessionDO extends DurableObject<Env> {
       ws.send(JSON.stringify({ t: 'error', code: 'BAD_BPM' }));
       return;
     }
+    if (!this.assertLeader(ws)) return;
     const cur = this.readTempo();
     const at = Date.now() + LEAD_MS;
     const grid = this.gridOf(cur);
@@ -176,7 +282,8 @@ export class SessionDO extends DurableObject<Env> {
     this.apply(cur, next);
   }
 
-  private transport(on: boolean): void {
+  private transport(ws: WebSocket, on: boolean): void {
+    if (!this.assertLeader(ws)) return;
     const cur = this.readTempo();
     if (on) {
       // Start ulang tidak boleh menggeser downbeat yang sudah jalan: anchor dihitung dari jam,
@@ -200,10 +307,16 @@ export class SessionDO extends DurableObject<Env> {
   }
 
   async webSocketClose(ws: WebSocket, code: number): Promise<void> {
+    this.peers.delete(ws);
     // Klien bisa mengirim code 1005/1006/1015; ws.close() menolak ketiganya dengan
     // InvalidAccessError, jadi code di luar daftar sah diterjemahkan ke 1000.
     const legal = code >= 1000 && code <= 1011 && code !== 1004 && code !== 1005 && code !== 1006;
     ws.close(legal ? code : 1000, 'client closed');
+    // Siaran, bukan diam: `members` sekarang dihitung dari socket yang masih OPEN, dan
+    // sesudah close() socket ini tidak OPEN lagi — jadi frame yang lahir di baris berikutnya
+    // sudah membawa kursi yang lepas. Tanpa siaran ini, 'N HP' baru turun ketika ada orang
+    // mengubah tempo, dan hari itu pemimpin sedang tidak mengubah apa-apa (§4 butir 2c).
+    this.broadcast(this.readTempo());
   }
 
   async webSocketError(ws: WebSocket, error: unknown): Promise<void> {

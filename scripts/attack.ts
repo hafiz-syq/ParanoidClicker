@@ -339,13 +339,24 @@ const stateDasar = states(pemimpin).length;
 pemimpin.send({ t: 'tempo', bpm: 118 });
 const masihBoleh = await waited(() => states(pemimpin).length > stateDasar);
 const bpmKini = Number((JSON.parse(states(pemimpin).at(-1) ?? '{}') as { bpm?: number }).bpm ?? -1);
+// Socket ini sudah menampung 1 (T12a) + 100 (banjir claim) penolakan, jadi yang diukur
+// adalah penolakan BARU di atas dasar itu — angka mutlak 2 tidak akan pernah benar.
+const tolakDasar = penantang.frames.filter(isNotLeader).length;
+const teksDasar = states(pemimpin).at(-1) ?? '';
 penantang.send({ t: 'tempo', bpm: 60 });
-const masihDitolak = await waited(() => penantang.frames.filter(isNotLeader).length === 2);
+const masihDitolak = await waited(() => penantang.frames.filter(isNotLeader).length >= tolakDasar + 1);
 check(
   'T12b',
-  jawabClaim && rebutDitolak === 100 && masihBoleh && bpmKini === 118 && masihDitolak,
+  jawabClaim &&
+    rebutDitolak === 100 &&
+    masihBoleh &&
+    bpmKini === 118 &&
+    masihDitolak &&
+    states(pemimpin).at(-1) === teksDasar,
   `100× claim tanpa lk → ${rebutDitolak} NOT_LEADER; pemimpin lama ${masihBoleh ? 'masih' : 'KEHILANGAN'} kendali ` +
-    `(bpm kini ${bpmKini}), penantang ${masihDitolak ? 'tetap' : 'BOLEH'} mengubah tempo`
+    `(bpm kini ${bpmKini}), penantang ${masihDitolak ? 'tetap DITOLAK' : 'BOLEH mengubah tempo'} ` +
+    `(penolakan ${tolakDasar} → ${penantang.frames.filter(isNotLeader).length}, state pemimpin ` +
+    `${states(pemimpin).at(-1) === teksDasar ? 'tidak berubah' : 'IKUT BERUBAH'})`
 );
 
 for (const r of [pemimpin, ...anggota]) r.close();

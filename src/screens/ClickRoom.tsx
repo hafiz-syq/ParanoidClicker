@@ -16,13 +16,12 @@ const STEPS = [-5, -1, 1, 5];
 const f = (n: number): string => (Number.isFinite(n) ? n.toFixed(1) : '—');
 
 /**
- * Layar klik. Satu komponen untuk dua peran: pemimpin membuat sesi lewat /create dan
- * memegang kendali tempo, pengikut membuka tautan join dan hanya melihat grid server.
- * Otoritas sebenarnya baru dijaga server di M3; hari ini tombol pengikut dimatikan
- * supaya sebelas HP tidak saling menimpa tempo.
+ * Layar klik. Satu komponen untuk dua peran: pemimpin membuat sesi lewat /create dan memegang
+ * kendali tempo, pengikut membuka tautan join dan hanya melihat grid server. Sejak M3a otoritas
+ * dijaga server (`lk` + `NOT_LEADER`); tombol pengikut tetap dimatikan di sini supaya tidak ada
+ * dua belas HP yang saling menimpa tempo yang pasti ditolak server.
  */
 export function ClickRoom(props: ClickRoomProps) {
-  const leader = props.role === 'leader';
   const [live, setLive] = useState(false);
   const [status, setStatus] = useState('belum mulai');
   const [members, setMembers] = useState(0);
@@ -33,6 +32,16 @@ export function ClickRoom(props: ClickRoomProps) {
   const [comp, setComp] = useState('0');
   const [wake, setWake] = useState('belum diuji');
   const [join, setJoin] = useState<LiveTarget | null>(props.target ?? null);
+  /** Server menjawab `NOT_LEADER` terakhir kali: podium sudah dipegang `did` lain. */
+  const [podiumLepas, setPodiumLepas] = useState(false);
+
+  // §4 butir 6: pemimpin bukan lagi sekadar peran di URL. Yang diakui adalah HP yang MEMEGANG
+  // KUNCI, dan kendalinya boleh dicabut server. Di wire tidak ada frame "kamu pemimpin" —
+  // sinyal satu-satunya adalah penolakan — jadi tombolnya aktif selama `lk` dipegang dan mati
+  // sejak `NOT_LEADER` pertama mendarat. Pemimpin palsu tetap tidak bisa apa-apa: yang
+  // memeriksa otoritas adalah server, bukan layar ini.
+  const punyaKunci = join?.lk !== undefined;
+  const leader = props.role === 'leader' && punyaKunci && !podiumLepas;
   /** bpm tujuan ramp; null = tidak ada ramp berjalan. */
   const [ramp, setRamp] = useState<number | null>(null);
   const [rampInput, setRampInput] = useState('100');
@@ -46,7 +55,12 @@ export function ClickRoom(props: ClickRoomProps) {
   /** Menyaring ketukan kedua pada tombol mulai: dua tap pernah melahirkan dua sid dan dua socket. */
   const startingRef = useRef(false);
 
-  const say = useCallback((line: string) => setStatus(line), []);
+  const say = useCallback((line: string) => {
+    setStatus(line);
+    // 'NOT_LEADER' adalah literal protokol (live.ts mencetak `server menolak: <kode>`), bukan
+    // prosa layar ini: penolakan itulah bukti dari server bahwa podium sudah pindah ke `did` lain.
+    if (line.includes('NOT_LEADER')) setPodiumLepas(true);
+  }, []);
 
   const pushGrid = useCallback(() => {
     const s = sesRef.current;
@@ -89,7 +103,10 @@ export function ClickRoom(props: ClickRoomProps) {
 
   const openSession = useCallback(
     async (t: LiveTarget) => {
-      rememberTarget(t, leader);
+      // Peran dihitung dari target yang DIPEGANG HP ini, bukan dari state `join`: state itu
+      // belum ter-render di continuation sesudah setJoin, dan memimpin tanpa menyimpan `lk`
+      // berarti kehilangan podium begitu layar mati.
+      rememberTarget(t, props.role === 'leader' && t.lk !== undefined);
       // unlock() wajib di sini, masih di dalam gestur tombol: AudioContext yang dibuat
       // diam-diam menghasilkan klik bisu tanpa satu pun error.
       const audio = await engineFor().unlock().catch((e: unknown) => `GAGAL: ${String(e)}`);
@@ -113,7 +130,7 @@ export function ClickRoom(props: ClickRoomProps) {
       setLive(true);
       void holdScreen();
     },
-    [engineFor, holdScreen, pushGrid, say]
+    [engineFor, holdScreen, props.role, pushGrid, say]
   );
 
   const startLeader = useCallback(async () => {
@@ -125,18 +142,34 @@ export function ClickRoom(props: ClickRoomProps) {
     if (audio.startsWith('GAGAL')) return;
     try {
       const res = await fetch('/create', { method: 'POST' });
-      const body = (await res.json()) as { sid?: string; token?: string; error?: string };
+      const body = (await res.json()) as { sid?: string; token?: string; leaderKey?: string; error?: string };
       if (!res.ok || typeof body.sid !== 'string' || typeof body.token !== 'string') {
         say(`/create gagal ${res.status}: ${JSON.stringify(body)}`);
         return;
       }
-      const t = { sid: body.sid, tok: body.token };
+      // `leaderKey` cuma ada di respons JSON ini — tidak pernah di `wsPath`, tidak pernah di
+      // tautan join. Worker lama yang belum mencetaknya tidak membuat sesi jadi batal: HP ini
+      // masuk sebagai anggota biasa, dan server memang belum bisa mengakui pemimpin apa pun.
+      const lk = typeof body.leaderKey === 'string' ? body.leaderKey : undefined;
+      const t: LiveTarget = { sid: body.sid, tok: body.token, ...(lk ? { lk } : {}) };
       setJoin(t);
       await openSession(t);
     } catch (e) {
       say(String(e));
     }
   }, [openSession, say]);
+
+  /**
+   * Tombol "Ambil kendali" (§3 rebut): mengirim `claim` ber-`lk` dari target, bukan dari URL.
+   * Bukti keberhasilannya tidak ada di wire — yang ada hanya perintah berikutnya yang tidak
+   * ditolak — jadi flag dilepas dan `say` yang mencetak penolakan kalau server tetap menolak.
+   */
+  const rebut = () => {
+    if (liveRef.current?.claim()) {
+      setPodiumLepas(false);
+      say('kendali diminta ulang dengan kunci pemimpin');
+    }
+  };
 
   // Diagnostik dibaca 4x per detik; θ basi harus terlihat sebelum personil menyadarinya
   // dari telinganya sendiri.
@@ -279,6 +312,15 @@ export function ClickRoom(props: ClickRoomProps) {
             </button>
           </p>
 
+          {punyaKunci && podiumLepas && (
+            <p className="row">
+              <button onClick={rebut} className="btn btn-wide">
+                Ambil kendali
+              </button>
+              <span className="bad">server tidak mengakui HP ini sebagai pemimpin</span>
+            </p>
+          )}
+
           {leader && (
             <p className="row">
               <label className="note">
@@ -321,10 +363,11 @@ export function ClickRoom(props: ClickRoomProps) {
             </>
           )}
 
-          {!leader && (
+          {!punyaKunci && (
             <p className="note">
-              Hanya pemimpin yang mengubah tempo. Server baru memeriksa itu mulai M3 — hari ini tombolnya
-              dimatikan di sisi pengikut supaya tidak ada dua HP yang saling menimpa.
+              Hanya pemimpin yang mengubah tempo, dan sejak M3a yang memeriksa itu server: HP tanpa
+              kunci pemimpin tetap masuk dan mendengar, tapi tempo/start/stop darinya dijawab
+              NOT_LEADER.
             </p>
           )}
 

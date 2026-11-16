@@ -455,14 +455,15 @@ it('pengikut tanpa lk yang mengirim tempo ditolak, dan grid ruangan tidak tersen
   pengikut.send({ t: 'hello', sid, did: 'devPengikut' });
   await pemimpin.untilStates(2);
 
-  const sebelum = statesOf(pemimpin.frames).at(-1)!;
+  // Teks mentah, bukan hasil parse: yang diklaim di judul tes adalah "sama persis".
+  const sebelum = pemimpin.states().at(-1)!;
   pengikut.send({ t: 'tempo', bpm: 60 });
   const jawab = (await pengikut.until(3)).map(body);
   expect(jawab.filter((f) => f.t === 'error')).toEqual([{ t: 'error', code: 'NOT_LEADER' }]);
   await new Promise((r) => setTimeout(r, 40));
   // Yang ditolak tidak boleh meninggalkan satu frame siaran pun, dan `bpm`/`anchorMs`
   // kedua layar harus tetap teks yang sama persis.
-  expect(statesOf(pengikut.frames).at(-1)).toEqual(sebelum);
+  expect(pengikut.states().at(-1)).toBe(sebelum);
   expect(pemimpin.frames.map(body).filter((f) => f.t === 'state')).toHaveLength(2);
   expect(body(sebelum)).toMatchObject({ bpm: 120, anchorMs: null, running: false, members: 2 });
   pemimpin.ws.close();
@@ -560,13 +561,17 @@ it('claim dengan lk memindahkan podium, claim tanpa lk tidak menggeser apa pun',
 
   // Rebut yang sah: lk diverifikasi ULANG dari frame ini — tidak percaya hasil hello —
   // leaderDid pindah, dan state disiarkan ke seluruh ruangan (anggota ikut menerimanya).
+  // Yang ditunggu di TIAP layar adalah salinan miliknya sendiri: siaran claim dan siaran
+  // tempo(132) berangkat ke dua socket yang sama, jadi menunggu angka anggota saja bisa
+  // selesai sebelum salinan pemimpin mendarat (terukur: jalan pertama berhenti di 5 frame, bukan 6).
   anggota.send({ t: 'claim', lk });
-  const pindah = await anggota.untilStates(3);
+  const pindah = await pemimpin.untilStates(5);
   expect(body(pindah.at(-1)!)).toMatchObject({ t: 'state', bpm: 132, members: 3 });
+  expect((await anggota.untilStates(4)).at(-1)).toBe(pindah.at(-1));
   expect(pemimpin.frames.length).toBe(diam[0]! + 2);
 
   anggota.send({ t: 'tempo', bpm: 76 });
-  expect(body((await anggota.untilStates(4)).at(-1)!)).toMatchObject({ t: 'state', bpm: 76 });
+  expect(body((await anggota.untilStates(5)).at(-1)!)).toMatchObject({ t: 'state', bpm: 76 });
   // Podium sudah pindah: perintah yang sama dari HP yang tadinya pemimpin sekarang ditolak.
   pemimpin.send({ t: 'tempo', bpm: 99 });
   const turun = (await pemimpin.until(8)).map(body);

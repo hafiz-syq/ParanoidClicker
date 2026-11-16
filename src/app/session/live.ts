@@ -21,6 +21,12 @@ export interface LiveTarget {
   sid: string;
   /** 64 hex — kapabilitas sesi dari /create (leader) atau dari tautan join (follower). */
   tok: string;
+  /**
+   * 64 hex — kapabilitas PEMIMPIN (ADR-0005). Hanya ada di HP yang memanggil `/create`
+   * (atau yang menyimpannya dari sana): tautan join dan QR tidak pernah memuatnya, dan
+   * `parseTarget` sengaja tidak pernah membacanya dari URL.
+   */
+  lk?: string;
 }
 
 const PING_INTERVAL_MS = 1_000;
@@ -37,6 +43,8 @@ export function parseTarget(search: string): LiveTarget | null {
   const q = new URLSearchParams(search);
   const sid = q.get('sid');
   const tok = q.get('tok') ?? '';
+  // Hanya sid + tok: `lk` TIDAK PERNAH dibaca dari URL, supaya tautan join yang dibagikan
+  // tidak pernah bisa membawa kapabilitas pemimpin meskipun ada yang menempelkannya manual.
   if (!isSid(sid) || !TOKEN_RE.test(tok)) return null;
   return { sid, tok };
 }
@@ -80,7 +88,11 @@ export class LiveSession {
     ws.addEventListener('open', () => {
       this.attempt = 0;
       this.opts.onStatus('terhubung');
-      ws.send(JSON.stringify({ t: 'hello', sid: this.target.sid, did: this.did }));
+      // `lk` hanya ikut kalau target memang punya: server membedakan "tidak punya kunci"
+      // dari "kunci rusak" lewat ada/tidaknya key ini, bukan lewat string kosong.
+      const hello: Record<string, unknown> = { t: 'hello', sid: this.target.sid, did: this.did };
+      if (this.target.lk) hello.lk = this.target.lk;
+      ws.send(JSON.stringify(hello));
       this.startPings();
     });
     ws.addEventListener('message', (ev: MessageEvent<string>) => this.onMessage(ev.data));
@@ -129,6 +141,20 @@ export class LiveSession {
 
   transport(on: boolean): boolean {
     return this.send({ t: on ? 'start' : 'stop' });
+  }
+
+  /**
+   * Rebut kendali (ADR-0005): satu-satunya jalan kembali ke podium sesudah DO berpindah
+   * tangan atau ter-evict dengan `did` lama. Tanpa `lk` tidak ada frame yang dikirim —
+   * mengirim `claim` kosong cuma menghasilkan `NOT_LEADER` dan membuat layarnya bisu.
+   */
+  claim(): boolean {
+    const lk = this.target.lk;
+    if (!lk) {
+      this.opts.onStatus('rebut ditolak: HP ini tidak punya kunci pemimpin (hanya yang membuat sesi yang punya)');
+      return false;
+    }
+    return this.send({ t: 'claim', lk });
   }
 
   thetaMs(): number {
@@ -270,7 +296,8 @@ const DID_KEY = 'paranoidclick.did';
 // shortcut: kapabilitas sesi ikut di localStorage, bukan sessionStorage — iOS membuang isi
 // sessionStorage saat me-reap tab, dan pemandu yang tabnya mati lalu membuka aplikasi lagi
 // tidak punya jalan kembali ke sid-nya sendiri; `/create` selalu melahirkan sid baru.
-// Bayarnya: `tok` bertahan sampai sesi berikutnya diganti. Kedaluwarsa token: M3.
+// Bayarnya: `tok` — dan sejak M3a `lk` pemimpin — bertahan sampai sesi berikutnya diganti.
+// Kedaluwarsa token: M3.
 const SESSION_KEY = 'paranoidclick.session';
 
 export interface Remembered extends LiveTarget {
@@ -280,7 +307,13 @@ export interface Remembered extends LiveTarget {
 
 export function rememberTarget(t: LiveTarget, leader: boolean): void {
   try {
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ sid: t.sid, tok: t.tok, leader }));
+    // `lk` ikut — TANPA itu jalan "Lanjut ke sesi" hanya mengembalikan kendali kalau kunci
+    // pemimpin ikut tersimpan. Tidak pernah lewat URL, jadi localStorage satu-satunya tempat
+    // ia boleh tinggal di HP pemimpin.
+    localStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({ sid: t.sid, tok: t.tok, ...(t.lk ? { lk: t.lk } : {}), leader })
+    );
   } catch {
     // Mode privat / storage diblokir: tidak ada jalan.resume, tapi klik tetap jalan.
   }
@@ -292,7 +325,10 @@ export function readRemembered(): Remembered | null {
     if (!raw) return null;
     const v = JSON.parse(raw) as Partial<Remembered>;
     if (!isSid(v.sid) || typeof v.tok !== 'string' || !TOKEN_RE.test(v.tok)) return null;
-    return { sid: v.sid, tok: v.tok, leader: v.leader === true };
+    // Kunci yang tersimpan ikut divalidasi dengan pola yang sama: localStorage adalah input
+    // pengguna (siapa pun yang bisa membuka DevTools), bukan penyimpanan aman.
+    const lk = typeof v.lk === 'string' && TOKEN_RE.test(v.lk) ? v.lk : undefined;
+    return { sid: v.sid, tok: v.tok, ...(lk ? { lk } : {}), leader: v.leader === true };
   } catch {
     return null;
   }
