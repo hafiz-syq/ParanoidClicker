@@ -26,23 +26,32 @@ latihan pertama, ruangan melaporkan `12 HP` selamanya dan gerbang `FULL` menolak
 kursinya kosong.
 
 M3a menyentuh angka yang sama dari sisi lain: otoritas pemimpin membuat identitas socket jadi hal
-yang harus ada (`Map<WebSocket, {sid, did}>`, `SessionDO.ts:113`), dan identitas per-socket adalah
-tepat satu hal yang dibutuhkan untuk menghitung kursi.
+yang harus ada, dan identitas per-socket adalah tepat satu hal yang dibutuhkan untuk menghitung
+kursi. Tempat penyimpanan identitas itu berubah dua kali dalam satu milestone: `b9fc0f3` menaruhnya di
+`Map<WebSocket, {sid, did}>` milik instance (`:113` waktu itu) dan itu cacat — Map dihapus oleh
+hibernasi — sehingga `a6ea775` memindahkannya ke attachment socket (`peerOf()` di `:92-98`).
+Penghitungan kursi tidak ikut berubah; lihat [ADR-0007](0007-attachment-identitas-socket.md).
+
+**Nomor baris di bawah diukur `grep -n` di atas `a6ea775`, bukan di atas `b9fc0f3`.** `a6ea775`
+menambah 32 baris dan menghapus 15 di `SessionDO.ts`, jadi rujukan lama bergeser sekitar +16; kolom
+kiri di setiap butir adalah nomor waktu ADR ini pertama diterima.
 
 ## Keputusan
 
-Satu fungsi, dipakai di tiga tempat: `seatCount()` (`SessionDO.ts:153-159`) menghitung socket yang
-`readyState === OPEN` dari `this.ctx.getWebSockets()`. **Angka mentah, tanpa deduplikasi `did`.**
+Satu fungsi, dipakai di tiga tempat: `seatCount()` (`SessionDO.ts:169-174`; dulu `:153-159`) menghitung
+socket yang `readyState === OPEN` dari `this.ctx.getWebSockets()`. **Angka mentah, tanpa deduplikasi
+`did`.**
 
-- Gerbang `FULL`: `!terdaftar && kursi > MAX_MEMBERS` (`:105-106`). Bentuk `total + 1` yang lama
-  hilang karena socket yang masuk sudah menghitung dirinya sendiri.
-- `members` di `welcome`: `kursi` (`:134`), sama seperti di `state`.
-- `members` di `state`: `this.seatCount()` (`:240`) — dan supaya angka itu bisa TURUN,
-  `webSocketClose` sekarang menyiarkan `state` (`:310-319`). Ini perilaku baru di wire: sebelumnya
+- Gerbang `FULL`: `!terdaftar && kursi > MAX_MEMBERS` (`:120-122`; dulu `:105-106`). Bentuk `total + 1`
+  yang lama hilang karena socket yang masuk sudah menghitung dirinya sendiri.
+- `members` di `welcome`: `kursi` (`:150`; dulu `:134`), sama seperti di `state`.
+- `members` di `state`: `this.seatCount()` (`:256`; dulu `:240`) — dan supaya angka itu bisa TURUN,
+  `webSocketClose` sekarang menyiarkan `state` (`:325-337`; dulu `:310-319`, dan catatan lama di README
+  menulis `:310-319` padahal blok itu mulai `:309`). Ini perilaku baru di wire: sebelumnya
   `state` hanya lahir dari perubahan tempo/transport/anggota.
 - Tabel `member` TETAP ada. Ia tidak lagi jadi dasar angka apa pun kecuali `rowsWritten` di
   `welcome`, yang masih dipakai untuk memutuskan apakah satu `hello` layak disiarkan. Aturan
-  siaran `hello` jadi: socket baru **atau** `rowsWritten > 0` (`:141-144`) — dua belas HP yang reload
+  siaran `hello` jadi: socket baru **atau** `rowsWritten > 0` (`:160`; dulu `:141-144`) — dua belas HP yang reload
   serentak tetap tidak boleh mengirim dua belas frame ke ruangan yang sedang menghitung beat.
 - `proto` tetap 2; isi frame `state` tidak bertambah dan tidak berkurang, hanya **arti** `members`
   yang berubah. Klien lama tetap membaca angka itu sebagai "N HP", dan mulai hari ini angkanya bisa
@@ -57,8 +66,9 @@ Satu fungsi, dipakai di tiga tempat: `seatCount()` (`SessionDO.ts:153-159`) meng
 2. **Socket hidup dihitung per `did` unik** (`new Set(peers.map(p => p.did)).size`) — **pernah dijawab,
    lalu dibatalkan**: label opsi inilah yang pemilik centang 15 Nov, dan yang menggantinya adalah socket
    mentah — dua-dua ada alamatnya di "Dasar perintah" di atas (`S1`/`S2` 15 Nov, `S7` 16 Nov). Konsekuensi
-   kalau keputusan ini dibuka lagi: dua tempat bergerak, gerbang `FULL` (`SessionDO.ts:105-106`) dan
-   `members` di `welcome` (`:134`), dan tes `session.spec.ts:149` pindah dari `members: 13` ke `12`. Hari
+   kalau keputusan ini dibuka lagi: dua tempat bergerak, gerbang `FULL` (`SessionDO.ts:120-122` di
+   `a6ea775`; `:105-106` di `b9fc0f3`) dan
+   `members` di `welcome` (`:150`; `:134` dulu), dan tes `session.spec.ts:149` pindah dari `members: 13` ke `12`. Hari
    ini tidak ada satu pun assertion yang mengasumsikan dedupe, dan itu memang isi jawaban 16 Nov.
 3. **Hitung jumlah entri `peers`** (socket yang sudah `hello`) — tolak: yang membuka koneksi lalu
    tidak pernah `hello` jadi gratis, padahal socket itu tetap hidup dan tetap memakan koneksi DO.

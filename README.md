@@ -499,19 +499,27 @@ pemimpin `lk` dicetak terpisah di `/create`, rebut kendali hanya sah dengan tomb
 [0006](docs/adr/0006-kursi-dari-socket-hidup.md) — dasar hitungan `N HP` pindah dari riwayat SQL ke
 socket hidup (ADR-0006 mengubah janji yang ditulis di M1b, makanya dia punya ADR sendiri). Kode:
 `178e1e9` (tes ditulis GAGAL lebih dulu, RED-nya difoto dengan angka di pesan commit itu) lalu
-`b9fc0f3` (kode §4 rencana M3a). Tidak ada dependensi baru, tidak ada deploy, tidak ada push, tidak
-ada perintah DDL ke produksi.
+`b9fc0f3` (kode §4 rencana M3a), dan dari ronde kedua: `297428a` (tes evict/hibernasi, MERAH) →
+`a6ea775` (perbaikan + kunci jalur error). Tidak ada dependensi baru, tidak ada deploy, tidak ada
+push, tidak ada perintah DDL ke produksi.
 
 ### Kontrak yang berubah di wire
 
 | Yang lama | Yang sekarang | Di mana |
 |---|---|---|
 | `/create` → `{sid, token, wsPath}` | → `{sid, token, leaderKey, wsPath}`; `leaderKey` 64 hex hanya di JSON ini, `wsPath` (yang disalin ke tautan join, nanti jadi QR) tidak memuatnya | `src/worker/index.ts:39` |
-| `tempo`/`start`/`stop` dari socket mana pun diterima | dijaga `assertLeader`; yang bukan pemegang podium dijawab `{t:'error',code:'NOT_LEADER'}` dan keadaan ruangan tidak tersentuh satu byte pun | `SessionDO.ts:182`, dipakai di `:275` (`tempo`) dan `:286` (`start`/`stop`) |
-| tidak ada frame `claim` | frame masuk baru `{t:'claim', lk}` — `lk` diverifikasi ULANG dari frame, hasil `hello` tidak dipercaya; sah → `leaderDid` pindah + `state` disiarkan | `SessionDO.ts:193-201` |
-| `members` = `SELECT COUNT(*) FROM member` (riwayat siapa yang pernah masuk) | `members` = jumlah socket `OPEN` di DO; angka itu sekarang bisa TURUN | `SessionDO.ts:153-159`, dipakai di `:105` (gerbang `FULL`), `:134` (`welcome`), `:240` (`state`) |
-| `state` hanya disiarkan saat tempo/transport/perubahan anggota | `webSocketClose` ikut menyiarkan | `SessionDO.ts:310-319` |
+| `tempo`/`start`/`stop` dari socket mana pun diterima | dijaga `assertLeader`; yang bukan pemegang podium dijawab `{t:'error',code:'NOT_LEADER'}` dan keadaan ruangan tidak tersentuh satu byte pun | `SessionDO.ts:198`, dipakai di `:291` (`tempo`) dan `:302` (`start`/`stop`) |
+| tidak ada frame `claim` | frame masuk baru `{t:'claim', lk}` — `lk` diverifikasi ULANG dari frame, hasil `hello` tidak dipercaya; sah → `leaderDid` pindah + `state` disiarkan | `SessionDO.ts:209-219` |
+| `members` = `SELECT COUNT(*) FROM member` (riwayat siapa yang pernah masuk) | `members` = jumlah socket `OPEN` di DO; angka itu sekarang bisa TURUN | `SessionDO.ts:169-174`, dipakai di `:120` (gerbang `FULL`), `:150` (`welcome`), `:256` (`state`) |
+| `state` hanya disiarkan saat tempo/transport/perubahan anggota | `webSocketClose` ikut menyiarkan | `SessionDO.ts:325-337` |
 | `leader` = peran dari URL | `leader` = punya `lk` DAN server belum menjawab `NOT_LEADER`; tombol "Ambil kendali" lahir dari penolakan itu | `ClickRoom.tsx:43-44`, `:62`, `:167`, `:315-318` |
+
+Angka `SessionDO.ts:` di tabel ini diukur `grep -n` di atas `a6ea775`, bukan di `b9fc0f3`: perbaikan
+hibernasi ronde kedua menulis 32 baris dan menghapus 15 (`git diff --numstat HEAD~1 HEAD --
+src/worker/SessionDO.ts`), dan `grep -n` memindahkan `seatCount` 153 → 169, `assertLeader` 182 → 198,
+`webSocketClose` 309 → 325 (+16 untuk ketiganya; catatan lama di tabel ini menulis `:310-319` padahal
+barisnya mulai 309 — salah satu angka, sekarang dibetulkan). Angka baris yang tidak ikut disegarkan
+adalah jejak yang salah tunjuk.
 
 Isi frame `state` tidak bertambah dan tidak berkurang (`bpm`, `anchorMs`, `running`, `members`),
 `proto` tetap 2, dan `src/shared/limits.ts` tidak disentuh: `FrameCode` adalah daftar penolakan
@@ -571,18 +579,126 @@ kunci=sid,token,leaderKey,wsPath  lenLeaderKey=64  lkDiWsPath=false
   Sesi yang dibuatnya tidak pernah mengikat `did` apa pun, jadi seluruh `tempo`/`start`/`stop`
   miliknya dijawab `NOT_LEADER` sampai klien-nya diperbarui. Jalur pemulihannya ada di layar:
   "Ambil kendali" (`ClickRoom.tsx:315-318`) hanya muncul kalau HP itu memegang `lk`.
-- `hello` pemimpin TIDAK menulis SQLite lagi kalau podium sudah terikat (`SessionDO.ts:125-127`):
+- `hello` pemimpin TIDAK menulis SQLite lagi kalau podium sudah terikat (`SessionDO.ts:141-143`):
   `claimed_at` tetap jam podium benar-benar direbut, dan reconnect tidak membayar kuota tulis.
+
+### Ronde M3a #2 — DO yang tertidur tidak boleh merampas podium
+
+Temuan checker, dan angkanya benar: `Map<WebSocket, Peer>` di memori instance adalah satu-satunya
+tempat `ws → {sid, did}` hidup, sementara `fetch()` memakai Hibernation API (`SessionDO.ts:45`).
+Sesudah DO di-evict, runtime memanggil handler dengan objek socket BARU yang tidak ada di Map itu,
+jadi `assertLeader` DAN `claim` menjawab `NOT_LEADER` untuk pemimpin yang `lk`-nya sah. Artinya
+janji yang tertulis di `live.ts:147-148` — "satu-satunya jalan kembali ke podium sesudah DO
+berpindah tangan **atau ter-evict**" — dibayar oleh tombol yang tidak bisa bekerja
+(`ClickRoom.tsx:315-318` → `live.ts:151`): buntu sampai orang itu me-reload halaman.
+
+- Tes ditulis lebih dulu (`297428a`), MERAH-nya difoto sebelum satu byte kode disentuh:
+  `npx vitest run --config vitest.worker.config.ts src/worker/eviction.spec.ts` →
+  **2 failed | 2 passed (4)**, duration **4,07 s**, mulai 2026-11-16T21:11:12Z. Yang merah persis
+  **A** (`tempo` sesudah evict) dan **B** (`claim` ber-`lk` sesudah evict), dua-duya dengan
+  `expected [] to deeply equal [ { code: 'NOT_LEADER', t: 'error' } ]`; **C** (kontrol positif:
+  `hello` ulang memulihkan kendali, kursi tetap 2) dan **D** (pagar: pengikut tanpa `lk` tetap
+  ditolak di `tempo` maupun `claim`) sudah hijau — jadi yang gagal adalah cacatnya, bukan tesnya.
+- Perbaikan (`a6ea775`): identitas hasil `hello` pindah ke **attachment socket** —
+  `serializeAttachment` saat hello, dibaca lewat `peerOf()` di `assertLeader` dan `claim`
+  (`SessionDO.ts:92-102`). Map dan `peers.delete` dihapus, bukan dipertahankan sebagai cache:
+  dua tempat untuk satu fakta persis sumber cacat ini. `proto` tetap 2, isi frame `state` tidak
+  berubah, `src/shared/limits.ts` tidak disentuh, `seatCount()` tetap memfilter
+  `readyState === OPEN`.
+- GREEN diukur sesudah kode: `npx vitest run --config vitest.worker.config.ts` → **31 passed
+  (31)** = 27 `session.spec.ts` + 4 `eviction.spec.ts` (2026-11-16T21:15:25Z), dan `npm run check`
+  → **EXIT=0**, `real 0m9.125s` (21:15:55Z → 21:16:04Z): typecheck bersih, `lint:arch OK`,
+  103 unit + 31 worker.
+- Serangan hidup sesudah perbaikan, dijalankan ulang barusan supaya angkanya bukan angka lama:
+  `PC_BASE_URL=http://127.0.0.1:8791 PC_LOG_FILE=/tmp/pc-dev-r3.log npx tsx scripts/attack.ts`
+  terhadap `npx wrangler dev --local --port 8791` (sid `VD2V`, exit 0) → **semua OK, nol GAGAL**:
+  T6a/b/c/d/e, T7a/b, T5a (3 lulus / 27 × `429`), T5b (30 sid palsu → 403, dijawab Worker JSON),
+  T12c (`/create` mencetak `leaderKey` 64 karakter, tidak ada di `wsPath`), T12s (12 socket hello
+  → welcome + state), T12a (11 anggota × `tempo` → 11 `NOT_LEADER`; siaran kursi
+  `12/11/…/2/1 → 12/11/…/2/1`, teks state pemimpin identik byte), T12b (100 × `claim` tanpa `lk`
+  → 100 `NOT_LEADER`, penantang tetap ditolak 101 → 102), T9a/b/d.
+- **T9c KOSONG dan lolosnya vacuous**, jadi batasnya ditulis di sebelah angkanya. Yang tercetak di
+  run ini: `isi payload tidak tertulis di log (95 baris, 4795 byte)`, dan berkas yang sama diukur
+  ulang dengan node → `{"jsChars":4795,"utf8Bytes":4897,"splitLines":95,"nonAscii":51}`: "byte"
+  yang dicetak tes adalah `text.length` (satuan UTF-16), berkas di disk 4897 byte karena log
+  wrangler punya 51 karakter non-ASCII, dan "95 baris" adalah `split('\n')` yang menghitung
+  newline terakhir sebagai satu elemen kosong (`wc -l` = 94). Bukan regresi, cuma cara hitung yang
+  harus disebut supaya dua orang tidak saling menuduh salah ukur.
+  Yang dijaga T9a/b/d bukan angka itu, dan ia tetap lulus: `sid=` tidak muncul di log (0 kali) dan
+  tidak ada token 64-hex di dalamnya. Sebaliknya itulah kesimpulannya: `grep 'GET /ws'` menghasilkan
+  48 baris dan semuanya `GET /ws 101 Switching Protocols (…ms)` TANPA query string — logger ini memang tidak
+  merekam URL, sehingga "sid tidak muncul di log localhost" TIDAK BOLEH dibaca sebagai bukti tentang
+  log produksi; yang terbukti cuma payload dan token tidak terserap log. `sid` hanya bisa diuji dari
+  log produksi lewat `npm run tail` (lihat angka capture 13 Nov di bagian M0).
+- Yang ikut berubah dan harus disebut, bukan diselipkan: `baru` di `hello` sekarang dibaca dari
+  attachment, jadi reconnect pada socket yang sama sesudah DO bangun tidak lagi dihitung hello
+  pertama (sebelumnya iya, karena Map-nya ikut terhapus). Ruangan tidak menerima `state` ekstra
+  untuk socket yang sudah dikenal — searah dengan janji "dua belas HP yang reload serentak tidak
+  boleh mengirim dua belas frame", dan tidak ada satu pun assertion yang menuntut sebaliknya.
+- **Yang belum terbukti:** bahwa evict ini terjadi di perangkat nyata. Yang dikirim klien tiap
+  `PING_INTERVAL_MS = 1000` (`live.ts:32`) adalah **frame teks** —
+  `ws.send(JSON.stringify({ t: 'ping', nonce, t1: slot }))` (`live.ts:278`) — jadi ia masuk lewat
+  `webSocketMessage` dan membangunkan DO. Ini bukan control-frame RFC 6455, dan bedanya penting
+  karena dokumen Cloudflare (di halaman `Use WebSockets`, terakhir diperbarui 30 Okt 2026, saya ambil
+  2026-11-16T21:37:13.891Z) menulis *"Ping/pong handling does not interrupt hibernation"* dan *"This
+  behavior keeps connections alive without waking the Durable Object"* — itu untuk frame ping
+  protokol yang ditangani runtime, bukan untuk `{"t":"ping"}` kita. Selama ada klien berlayar depan,
+  DO tidak pernah sempat di-evict, jadi evict di semua tes ini **dipaksa** lewat
+  `evictDurableObject` API tes, bukan diamati. Skenario yang masuk akal — dan ini DEDUKSI, bukan
+  ukur — dua belas HP terkunci di antara lagu, ping berhenti, DO tidur, bangun, dan pemimpin
+  kehilangan podiumnya. Jalur pulih yang dijanjikan §6.3 (rebut dengan `lk` lewat tombol
+  "Ambil kendali") sekarang benar-benar menutupnya, dan itu yang dites di **B**.
+
+### TEMUAN 2 ronde kedua: ditutup dengan bukti, bukan dengan diam
+
+`webSocketError` (`SessionDO.ts:339-342`) tidak menghapus keadaan dan tidak menyiarkan apa pun —
+gejalanya persis penyakit T6 di jalur `close`. Pertanyaan penentunya bukan "perlu tidak ya
+beres-beres di situ", tapi "apakah `webSocketClose` sungguh menyusul". Dokumen vendor cuma bilang
+*"invoked upon disconnect"*, jadi runtainya diukur: sebuah probe sementara (sengaja tidak
+di-commit; yang di-commit adalah tes penguncinya) membungkus `instance.webSocketClose` dengan spy,
+lalu memanggil `instance.webSocketError(socket, err)` di dalam `runInDurableObject`:
+
+```
+PROBE ERROR {"sebelum":{"jumlah":2,"kursi":2},"sesudahJumlah":1,"sesudahOpen":1,"readyStateSoketYangError":3,"dipanggil":["webSocketClose"],"frameB":[{"t":"state","members":2},{"t":"welcome","members":2},{"t":"state","members":2}],"frameA":[{"t":"welcome","members":2},{"t":"state","members":2},{"t":"state","members":2},{"t":"state","members":1}]}
+```
+
+Bacaannya: runtime **menyusulkan** `webSocketClose` satu kali sesudah `ws.close(1011)` dari sisi
+server, `getWebSockets()` turun 2 → 1 dengan `readyState` 3 (CLOSED), dan HP yang masih di dalam
+(`frameA`) menerima `state` dengan kursi yang **sudah** turun. Karena beres-beres itu memang
+terjadi, `webSocketError` sengaja tidak saya tambahi `broadcast` sendiri — itu mengirim dua frame
+identik untuk satu kesalahan. Temuan ini closed sebagai **bukan defect**, dengan kunci supaya
+perubahan vendor ketahuan: `session.spec.ts:610`
+`webSocketError menurunkan kursi karena webSocketClose menyusul, bukan karena diam` memilih socket
+korban lewat attachment (bukan `sockets[0]`, urutan `getWebSockets()` tidak dijamin) dan menuntut
+frame `state members: 1`. Rantai yang sama tercatat di
+[ADR-0007](docs/adr/0007-attachment-identitas-socket.md).
 
 ### BELUM di M3a
 
-- Gerbang rencana §7 butir "ukur di stack hidup DUA perangkat" **belum dikerjakan**: pengikut yang
-  memaksa `tempo` dari layar → `NOT_LEADER` terlihat, `bpm`/`anchor` kedua layar tetap identik,
-  `0 hilang` tidak berubah, dan `N HP` TURUN saat satu perangkat ditutup. Yang terbukti hari ini
-  adalah jalur itu di socket (`T12a`/`T12b`) dan di layar lewat unit test, bukan di dua HP.
+- Gerbang rencana §7 "ukur di stack hidup DUA perangkat": **sebagian tertutup, dan yang tersisa
+  bukan pekerjaan yang bisa saya kerjakan sendirian.** Angka-angka di bawah ini **dilaporkan checker
+  di prompt ronde M3a #2 dan tidak saya ukur ulang** — sumbernya pelapor, bukan alat saya
+  (Chromium 390×844, dua `isolatedContext`, vite 5173 → proxy 8787, sid `ABVQ`, pemimpin
+  `did 4b05e094864ca995`, pengikut `did f992decd4ce73998`): `grid: bpm=130 anchor=1794862553748
+  running=true` **identik di kedua layar**, sebelum dan sesudah pengikut me-reload; pengikut
+  "klik 55 berbunyi · 0 hilang · ctx=running · laju audio=1.000×", θ −0,5 ms, meleset p50 1,5 /
+  p95 9,0 / maks 360,5 ms (54 klik; maks = klik pertama pra-M2, bukan regresi); sesudah tab
+  pengikut ditutup, pemimpin melihat 1 HP di sampel poll pertama dan "klik 202 berbunyi · 0 hilang",
+  p50 1,0 / p95 9,0 / maks 410,0 ms (201 klik). Jadi `bpm`/`anchor` identik, `0 hilang` tidak
+  berubah, dan `N HP` TURUN sudah punya bukti dua perangkat.
+- Yang MASIH BELUM dari gerbang yang sama: **`NOT_LEADER` terlihat di layar pengikut**, karena UI
+  pengikut tidak pernah mengirim frame perintah — tombolnya `disabled`, dan sesudah `disabled`
+  dilepas tangan yang hasilnya cuma `{"t":"ping"}` yang terkirim. Penjaga server terbukti di kawat
+  (`T12a`) dan tidak terbukti di layar, dan itu dua hal berbeda; kalimat §7 menuntut yang kedua.
+  Apakah butir §7 perlu diformulasikan ulang ("jalur UI-nya memang tidak ada, jadi yang diuji di
+  kawat") atau perlu jalur UI baru supaya penolakan itu bisa terlihat — [TANYA] untuk checker/pemilik;
+  saya berhenti di sini dan tidak menjawabnya sendiri.
 - Setlist (tabel, layar, frame-nya sendiri) keluar ke **M3b** — bukan pekerjaan yang tertinggal.
 - QR menyusul di M4; sampai itu terjadi, tautan join tetap kunci ruangan: siapa pun yang membukanya
   bisa masuk, dan hari ini ia masuk sebagai anggota.
+- M3a **belum dinyatakan LULUS** selama TEMUAN 1 masih merah di sisi checker. Kode dan tesnya sudah
+  ada (`297428a` MERAH → `a6ea775` hijau), tapi keputusan ada di tangan yang mengukur, bukan di
+  tangan yang menulis perbaikan.
 
 ## Antrean defect yang belum punya gerbang
 
@@ -1111,7 +1227,9 @@ Konsekuensinya saya tulis apa adanya dan tidak dilunakkan jadi "aman": dengan so
 network-nya flap atau me-reload halaman sebelum socket lama terdeteksi tutup memegang **2 kursi**, jadi
 ruangan 12 HP bisa menjawab `FULL` padahal ada 11 HP nyata di tengah latihan. Itu harga yang diterima
 pemilik bersama jawabannya (S7), dan satu-satunya penahan yang tercatat adalah `webSocketClose`
-menyiarkan `state` (`SessionDO.ts:310-319`) supaya angkanya bisa turun sendiri.
+menyiarkan `state` (`SessionDO.ts:325-337` di `a6ea775`) supaya angkanya bisa turun sendiri. Rantai
+itu sekarang punya dua penahan yang diukur, bukan dua kalimat: siaran di `close` DAN fakta bahwa
+error di sisi server menyusul ke `close` juga (bagian "TEMUAN 2 ronde kedua" di atas).
 
 ## Gerbang ikon: tidak ada kembar, tidak ada bukti status
 

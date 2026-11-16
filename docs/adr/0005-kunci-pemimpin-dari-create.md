@@ -41,13 +41,22 @@ Dua kapabilitas terpisah di atas kunci ruangan yang sama (`src/worker/keys.ts`):
 
 DO mencatat pemegang podium di baris tunggal `leader (id INTEGER PRIMARY KEY CHECK (id = 1), did,
 lk_hint, claimed_at)` — `CHECK(id = 1)` dipakai lagi karena polanya sama dengan tabel `tempo`:
-keadaan tidak boleh bercabang. `hello` memverifikasi `lk` (`SessionDO.ts:125-127`) dan mengikat
-`did` hanya kalau belum ada pemegang; tiga frame perintah dijaga `assertLeader(ws)` (`:182`, dipakai
-di `:275` dan `:286`) yang bertanya ke **socket**, bukan ke `did` di dalam frame — identitas socket
-diambil dari `Map<WebSocket, {sid, did}>` hasil `hello` yang berhasil (`:113`). Rebut kendali ada,
+keadaan tidak boleh bercabang. `hello` memverifikasi `lk` (`SessionDO.ts:141-143`) dan mengikat
+`did` hanya kalau belum ada pemegang; tiga frame perintah dijaga `assertLeader(ws)` (`:198`, dipakai
+di `:291` dan `:302`) yang bertanya ke **socket**, bukan ke `did` di dalam frame. Rebut kendali ada,
 tapi hanya lewat frame `claim` yang membawa `lk` dan memverifikasinya ulang dari frame itu
-(`:193-201`), dipicu tombol "Ambil kendali" (`ClickRoom.tsx:315-318`) yang muncul justru setelah server
+(`:209-218`), dipicu tombol "Ambil kendali" (`ClickRoom.tsx:315-318`) yang muncul justru setelah server
 menjawab `NOT_LEADER`.
+
+**Yang dicabut dari kalimat di atas, dan kenapa.** Versi pertama ADR ini menulis bahwa identitas socket
+"diambil dari `Map<WebSocket, {sid, did}>` hasil `hello` yang berhasil (`:113`)" — itu memang kode yang
+lahir di `b9fc0f3`, dan kode itu cacat: `fetch()` memakai Hibernation API, jadi sesudah DO tidur
+runtime memanggil handler dengan objek socket baru yang tidak ada di Map itu, dan pemimpin sah dijawab
+`NOT_LEADER` bahkan lewat `claim` ber-`lk` yang benar. Nomor baris di paragraf di atas karena itu
+diukur ulang di `a6ea775`, tempat identitas dibaca dari attachment socket lewat `peerOf()` (`:92-98`,
+ditulis `remember()` di `:100-102` saat `hello` `:129`). Keputusan di ADR ini tidak berubah — otoritas
+tetap `lk`, rebut tetap eksplisit — yang berubah hanya tempat kebenaran itu disimpan; itu ada di
+[ADR-0007](0007-attachment-identitas-socket.md).
 
 ## Alternatif yang dipertimbangkan
 

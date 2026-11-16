@@ -16,7 +16,7 @@ lewat pada saat adopsi) dan `tertelan` = 0 (yang dibuang bukan beat grid baru).
 Sebabnya di aritmetika, bukan di timer. Frame `state` mendarat pada jam server `t`; antrean
 oscillator hanya memegang beat sampai `t + LOOKAHEAD_MS + comp` (`schedule.ts:53`, ≈150 ms);
 `retune` menaruh anchor di beat grid lama berikutnya sesudah `t + LEAD_MS` (`tempo.ts:54-57`,
-`SessionDO.ts:171`) — jadi anchor bisa 2,3 detik di depan. Engine waktu itu mengganti grid
+`SessionDO.ts:171` di `178e1e9` — `:293` di `a6ea775`, fungsinya tetap `setTempo`) — jadi anchor bisa 2,3 detik di depan. Engine waktu itu mengganti grid
 **sekarang juga**, sehingga beat grid lama di antara ekor antrean dan anchor — semuanya masih di
 masa depan, semuanya akan berbunyi — tidak pernah disetel oleh siapa pun. Pada tombol ±5 BPM cacat
 ini sudah ada sejak M1b; dia hanya jadi sistematis ketika ramp mengirim dua puluh jahitan.

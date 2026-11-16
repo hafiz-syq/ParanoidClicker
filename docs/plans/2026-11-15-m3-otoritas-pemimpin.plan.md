@@ -35,6 +35,12 @@ satu baris `src/**` pun yang diubah, dan pemilik sudah menjawab (S1) *"Setuju, t
 
 ## 2. Fakta yang mengikat desain (sudah diverifikasi di tree ini, bukan diingat-ingat)
 
+**Nomor baris di tabel ini membeku di tree 15/16 Nov SEBELUM M3a dan sengaja tidak disegarkan** — ia
+adalah bukti audit pada saat keputusan diambil, bukan rujukan kode hari-hari. Setelah `b9fc0f3` dan
+`a6ea775` yang berlaku adalah jangkar di README (tabel kontrak M3a) dan di ADR-0006/0007; misalnya
+baris `SessionDO.ts:148` di bawah (siaran) sekarang `:266-270`, dan `:202-207` (`webSocketClose` yang
+diam) sekarang `:325-337` dan sudah tidak diam.
+
 | Fakta | Bukti | Konsekuensi |
 |---|---|---|
 | `tok` = HMAC(kunci, `sid`) — kapabilitas **sesi**, bukan kapabilitas **pemimpin** | `index.ts:36-37`, `index.ts:74-75` | token yang sama dipegang pemimpin dan kesebelas HP; `tok` TIDAK BISA menyatakan otoritas |
@@ -117,8 +123,24 @@ satu baris `src/**` pun yang diubah, dan pemilik sudah menjawab (S1) *"Setuju, t
    datang. Jadi `NOT_LEADER` tidak butuh perubahan di `src/shared/`.
 4. `src/app/session/live.ts` — `LiveTarget` dapat `lk?` opsional; `hello` mengirimnya kalau ada;
    `rememberTarget` menyimpannya (kalau tidak, pemimpin yang layarnya mati kehilangan podium).
-5. `src/screens/Start.tsx` + `src/main.tsx` — `lk` mengalir dari JSON `/create` ke `ClickRoom`
-   lewat target, BUKAN lewat URL.
+5. `src/screens/Start.tsx` + `src/main.tsx` — ~~`lk` mengalir dari JSON `/create` ke `ClickRoom`
+   lewat target, BUKAN lewat URL~~ → **TIDAK disentuh, dan butir ini memang salah nama berkas.**
+   Dikoreksi 2026-11-17 atas temuan checker (ronde M3a #2 butir 3b), diukur dulu:
+   `git log --oneline 452488c..HEAD -- src/screens/Start.tsx src/main.tsx` → **kosong**, dan
+   `git log --oneline -1 --` masing-masing berhenti di `e44f96f` (2026-11-15T10:18:38+07:00), yang
+   dua-duanya sudah leluhur `452488c` (`git merge-base --is-ancestor` → YA untuk keduanya).
+   Alasannya sederhana dan itu yang harusnya ditulis sejak awal: `fetch('/create')` **sudah hidup
+   di `ClickRoom.tsx` sebelum M3a sama sekali** — di `452488c` ia baris `:127`, dan
+   `git log -S"'/create'" -- src/screens/ClickRoom.tsx` menunjuk kelahirannya ke `6259a7e`
+   (M1b, `:121` di commit itu; sekarang `:144`, bergeser karena b9fc0f3). `lk` ikut mengalir tanpa
+   menyentuh dua berkas itu karena ia naik di dalam objek yang sudah lewat: `ClickRoom.tsx:153-154`
+   menyusun `LiveTarget` dengan `lk` → `:109` `rememberTarget(t, …)` → `Start.tsx:40` mengirim
+   seluruh `remembered` ke `setView` → `Start.tsx:17` `<ClickRoom … target={view.target} />`.
+   `main.tsx:17` memang sengaja tidak berubah: jalur URL-nya pengikut, dan di sana `lk` tidak boleh
+   ada (URL = tautan join = kunci sesi `tok` saja).
+   Yang tetap benar dari butir ini cuma setengah belakangnya: `lk` mengalir lewat target, BUKAN
+   lewat URL — dan itu sekarang dijaga `T12c` di `scripts/attack.ts` ("leaderKey 64 karakter,
+   tidak ada di wsPath").
 6. `src/screens/ClickRoom.tsx` — `leader` bukan lagi sekadar peran UI: jadi
    *"punya lk DAN server mengakui did-ku"*. Tombol pengikut tetap disabled; pemimpin yang
    menerima `NOT_LEADER` melihat statusnya plus tombol "Ambil kendali", bukan bisu.
@@ -229,6 +251,18 @@ Pemilik sudah membaca rencana ini; jawabannya (S1) dicatat apa adanya (2026-11-1
   menunjuk sesi lain. Alamat lama baris ini (`…@2026-11-16T16:50:13.874Z`, dan bentuk pendek
   `2d6f4ca7@…` yang tidak lolos regex penjaga) salah dan dicabut di §8.2, bukan dihapus diam-diam.
   Yang tetap berlaku: ini satu-satunya kotak yang pemilik buka hari itu (S6b).
+  **Kalimat cakupan di baris ini dibetulkan 2026-11-17 atas perintah checker ronde M3a #2 butir 3a**
+  — ini koreksi teks, bukan jawaban baru dan bukan pelebaran izin. Glob `src/worker/**` + `src/app/**`
+  lebih sempit dari yang sungguh disentuh M3a: `git show --stat b9fc0f3` mencetak
+  `src/screens/ClickRoom.tsx | 69 +++++++++++++++++---` dan `scripts/attack.ts | 17 +++++-`, dan pada
+  range `452488c..HEAD` (`git diff --stat`) keduanya 69 dan 142 baris. Keduanya tidak masuk diam-diam:
+  `src/screens/ClickRoom.tsx` disebut namanya di §4 butir 6, `scripts/attack.ts` disebut namanya di
+  daftar "Test yang berubah atau lahir" §4, dan dua daftar itu adalah isi rencana yang dibaca saat S4
+  dibuka. Bentuk kalimat yang benar untuk kotak ini karena itu: *"untuk irisan yang tercantum di §4 —
+  termasuk berkas yang §4 sebut namanya di luar dua glob itu (`src/screens/ClickRoom.tsx`,
+  `scripts/attack.ts`, `src/worker/*.spec.ts`)"*. Baris tanda tangan di bawah tetap tidak saya sentuh.
+  Kalau pelebaran glob secara resmi (bukan hanya kalimat) memang diminta, itu pertanyaan untuk pemilik
+  dan saya tandai [TANYA] — tidak saya jawab sendiri.
 
 Persetujuan pemilik (kotak terakhir, yang membuka kode): `________________________`  Tanggal: `____________` — [TANYA]: baris ini hanya boleh diisi tangan pemilik; jawaban S4 saya catat di baris di atas, bukan di sini.
 
@@ -356,4 +390,90 @@ Satu jawaban S4 lagi yang menyentuh dokumen, bukan kode: **`apple-touch-icon` di
 APLIKASI**, jadi `index.html` tetap menunjuk `paranoid-180.png` dan `scripts/gerbang-ikon.mjs` **tidak
 diubah** — klasifikasi di dalamnya (`web` hanya untuk `index.html rel="icon"`) kebetulan sudah cocok
 dengan jawaban pemilik itu (S4), jadi yang saya catat cuma jawabannya.
+
+## 8.3 Ronde M3a #2 — DO yang tidur, `webSocketError`, dan tiga catatan dokumen
+
+Ditulis 2026-11-17 atas perintah checker ronde M3a #2 (basis `33c2342`, worktree terisolasi
+`C:/Users/LENOVO/AppData/Local/Temp/pc-verify`). Tidak ada jawaban baru di bagian ini; yang berubah
+hanya faktanya.
+
+**TEMUAN 1 (blokir, kode).** `Map<WebSocket, Peer>` di memori instance + Hibernation API
+(`acceptWebSocket`) = otoritas pemimpin hilang tiap DO dibangun ulang, dan tombol "Ambil kendali"
+menjadi jalur buntu. Rantai yang saya kutip sebagai janji ada di `live.ts:146-150` (kalimat
+"satu-satunya jalan kembali ke podium … atau ter-evict" di `:147-148`), UI-nya
+`ClickRoom.tsx:315-318` → `live.ts:151`.
+
+- Tes A/B/C/D ditulis lebih dulu dan difoto MERAH sebelum kode: `297428a`,
+  `npx vitest run --config vitest.worker.config.ts src/worker/eviction.spec.ts` →
+  **2 failed | 2 passed (4)**, 4,07 s, mulai 2026-11-16T21:11:12Z. A dan B merah dengan
+  `expected [] to deeply equal [ { code: 'NOT_LEADER', t: 'error' } ]`; C (kontrol positif `hello`
+  ulang + kursi 2) dan D (pagar fail-closed untuk pengikut tanpa `lk`) hijau sejak awal.
+- Reproduksi di tree utama, bukan cuma di worktree checker: cacat yang sama, angka yang sama.
+- Perbaikan `a6ea775`: satu tempat untuk fakta `ws → {sid, did}` = attachment socket
+  (`serializeAttachment`/`deserializeAttachment`, pembacanya `peerOf()` di `SessionDO.ts:92-102`).
+  Map dihapus, `peers.delete` dihapus. `proto`, isi `state`, dan `src/shared/limits.ts` tidak
+  disentuh; filter `readyState === OPEN` di `seatCount()` tetap (dokumen vendor: `getWebSockets()`
+  boleh mengembalikan socket CLOSING, jadi filter itu memang benar).
+- GREEN: `npx vitest run --config vitest.worker.config.ts` → **31 passed (31)** (21:15:25Z);
+  `npm run check` → **EXIT=0**, `real 0m9.125s`; `npm run attack` di `wrangler dev --local --port
+  8791` (sid `VD2V`) → nol GAGAL, termasuk T12a dan T12b.
+- Yang masih DEDUKSI dan saya labeli begitu: bahwa evict terjadi di perangkat nyata.
+  `PING_INTERVAL_MS = 1000` (`live.ts:32`) membuat klien berlayar-depan membangunkan DO tiap detik,
+  jadi evict di semua tes ini dipaksa lewat `evictDurableObject` API tes.
+
+**TEMUAN 2 (tidak blokir) ditutup sebagai bukan-defect dengan bukti runtainya.** Pertanyaannya bukan
+"perlu beres-beres di `webSocketError` tidak ya" tapi "apakah `webSocketClose` menyusul". Probe
+sementara (tidak di-commit; yang di-commit adalah tes penguncinya) memanggil
+`instance.webSocketError(socket, err)` dari dalam `runInDurableObject` dan mem-print:
+
+```
+PROBE ERROR {"sebelum":{"jumlah":2,"kursi":2},"sesudahJumlah":1,"sesudahOpen":1,"readyStateSoketYangError":3,"dipanggil":["webSocketClose"],"frameB":[{"t":"state","members":2},{"t":"welcome","members":2},{"t":"state","members":2}],"frameA":[{"t":"welcome","members":2},{"t":"state","members":2},{"t":"state","members":2},{"t":"state","members":1}]}
+```
+
+`webSocketClose` dipanggil satu kali, kursi 2 → 1, dan `state` dengan angka baru benar-benar sampai
+ke HP yang masih di dalam. Karena itu `webSocketError` sengaja TIDAK saya tambahi `broadcast`:
+menambahnya mengirim dua frame identik untuk satu kesalahan. Kuncinya sekarang di
+`session.spec.ts:610` (`webSocketError menurunkan kursi karena webSocketClose menyusul, bukan karena
+diam`) dan alasannya di [ADR-0007](../adr/0007-attachment-identitas-socket.md).
+
+**TEMUAN 3 (dokumen).** Tiga catatan yang tidak cocok dengan diff, semuanya diukur sebelum ditulis:
+(a) kotak izin S4 meng-glob `src/worker/**` + `src/app/**` sementara `b9fc0f3` juga menyentuh
+`src/screens/ClickRoom.tsx` (69 baris) dan `scripts/attack.ts` (17 baris di commit itu; 142 di range
+`452488c..HEAD`) — kalimatnya dibetulkan di Baris persetujuan, baris tanda tangan tidak disentuh;
+(b) §4 butir 5 menamakan `Start.tsx` + `main.tsx` yang `git log 452488c..HEAD --`-nya kosong karena
+`/create` sudah hidup di `ClickRoom.tsx` (`:127` di `452488c`) — butirnya ditulis ulang;
+(c) `T9c KOSONG`: log localhost tidak merekam query string, jadi lulusnya T9a atas "sid" adalah
+lolos vacuous — batasnya sekarang tertulis di sebelah angkanya, termasuk fakta bahwa "4795 byte"
+yang dicetak tes itu `text.length` (UTF-16) sedangkan berkasnya 4897 byte (`node`:
+`{"jsChars":4795,"utf8Bytes":4897,"splitLines":95,"nonAscii":51}`) dan "95 baris" adalah
+`split('\n')` yang menghitung newline terakhir sebagai elemen kosong (`wc -l` = 94).
+
+**Jangkar yang bergeser karena `a6ea775`** (diukur `grep -n` di atas commit itu; kolom kiri = `33c2342`):
+
+| Simbol | lama | baru di `a6ea775` |
+|---|---|---|
+| `acceptWebSocket` | `:53` | `:45` |
+| `peers = new Map` | `:30` | **tidak ada lagi** (hapus) |
+| tulis identitas di `hello` | `:113` | `:129` (`remember`) |
+| `seatCount()` | `:153-159` | `:169-174` |
+| gerbang `FULL` | `:105-106` | `:120-122` |
+| `assertLeader` | `:182` | `:198` |
+| `claim` | `:194` | `:209-210` |
+| `members` di `welcome` | — | `:150` |
+| `members` di `state` | — | `:256` |
+| `webSocketClose` | `:309` (dokumen lama menulis `:310-319`) | `:325-337` |
+| `webSocketError` | `:322-325` | `:339-342` |
+
+Dokumen yang ikut disegarkan: README (bagian M3a + dua subbagian ronde ini + tabel kontrak),
+ADR-0005, ADR-0006, ADR-0002/0004 (rujukan `SessionDO.ts:171` diberi jangkar commit karena nomor
+barisnya sudah tiga kali berpindah), dan `docs/adr/README.md` untuk baris ADR-0007.
+
+**Yang tidak saya ceritakan bersih di sini, supaya tidak hilang:** server `wrangler dev` di port 8787
+masih menahan port tetapi tidak lagi menjawab (`curl -m 8 http://127.0.0.1:8787/health` →
+`curl: (28) timed out, 0 bytes`); percobaan menghentikannya lewat `Stop-Process` pada proses anak
+workerd sudah saya lakukan sekali (meninggalkan crash #1 di log) dan percobaan lanjutan diblokir
+penapis sesi, jadi satu-satunya yang saya buka lagi adalah instance baru di **8791** yang dipakai
+untuk angka T9 di atas. Baca transkrip sesi lewat `grep` juga diblokir (label
+`[Session Transcript Tampering]`), sehingga jam prompt ronde M3a #2 tidak bisa saya ukur sendiri dan
+angka yang berasal dari prompt checker saya tulis sebagai "dilaporkan", bukan "diukur".
 

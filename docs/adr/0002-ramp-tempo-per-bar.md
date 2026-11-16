@@ -11,7 +11,8 @@ servo/ramp/kontinuitas dipotong.
 
 Ramp di tengah lagu adalah keputusan terkunci (rencana §kebutuhan), dan mesin jahitnya sudah ada:
 pemimpin mengirim `{t:'tempo', bpm}`, `SessionDO.setTempo` memanggil `retune(grid, bpm, Date.now() +
-LEAD_MS)` (`SessionDO.ts:171`, `tempo.ts:54`) sehingga grid baru selalu mulai tepat di batas grid
+LEAD_MS)` (`SessionDO.ts:171` di `178e1e9`, sekarang `:293` di `a6ea775` — yang tetap adalah nama
+fungsinya, `setTempo`; `tempo.ts:54`) sehingga grid baru selalu mulai tepat di batas grid
 lama — kedua sisi sepakat tentang *kapan* perpindahan terjadi, tidak ada yang pernah menaruh beat
 di masa lalu. Yang belum ada: siapa yang menekan tombol itu 20 kali, dan seberapa sering.
 
