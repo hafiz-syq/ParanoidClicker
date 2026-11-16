@@ -28,6 +28,17 @@ function ip(n: string) {
   return { 'CF-Connecting-IP': `203.0.113.${n}` };
 }
 
+// lk diambil dari /create sungguhan, bukan dari HMAC yang dihitung ulang di file tes: yang
+// harus dibuktikan adalah kunci yang dicetak rute itu memang bisa dipakai lagi oleh DO.
+async function mintPemimpin(n: string): Promise<{ sid: string; lk: string }> {
+  const res = await req('https://example.com/create', { method: 'POST', headers: ip(n) });
+  const body = (await res.json()) as { sid?: unknown; leaderKey?: unknown };
+  if (typeof body.sid !== 'string' || typeof body.leaderKey !== 'string') {
+    throw new Error(`/create belum mencetak leaderKey (dapat ${JSON.stringify(Object.keys(body))})`);
+  }
+  return { sid: body.sid, lk: body.leaderKey };
+}
+
 it('/ws menolak sid yang tidak pernah lahir dari /create', async () => {
   const upgrade = { headers: { ...ip('7'), Upgrade: 'websocket' } };
   const cases = ['https://example.com/ws?sid=ABCD', `https://example.com/ws?sid=ABCD&tok=${'a'.repeat(64)}`];
@@ -77,51 +88,78 @@ it('/create menolak GET', async () => {
   expect((await req('https://example.com/create')).status).toBe(405);
 });
 
+// —— §6.2: kursinya socket hidup, bukan sejarah di tabel `member` ——
+//
+// Tiga tes di bawah ini dulunya memakai fakeSocket di dalam runInDurableObject: socket itu
+// tidak pernah ada di ctx.getWebSockets(), jadi angka `members` yang diuji adalah COUNT(*)
+// SQLite. Setelah §6.2 angka itu adalah kursi, maka socketnya harus nyata — dan harus bisa
+// ditutup lagi, karena justru pelepasan kursi itu yang baru mau diuji.
+
 it('hello menulis satu baris member dan menjawab welcome', async () => {
-  const sent: string[] = [];
-  await runInDurableObject(stubFor('ABCD'), async (instance: SessionDO) => {
-    await instance.webSocketMessage(fakeSocket(sent), JSON.stringify({ t: 'hello', sid: 'ABCD', did: 'deadbeef' }));
-  });
-  const frame = JSON.parse(sent[0] ?? '{}') as Record<string, unknown>;
+  const peer = await openPeer('ABCD');
+  peer.send({ t: 'hello', sid: 'ABCD', did: 'deadbeef' });
+  const frames = await peer.until(2);
   // rowsWritten 2, bukan 1: baris tabel + entri indeks PRIMARY KEY dihitung terpisah,
-  // jadi kuota "rows written" gratis harus dihitung 2x per orang yang masuk.
-  expect(frame).toMatchObject({ t: 'welcome', sid: 'ABCD', members: 1, rowsWritten: 2 });
+  // jadi kuota "rows written" gratis harus dihitung 2x per orang yang masuk. Tabel `member`
+  // TETAP mengukur ini walau kursi sudah pindah ke socket (§4 butir 2b).
+  expect(body(frames[0]!)).toMatchObject({ t: 'welcome', sid: 'ABCD', members: 1, rowsWritten: 2 });
+  peer.ws.close();
 });
 
 it('hello ulang dari HP yang sama tidak membayar kuota tulis dua kali', async () => {
-  const sent: string[] = [];
-  await runInDurableObject(stubFor('RPT9'), async (instance: SessionDO) => {
-    const frame = JSON.stringify({ t: 'hello', sid: 'RPT9', did: 'cafe0001' });
-    await instance.webSocketMessage(fakeSocket(sent), frame);
-    await instance.webSocketMessage(fakeSocket(sent), frame);
-  });
-  // Setiap welcome sekarang diikuti satu frame state, jadi diambil yang bertipe welcome
-  // saja — indeks mentah akan pecah setiap kali ada frame baru.
-  const welcomes = sent.map((s) => JSON.parse(s)).filter((f) => f.t === 'welcome');
-  const [first, again] = welcomes;
-  expect(first).toMatchObject({ members: 1, rowsWritten: 2 });
-  // OR IGNORE: INSERT-nya tidak menulis apa pun, dan jumlah member tidak naik.
-  expect(again).toMatchObject({ t: 'welcome', members: 1, rowsWritten: 0 });
+  const peer = await openPeer('RPT9');
+  const hello = { t: 'hello', sid: 'RPT9', did: 'cafe0001' };
+  peer.send(hello);
+  peer.send(hello);
+  // welcome + state, dua kali: frame state ikut dihitung supaya `until` tidak menggantung.
+  const welcomes = (await peer.until(4)).map(body).filter((f) => f.t === 'welcome');
+  expect(welcomes[0]).toMatchObject({ members: 1, rowsWritten: 2 });
+  // OR IGNORE: INSERT-nya tidak menulis apa pun, dan socketnya sudah terhitung sendiri.
+  expect(welcomes[1]).toMatchObject({ t: 'welcome', members: 1, rowsWritten: 0 });
+  peer.ws.close();
 });
 
-it('hello ke-13 dari device baru ditolak FULL', async () => {
-  const sent: string[] = [];
-  await runInDurableObject(stubFor('FULL'), async (instance: SessionDO) => {
-    const sock = fakeSocket(sent);
-    for (let i = 0; i < MAX_MEMBERS; i++) {
-      await instance.webSocketMessage(sock, JSON.stringify({ t: 'hello', sid: 'FULL', did: `member${i}` }));
-    }
-    await instance.webSocketMessage(sock, JSON.stringify({ t: 'hello', sid: 'FULL', did: 'memberX' }));
-    // Yang sudah masuk tetap boleh hello ulang walau session sudah penuh.
-    await instance.webSocketMessage(sock, JSON.stringify({ t: 'hello', sid: 'FULL', did: 'member0' }));
-  });
-  const parsed = sent.map((s) => JSON.parse(s) as Record<string, unknown>);
-  const welcomes = parsed.filter((f) => f.t === 'welcome');
-  const errors = parsed.filter((f) => f.t === 'error');
-  expect(welcomes.length).toBe(MAX_MEMBERS + 1);
-  expect(errors.length).toBe(1);
-  expect(errors[0]).toMatchObject({ code: 'FULL' });
-  expect(welcomes[welcomes.length - 1]).toMatchObject({ t: 'welcome', members: MAX_MEMBERS });
+it('ke-13 ditolak FULL, dan kursi dari socket yang ditutup bisa dipakai lagi', async () => {
+  const peers: Peer[] = [];
+  for (let i = 0; i < MAX_MEMBERS; i++) {
+    const p = await openPeer('FULL');
+    p.send({ t: 'hello', sid: 'FULL', did: `member${i}` });
+    peers.push(p);
+  }
+  await peers[0]!.untilStates(MAX_MEMBERS);
+
+  // Yang sudah masuk tetap boleh hello ulang walau ruangan penuh (reconnect, tab bangun).
+  const dasar = peers[0]!.frames.length;
+  peers[0]!.send({ t: 'hello', sid: 'FULL', did: 'member0' });
+  const ulang = (await peers[0]!.until(dasar + 1)).map(body);
+  expect(ulang.filter((f) => f.t === 'welcome').at(-1)).toMatchObject({ members: MAX_MEMBERS, rowsWritten: 0 });
+
+  const penolak = await openPeer('FULL');
+  const sebelumPenuh = peers[0]!.frames.length;
+  penolak.send({ t: 'hello', sid: 'FULL', did: 'memberX' });
+  await penolak.until(1);
+  expect(body(penolak.frames[0]!)).toMatchObject({ t: 'error', code: 'FULL' });
+  await new Promise((r) => setTimeout(r, 40));
+  expect(peers[0]!.frames.length).toBe(sebelumPenuh);
+
+  // Konsekuensi socket MENTAH yang tercatat di §4 butir 2b: yang ditolak FULL masih
+  // memegang socketnya, jadi angka berikutnya 13 walau yang terdaftar cuma 12.
+  peers[0]!.send({ t: 'hello', sid: 'FULL', did: 'member0' });
+  const hantu = (await peers[0]!.until(sebelumPenuh + 1)).map(body);
+  expect(hantu.filter((f) => f.t === 'welcome').at(-1)).toMatchObject({ members: MAX_MEMBERS + 1 });
+
+  // Satu HP pulang → kursi lepas → yang tadi ditolak boleh masuk. Dasar lama (COUNT(*) FROM
+  // member) tidak bisa melakukan ini: FULL itu permanen sampai DO di-evict.
+  const pulang = peers[MAX_MEMBERS - 1]!;
+  pulang.ws.close();
+  const turun = await peers[0]!.untilStates(MAX_MEMBERS + 3);
+  expect(body(turun.at(-1)!)).toMatchObject({ t: 'state', members: MAX_MEMBERS });
+  penolak.send({ t: 'hello', sid: 'FULL', did: 'memberX' });
+  const masuk = (await penolak.until(3)).map(body).filter((f) => f.t === 'welcome');
+  expect(masuk).toHaveLength(1);
+  expect(masuk[0]).toMatchObject({ t: 'welcome', members: MAX_MEMBERS });
+  for (const p of peers) p.ws.close();
+  penolak.ws.close();
 });
 
 it('ping dijawab pong dengan t2 dan t3 milik server', async () => {
@@ -262,8 +300,11 @@ it('hello ulang dari HP yang sama tidak menyiarkan angka ke seluruh ruangan', as
 });
 
 it('orang ke-13 ditolak FULL tanpa membuat hitungan HP jadi 13', async () => {
-  // MAX_MEMBERS dijaga di hello(); kalau frame state ikut menghitung "total + 1" seperti
-  // welcome, ruangan yang penuh melaporkan satu HP hantu ke sebelas HP yang sudah di dalam.
+  // MAX_MEMBERS dijaga di hello() atas jumlah socket hidup (§6.2). Kalau angka itu dihitung
+  // seperti welcome lama — "total + 1" — ruangan yang penuh melaporkan satu HP hantu ke
+  // sebelas HP yang sudah di dalam. Yang ditolak memang masih memegang satu socket, TAPI
+  // penolakan tidak menyiarkan apa pun, jadi angka TERAKHIR yang dilihat ruangan tetap 12
+  // sampai ada peristiwa yang benar-benar menyiarkan (lihat tes FULL di atas).
   const peers: Peer[] = [];
   for (let i = 0; i < MAX_MEMBERS; i++) {
     const p = await openPeer('TMPJ');
@@ -291,10 +332,11 @@ it('orang ke-13 ditolak FULL tanpa membuat hitungan HP jadi 13', async () => {
 
 
 it('start menyebarkan anchor yang sama persis ke semua socket terbuka', async () => {
-  const a = await openPeer('TMPB');
-  const b = await openPeer('TMPB');
-  a.send({ t: 'hello', sid: 'TMPB', did: 'devA' });
-  b.send({ t: 'hello', sid: 'TMPB', did: 'devB' });
+  const { sid, lk } = await mintPemimpin('30');
+  const a = await openPeer(sid);
+  const b = await openPeer(sid);
+  a.send({ t: 'hello', sid, did: 'devA', lk });
+  b.send({ t: 'hello', sid, did: 'devB' });
   // a sudah berdiri ketika b masuk, jadi ia punya satu frame state ekstra — itu justru
   // yang dituntut T6. Karena itu yang dibandingkan frame TERAKHIR, bukan indeks mentah.
   await a.untilStates(2);
@@ -313,8 +355,9 @@ it('start menyebarkan anchor yang sama persis ke semua socket terbuka', async ()
 });
 
 it('tempo saat berjalan mendarat di batas grid lama, bukan di tengah beat', async () => {
-  const peer = await openPeer('TMPC');
-  peer.send({ t: 'hello', sid: 'TMPC', did: 'devC' });
+  const { sid, lk } = await mintPemimpin('31');
+  const peer = await openPeer(sid);
+  peer.send({ t: 'hello', sid, did: 'devC', lk });
   await peer.until(2);
   peer.send({ t: 'start' });
   await peer.until(3);
@@ -364,8 +407,9 @@ it('tempo cacat hanya menjawab pengirimnya, tidak menyentuh HP lain', async () =
 });
 
 it('tombol start yang ditekan dua kali tidak menulis dua kali', async () => {
-  const peer = await openPeer('TMPE');
-  peer.send({ t: 'hello', sid: 'TMPE', did: 'devF' });
+  const { sid, lk } = await mintPemimpin('32');
+  const peer = await openPeer(sid);
+  peer.send({ t: 'hello', sid, did: 'devF', lk });
   await peer.until(2);
   peer.send({ t: 'start' });
   await peer.until(3);
@@ -383,8 +427,9 @@ it('tombol start yang ditekan dua kali tidak menulis dua kali', async () => {
 });
 
 it('tempo saat berhenti hanya mengubah bpm, grid baru lahir saat start', async () => {
-  const peer = await openPeer('TMPF');
-  peer.send({ t: 'hello', sid: 'TMPF', did: 'devG' });
+  const { sid, lk } = await mintPemimpin('33');
+  const peer = await openPeer(sid);
+  peer.send({ t: 'hello', sid, did: 'devG', lk });
   await peer.until(2);
   peer.send({ t: 'tempo', bpm: 90 });
   const stopped = await peer.until(3);
@@ -394,3 +439,160 @@ it('tempo saat berhenti hanya mengubah bpm, grid baru lahir saat start', async (
   expect(statesOf(started)[2]).toMatchObject({ bpm: 90, running: true });
   peer.ws.close();
 });
+
+// —— M3a: otoritas pemimpin di server ——
+//
+// `lk` = kapabilitas PEMIMPIN yang dicetak /create dan tidak pernah lewat tautan join. Yang
+// diuji di bawah adalah janji §3: perintah tempo/start/stop hanya dilayani untuk socket yang
+// sudah terikat ke leaderDid, dan rebut kendali hanya sah dengan kunci yang sama.
+
+it('pengikut tanpa lk yang mengirim tempo ditolak, dan grid ruangan tidak tersentuh', async () => {
+  const { sid, lk } = await mintPemimpin('40');
+  const pemimpin = await openPeer(sid);
+  pemimpin.send({ t: 'hello', sid, did: 'devPemimpin', lk });
+  await pemimpin.untilStates(1);
+  const pengikut = await openPeer(sid);
+  pengikut.send({ t: 'hello', sid, did: 'devPengikut' });
+  await pemimpin.untilStates(2);
+
+  const sebelum = statesOf(pemimpin.frames).at(-1)!;
+  pengikut.send({ t: 'tempo', bpm: 60 });
+  const jawab = (await pengikut.until(3)).map(body);
+  expect(jawab.filter((f) => f.t === 'error')).toEqual([{ t: 'error', code: 'NOT_LEADER' }]);
+  await new Promise((r) => setTimeout(r, 40));
+  // Yang ditolak tidak boleh meninggalkan satu frame siaran pun, dan `bpm`/`anchorMs`
+  // kedua layar harus tetap teks yang sama persis.
+  expect(statesOf(pengikut.frames).at(-1)).toEqual(sebelum);
+  expect(pemimpin.frames.map(body).filter((f) => f.t === 'state')).toHaveLength(2);
+  expect(body(sebelum)).toMatchObject({ bpm: 120, anchorMs: null, running: false, members: 2 });
+  pemimpin.ws.close();
+  pengikut.ws.close();
+});
+
+it('HP yang membawa lk boleh mengubah tempo; tanpa lk kursinya kosong', async () => {
+  const { sid, lk } = await mintPemimpin('41');
+  const peer = await openPeer(sid);
+  peer.send({ t: 'hello', sid, did: 'devSatu' });
+  await peer.untilStates(1);
+
+  // Ruangan tanpa satu pun lk: §3 menolak "otoritas tanpa kunci", jadi tidak ada yang boleh
+  // memerintah — bukan "siapa saja boleh sampai ada yang klaim".
+  peer.send({ t: 'tempo', bpm: 96 });
+  const kosong = (await peer.until(3)).map(body);
+  expect(kosong.filter((f) => f.t === 'error')).toEqual([{ t: 'error', code: 'NOT_LEADER' }]);
+  expect(statesOf(peer.frames).at(-1)).toMatchObject({ bpm: 120 });
+
+  // Kunci yang sama, satu hello lagi di socket yang sama → podium terikat ke did ini →
+  // perintah yang sama lahir.
+  peer.send({ t: 'hello', sid, did: 'devSatu', lk });
+  await peer.untilStates(2);
+  peer.send({ t: 'tempo', bpm: 96 });
+  const lahir = await peer.untilStates(3);
+  expect(body(lahir.at(-1)!)).toMatchObject({ t: 'state', bpm: 96, running: false, members: 1 });
+  peer.ws.close();
+});
+
+it('pemimpin yang reconnect dengan did yang sama tetap pemimpin tanpa /create baru', async () => {
+  const { sid, lk } = await mintPemimpin('42');
+  const a = await openPeer(sid);
+  a.send({ t: 'hello', sid, did: 'devPemimpin', lk });
+  await a.untilStates(1);
+  a.send({ t: 'tempo', bpm: 100 });
+  expect(body((await a.untilStates(2)).at(-1)!)).toMatchObject({ bpm: 100 });
+  a.ws.close();
+
+  // Jalur "Lanjut ke sesi" (Start.tsx + rememberTarget): socket baru, did lama, lk dari
+  // localStorage. Kendali harus kembali tanpa /create baru dan tanpa tombol rebut.
+  const b = await openPeer(sid);
+  b.send({ t: 'hello', sid, did: 'devPemimpin', lk });
+  await b.untilStates(1);
+  b.send({ t: 'tempo', bpm: 140 });
+  expect(body((await b.untilStates(2)).at(-1)!)).toMatchObject({ t: 'state', bpm: 140, running: false });
+  b.ws.close();
+});
+
+it('dua HP yang sama-sama membawa lk: yang pertama mengikat, yang kedua tidak memerintah', async () => {
+  const { sid, lk } = await mintPemimpin('43');
+  const a = await openPeer(sid);
+  a.send({ t: 'hello', sid, did: 'devSatu', lk });
+  await a.untilStates(1);
+  const b = await openPeer(sid);
+  // Kunci yang sama SAMA SEKALI tidak berarti podium dua-duanya: lk hanya mengikat kalau
+  // belum ada pemimpin, setelah itu jalurnya adalah rebut eksplisit (`claim`).
+  b.send({ t: 'hello', sid, did: 'devDua', lk });
+  await a.untilStates(2);
+
+  b.send({ t: 'tempo', bpm: 60 });
+  const jawab = (await b.until(3)).map(body);
+  expect(jawab.filter((f) => f.t === 'error')).toEqual([{ t: 'error', code: 'NOT_LEADER' }]);
+  expect(statesOf(b.frames).at(-1)).toMatchObject({ bpm: 120 });
+
+  a.send({ t: 'tempo', bpm: 132 });
+  expect(body((await a.untilStates(3)).at(-1)!)).toMatchObject({ t: 'state', bpm: 132 });
+  a.ws.close();
+  b.ws.close();
+});
+
+it('claim dengan lk memindahkan podium, claim tanpa lk tidak menggeser apa pun', async () => {
+  const { sid, lk } = await mintPemimpin('44');
+  const pemimpin = await openPeer(sid);
+  pemimpin.send({ t: 'hello', sid, did: 'devLama', lk });
+  await pemimpin.untilStates(1);
+  const anggota = await openPeer(sid);
+  anggota.send({ t: 'hello', sid, did: 'devBaru' });
+  await pemimpin.untilStates(2);
+  const penantang = await openPeer(sid);
+  penantang.send({ t: 'hello', sid, did: 'devTiga' });
+  await pemimpin.untilStates(3);
+  const diam = [pemimpin, anggota].map((p) => p.frames.length);
+
+  // Klaim tanpa kunci: jawaban hanya ke pengirim, ruangan tidak boleh melihat satu frame pun.
+  penantang.send({ t: 'claim' });
+  const tolak = (await penantang.until(3)).map(body);
+  expect(tolak.filter((f) => f.t === 'error')).toEqual([{ t: 'error', code: 'NOT_LEADER' }]);
+  await new Promise((r) => setTimeout(r, 40));
+  expect([pemimpin, anggota].map((p) => p.frames.length)).toEqual(diam);
+
+  // leaderDid tidak goyah: pemimpin lama masih yang boleh memerintah.
+  pemimpin.send({ t: 'tempo', bpm: 132 });
+  const tetap = await pemimpin.untilStates(4);
+  expect(body(tetap.at(-1)!)).toMatchObject({ t: 'state', bpm: 132, running: false, members: 3 });
+
+  // Rebut yang sah: lk diverifikasi ULANG dari frame ini — tidak percaya hasil hello —
+  // leaderDid pindah, dan state disiarkan ke seluruh ruangan (anggota ikut menerimanya).
+  anggota.send({ t: 'claim', lk });
+  const pindah = await anggota.untilStates(3);
+  expect(body(pindah.at(-1)!)).toMatchObject({ t: 'state', bpm: 132, members: 3 });
+  expect(pemimpin.frames.length).toBe(diam[0]! + 2);
+
+  anggota.send({ t: 'tempo', bpm: 76 });
+  expect(body((await anggota.untilStates(4)).at(-1)!)).toMatchObject({ t: 'state', bpm: 76 });
+  // Podium sudah pindah: perintah yang sama dari HP yang tadinya pemimpin sekarang ditolak.
+  pemimpin.send({ t: 'tempo', bpm: 99 });
+  const turun = (await pemimpin.until(8)).map(body);
+  expect(turun.filter((f) => f.t === 'error')).toEqual([{ t: 'error', code: 'NOT_LEADER' }]);
+  pemimpin.ws.close();
+  anggota.ws.close();
+  penantang.ws.close();
+});
+
+it('socket yang ditutup menurunkan jumlah kursi di layar HP yang masih di dalam', async () => {
+  const a = await openPeer('TMPM');
+  a.send({ t: 'hello', sid: 'TMPM', did: 'devSatu' });
+  await a.untilStates(1);
+  const b = await openPeer('TMPM');
+  b.send({ t: 'hello', sid: 'TMPM', did: 'devDua' });
+  expect(body((await a.untilStates(2)).at(-1)!)).toMatchObject({ t: 'state', members: 2 });
+
+  // Bayaran §4 butir 2c: tanpa siaran di webSocketClose angka ini baru TURUN ketika ada
+  // orang mengubah tempo — dan hari itu pemimpin sedang tidak mengubah apa-apa.
+  b.ws.close();
+  expect(body((await a.untilStates(3)).at(-1)!)).toMatchObject({
+    t: 'state',
+    bpm: 120,
+    running: false,
+    members: 1,
+  });
+  a.ws.close();
+});
+

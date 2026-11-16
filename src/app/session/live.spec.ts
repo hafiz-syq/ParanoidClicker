@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LiveSession, parseTarget, type SessionState } from './live';
+import { LiveSession, parseTarget, readRemembered, rememberTarget, type SessionState } from './live';
 
 const TOK = 'a'.repeat(64);
 const T0 = 1_700_000_000_000;
@@ -78,13 +78,13 @@ interface Harness {
   ws(): FakeWS;
 }
 
-function harness(sid = 'ABCD'): Harness {
+function harness(sid = 'ABCD', lk?: string): Harness {
   const states: SessionState[] = [];
   const members: number[] = [];
   const status: string[] = [];
   const theta: number[] = [];
   const live = new LiveSession(
-    { sid, tok: TOK },
+    lk === undefined ? { sid, tok: TOK } : { sid, tok: TOK, lk },
     {
       onState: (s) => states.push(s),
       onMembers: (n) => void members.push(n),
@@ -117,6 +117,9 @@ describe('parseTarget', () => {
     expect(parseTarget(`?sid=ABCD&tok=${'a'.repeat(63)}`)).toBeNull();
     expect(parseTarget(`?sid=ABCD&tok=${'A'.repeat(64)}`)).toBeNull();
     expect(parseTarget(`?sid=ABCD&tok=${'0'.repeat(63)}g`)).toBeNull();
+    // `lk` TIDAK PERNAH dibaca dari URL: tautan join adalah kunci SESI, dan kunci PEMIMPIN
+    // harus tetap tinggal di browser yang memanggil /create (§3 + §4 butir 5).
+    expect(parseTarget(`?sid=ABCD&tok=${TOK}&lk=${'f'.repeat(64)}`)).toEqual({ sid: 'ABCD', tok: TOK });
   });
 });
 
@@ -345,5 +348,45 @@ describe('LiveSession', () => {
     h.live.close();
     vi.advanceTimersByTime(120_000);
     expect(FakeWS.instances.length).toBe(1);
+  });
+
+  it('hello membawa lk hanya kalau target punya kunci pemimpin', () => {
+    const h = harness('ABCD', 'b'.repeat(64));
+    h.live.connect();
+    h.ws().open();
+    expect(JSON.parse(h.ws().sent[0]!)).toMatchObject({ t: 'hello', sid: 'ABCD', lk: 'b'.repeat(64) });
+
+    // Pengikut: key-nya tidak ada sama sekali, bukan lk kosong — server membedakan
+    // "tidak punya kunci" dari "kunci rusak" lewat ini.
+    const f = harness();
+    f.live.connect();
+    f.ws().open();
+    expect('lk' in (JSON.parse(f.ws().sent[0]!) as object)).toBe(false);
+
+    // Jalan "Lanjut ke sesi" hanya mengembalikan kendali kalau lk ikut tersimpan.
+    rememberTarget({ sid: 'ABCD', tok: TOK, lk: 'c'.repeat(64) }, true);
+    expect(readRemembered()).toEqual({ sid: 'ABCD', tok: TOK, lk: 'c'.repeat(64), leader: true });
+  });
+
+  it('NOT_LEADER terlihat di status dan jalan rebut tidak jadi cabang mati', () => {
+    const h = harness('ABCD', 'd'.repeat(64));
+    h.live.connect();
+    const ws = h.ws();
+    ws.open();
+    ws.frame({ t: 'error', code: 'NOT_LEADER' });
+    expect(h.status.at(-1)).toMatch(/NOT_LEADER/);
+
+    // Tombol "Ambil kendali" harus benar-benar mengirim frame `claim` dengan lk dari target,
+    // bukan tombol yang memanggil fungsi kosong (QODER.md:40).
+    expect(h.live.claim()).toBe(true);
+    expect(JSON.parse(ws.sent[ws.sent.length - 1]!)).toEqual({ t: 'claim', lk: 'd'.repeat(64) });
+
+    // Tanpa lk tidak ada yang boleh dikirim dan layar harus mengatakannya.
+    const f = harness();
+    f.live.connect();
+    f.ws().open();
+    expect(f.live.claim()).toBe(false);
+    expect(f.ws().sent.map((s) => (JSON.parse(s) as { t: string }).t)).not.toContain('claim');
+    expect(f.status.join(' ')).toMatch(/kunci/);
   });
 });

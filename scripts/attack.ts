@@ -4,10 +4,13 @@
 //   PC_BASE_URL=https://paranoidclick.<akun>.workers.dev PC_LOG_FILE=/tmp/pc-dev.log npx tsx scripts/attack.ts
 // BATAS: hanya boleh ke URL milik sendiri. Tidak ada permintaan ke pihak ketiga di sini.
 // Kerangka T1/T2/T3/T4/T8/T10/T11 ikut baris ini nanti, begitu cmd.* dan join ada.
+// T12 = otoritas pemimpin (M3a): anggota yang memaksa tempo, 100× rebut tanpa kunci, dan
+// leaderKey yang tidak boleh sampai ke URL maupun ke log.
 import { existsSync, readFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { genSid } from '../src/shared/ids';
+import { MAX_MEMBERS } from '../src/shared/limits';
 
 const BASE = process.env['PC_BASE_URL'] ?? 'http://127.0.0.1:8787';
 const LOG = process.env['PC_LOG_FILE'] ?? '';
@@ -75,7 +78,7 @@ const wsUrl = (path: string) => `${BASE.replace(/^http/, 'ws')}${path}`;
 // dengan JSON, semua tes di bawahnya cuma mengukur sesuatu yang lain.
 const createRes = await fetch(`${BASE}/create`, { method: 'POST', headers: fakeIp(ownIp) });
 const createText = await createRes.text();
-let created: { sid?: string; token?: string; wsPath?: string };
+let created: { sid?: string; token?: string; leaderKey?: string; wsPath?: string };
 try {
   created = JSON.parse(createText) as typeof created;
 } catch {
@@ -224,6 +227,129 @@ check(
   `30 sid palsu → status unik ${statusUnik}, ${dariWorker ? 'dijawab Worker (JSON)' : 'BUKAN Worker (HTML edge)'}`
 );
 
+console.log('\n--- T12: otoritas pemimpin (M3a) ---');
+
+interface Room {
+  did: string;
+  ws: WebSocket;
+  frames: string[];
+  send(frame: unknown): void;
+  close(): void;
+}
+
+// bomb() menutup socketnya setelah jawaban pertama. T12 justru butuh socket yang DITINGGAL
+// terbuka: kursinya dibaca dari socket hidup, dan siaran ruangan hanya sampai ke yang
+// masih tersambung.
+function join(did: string, lk?: string): Promise<Room> {
+  return new Promise<Room>((resolve, reject) => {
+    const ws = new WebSocket(wsUrl(wsPath));
+    const frames: string[] = [];
+    ws.addEventListener('message', (ev) => frames.push(String(ev.data)));
+    ws.addEventListener('error', () => reject(new Error(`socket ${did} error`)));
+    ws.addEventListener(
+      'open',
+      () => {
+        ws.send(JSON.stringify(lk ? { t: 'hello', sid, did, lk } : { t: 'hello', sid, did }));
+        resolve({
+          did,
+          ws,
+          frames,
+          send: (frame) => ws.send(JSON.stringify(frame)),
+          close: () => ws.close(1000, 'selesai'),
+        });
+      },
+      { once: true }
+    );
+    setTimeout(() => reject(new Error(`socket ${did} tidak membuka dalam 8 s`)), 8_000);
+  });
+}
+
+// Yang ditunggu adalah keputusannya, bukan waktunya: socket lokal menjawab dalam milidetik,
+// workers.dev butuh ratusan, dan tidur buta akan membuat tes ini merah di produksi.
+// `false` yang kembali adalah jawaban, bukan crash: suite harus melaporkan, tidak berhenti.
+async function waited(pred: () => boolean, ms = 8_000): Promise<boolean> {
+  const t0 = Date.now();
+  while (!pred()) {
+    if (Date.now() - t0 > ms) return false;
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  return true;
+}
+
+const isState = (t: string): boolean => {
+  try {
+    return (JSON.parse(t) as { t?: string }).t === 'state';
+  } catch {
+    return false;
+  }
+};
+const isNotLeader = (t: string): boolean => {
+  try {
+    const f = JSON.parse(t) as { t?: string; code?: string };
+    return f.t === 'error' && f.code === 'NOT_LEADER';
+  } catch {
+    return false;
+  }
+};
+const states = (r: Room): string[] => r.frames.filter(isState);
+
+// lk hanya boleh keluar dari JSON /create. Kalau ia ikut di wsPath, ia ikut di tautan join
+// dan QR, dan seluruh bangunan otoritas ini jadi hiasan.
+const lk = created.leaderKey ?? '';
+check(
+  'T12c',
+  /^[0-9a-f]{64}$/.test(lk) && !wsPath.includes(lk),
+  `/create mencetak leaderKey ${lk.length} karakter, ${lk && wsPath.includes(lk) ? 'ADA di wsPath (bocor ke tautan join!)' : 'tidak ada di wsPath'}`
+);
+
+// Kursi: 1 pemimpin + 11 anggota = MAX_MEMBERS persis.
+const pemimpin = await join('attack-pemimpin', lk);
+const masuk = await waited(() => pemimpin.frames.length >= 2);
+const anggota: Room[] = [];
+for (let i = 0; i < MAX_MEMBERS - 1; i++) {
+  const r = await join(`attack-anggota-${i}`);
+  // FULL di sini adalah jawaban yang SAH (kursi sudah terpakai), jadi tunggu kedua kemungkinan
+  // dan biarkan `check` di bawah yang merah — tes yang crash tidak melaporkan apa-apa.
+  await waited(() => r.frames.length >= 2 || r.frames.some((f) => codeOf(f) === 'FULL'));
+  anggota.push(r);
+}
+const seatOk = await waited(() => [pemimpin, ...anggota].every((r) => r.frames.length >= 2));
+check('T12s', seatOk, `${anggota.length + 1} socket hello → semua dijawab welcome + state (kursi nyata)`);
+
+const siaran0 = [pemimpin, ...anggota].map((r) => states(r).length);
+const teks0 = states(pemimpin).at(-1) ?? '';
+for (const r of anggota) r.send({ t: 'tempo', bpm: 90 });
+const semuaTolak = await waited(() => anggota.every((r) => r.frames.filter(isNotLeader).length === 1));
+const siaran1 = [pemimpin, ...anggota].map((r) => states(r).length);
+check(
+  'T12a',
+  semuaTolak && siaran0.join(',') === siaran1.join(',') && states(pemimpin).at(-1) === teks0,
+  `${anggota.length} anggota × tempo → ${anggota.filter((r) => r.frames.filter(isNotLeader).length === 1).length} NOT_LEADER; ` +
+    `siaran state ${siaran0.join('/')} → ${siaran1.join('/')}, teks state pemimpin ` +
+    `${states(pemimpin).at(-1) === teks0 ? 'identik byte' : 'BERUBAH'}`
+);
+
+const penantang = anggota[0]!;
+const dasarClaim = penantang.frames.length;
+for (let i = 0; i < 100; i++) penantang.send({ t: 'claim' });
+const jawabClaim = await waited(() => penantang.frames.length >= dasarClaim + 100);
+const rebutDitolak = penantang.frames.slice(dasarClaim).filter(isNotLeader).length;
+// Podium tidak boleh goyah: pemimpin lama masih yang bisa mengubah tempo.
+const stateDasar = states(pemimpin).length;
+pemimpin.send({ t: 'tempo', bpm: 118 });
+const masihBoleh = await waited(() => states(pemimpin).length > stateDasar);
+const bpmKini = Number((JSON.parse(states(pemimpin).at(-1) ?? '{}') as { bpm?: number }).bpm ?? -1);
+penantang.send({ t: 'tempo', bpm: 60 });
+const masihDitolak = await waited(() => penantang.frames.filter(isNotLeader).length === 2);
+check(
+  'T12b',
+  jawabClaim && rebutDitolak === 100 && masihBoleh && bpmKini === 118 && masihDitolak,
+  `100× claim tanpa lk → ${rebutDitolak} NOT_LEADER; pemimpin lama ${masihBoleh ? 'masih' : 'KEHILANGAN'} kendali ` +
+    `(bpm kini ${bpmKini}), penantang ${masihDitolak ? 'tetap' : 'BOLEH'} mengubah tempo`
+);
+
+for (const r of [pemimpin, ...anggota]) r.close();
+
 console.log('\n--- T9: jejak di log ---');
 
 if (LOG && existsSync(LOG)) {
@@ -234,6 +360,9 @@ if (LOG && existsSync(LOG)) {
   const lines = text.split('\n').length;
   check('T9a', !text.includes('AAAA'), `isi payload tidak tertulis di log (${lines} baris, ${text.length} byte)`);
   check('T9b', !text.includes(created.token ?? '§'), 'token sesi tidak tertulis di log');
+  // Kunci pemimpin punya derajat kerahasiaan yang sama dan ia TIDAK duduk di query string,
+  // jadi kemunculannya di log berarti ada kode yang mencetak JSON /create.
+  check('T9d', !text.includes(lk || '§'), 'kunci pemimpin tidak tertulis di log');
   // Kendali positif untuk T9b: sid dan tok duduk di query string yang sama, jadi kalau URL
   // itu tercatat maka sid pasti ikut muncul. Kalau sid pun tidak muncul, logger ini tidak
   // merekam query string sama sekali — T9b di atas lolos tanpa membuktikan apa-apa, dan itu
