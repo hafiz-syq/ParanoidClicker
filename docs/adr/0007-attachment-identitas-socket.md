@@ -4,6 +4,10 @@
 "console.log(new Date().toISOString(), new Date().getTimezoneOffset())"` di menit dokumen ini ditulis)
 **Status**: accepted
 **Kodi yang didokumentasikan**: `a6ea775` (perbaikan) + `297428a` (tes lebih dulu) atas `33c2342`
+**Revisi ronde M3a #4**: judulnya masih `{sid, did}` karena itu isi attachment di `a6ea775`; sejak `f383335`
+attachment membawa field ketiga, `lkDibuktikan` — lihat bagian "Perpanjangan" di bawah. Nomor `SessionDO.ts`
+di ADR ini saya segarkan ke `f383335` (pergeseran +7…+23 akibat perubahan itu sendiri); angka lama tetap bisa
+dibuka dengan `git show a6ea775:src/worker/SessionDO.ts`, dan keduanya saya tulis berdampingan di bawah.
 **Dasar perintah**: perintah checker `2d6f4ca7-3aba-44e4-ab8d-470daf00b560` ronde M3a #2 — TEMUAN 1
 (blokir: otoritas pemimpin hilang sesudah DO di-evict, "Ambil kendali" tidak bisa memulihkan) dan
 TEMUAN 2 (tidak blokir: `webSocketError` tanpa beres-beres dan tanpa cakupan tes). Tidak ada keputusan
@@ -13,7 +17,7 @@ diterima di ADR-0005 dan ADR-0006, dan perbaikannya tidak menyentuh kontrak itu.
 ## Konteks
 
 `SessionDO.fetch()` menerima sisi server lewat `this.ctx.acceptWebSocket(server)`
-(`SessionDO.ts:45`). Itu API Hibernation, dan konsekuensinya tertulis di dokumen vendor (halaman
+(`SessionDO.ts:45` di `a6ea775`, `:52` di `f383335`). Itu API Hibernation, dan konsekuensinya tertulis di dokumen vendor (halaman
 `Use WebSockets`, "Last updated Oct 30, 2026", saya ambil 2026-11-16T21:37:13.891Z lewat
 `https://developers.cloudflare.com/durable-objects/api/websockets/`):
 
@@ -27,19 +31,21 @@ diterima di ADR-0005 dan ADR-0006, dan perbaikannya tidak menyentuh kontrak itu.
 
 M3a menyimpan identitas hasil `hello` di `private readonly peers = new Map<WebSocket, Peer>()` —
 persis jenis keadaan yang kalimat pertama hapus. runtime lalu memanggil handler dengan objek
-`WebSocket` BARU, jadi `peerOf` tidak menemukan siapa pun: `assertLeader` (`:198`) dan `claim`
-(`:209`) menjawab `NOT_LEADER` untuk pemimpin yang `lk`-nya sah. Yang rusak bukan cuma angka: tombol
+`WebSocket` BARU, jadi `peerOf` tidak menemukan siapa pun: `assertLeader` (`:198` di `a6ea775`, `:220` di
+`f383335`) dan `claim` (`:209` di `a6ea775`, `:231` di `f383335`) menjawab `NOT_LEADER` untuk pemimpin yang
+`lk`-nya sah. Yang rusak bukan cuma angka: tombol
 "Ambil kendali" (`ClickRoom.tsx:315-318` → `live.ts:151`) adalah satu-satunya jalan pulih yang
 dijanjikan `live.ts:146-150`, dan ia jadi jalur buntu sampai orang itu me-reload halaman.
 
 ## Keputusan
 
 Satu tempat untuk fakta `socket ini adalah {sid, did}`: **attachment socket**, ditulis di `hello`
-(`remember()`, `SessionDO.ts:100-102`) dan dibaca di setiap keputusan otoritas (`peerOf()`,
-`:92-98`). Map instance dihapus beserta `peers.delete` di `webSocketClose` — bukan dipertahankan
+(`remember()`, `SessionDO.ts:100-102` di `a6ea775`, `:110-112` di `f383335`) dan dibaca di setiap keputusan
+otoritas (`peerOf()`,
+`:92-98` di `a6ea775`, `:99-108` di `f383335`). Map instance dihapus beserta `peers.delete` di `webSocketClose` — bukan dipertahankan
 sebagai cache, karena dua tempat untuk satu fakta adalah sumber cacat ini.
 
-`webSocketError` (`SessionDO.ts:339-342`) **tidak** saya tambahi beres-beres atau siaran. Itu bukan
+`webSocketError` (`SessionDO.ts:339-342` di `a6ea775`, `:362-365` di `f383335`) **tidak** saya tambahi beres-beres atau siaran. Itu bukan
 kemalasan: runtaiannya diukur, dan ternyata `webSocketClose` — yang sudah menyiarkan `state` dengan
 kursi yang turun (ADR-0006) — memang menyusul. Menambah siaran di `webSocketError` menghasilkan dua
 frame identik untuk satu kesalahan.
@@ -73,13 +79,20 @@ identitas kembali ke memori, tanpa perlu tes yang membaca isi field.
 
 **Jadi lebih sulit / harus diterima:** dokumen vendor membatasi attachment (`Maximum serialized size
 is 16,384 bytes`, dan *"Modifications to `value` after calling this method are not retained unless you
-call it again"*), jadi attachment kita tetap kecil (`{sid, did}` ≈ 40 byte) dan **ditulis ulang di
-setiap `hello`**, bukan sekali lalu dipercaya. Kalau nanti ada keadaan per-koneksi yang lebih besar,
+call it again"*), jadi attachment kita tetap kecil dan **ditulis ulang di
+setiap `hello`**, bukan sekali lalu dipercaya. Ukurannya saya hitung sebagai panjang `JSON.stringify` dari
+nilai yang benar-benar ditulis: `{sid, did}` = **39 byte** untuk bentuk nyata (`sid` 4 karakter, dipaksa
+`isSid` di `src/shared/ids.ts:16-18`; `did` 16 hex dari `genDid()`), jadi angka lama "≈ 40 byte" memang
+akurat. Dengan field ketiga di `f383335` = **59 byte**, dan **75 byte** pada bentuk terbesar yang masih
+diterima server (`sid` tetap 4, `did` 32 karakter — batas panjang dijaga di `SessionDO.ts:120`). Jarak ke
+batas 16.384 tetap dua sampai tiga orde, dan tidak ada kunci di dalamnya: yang disimpan cuma hasil
+verifikasi (`boolean`), bukan `lk`.
+Kalau nanti ada keadaan per-koneksi yang lebih besar,
 jalur resminya adalah Storage API + menyimpan kuncinya di attachment — itu keputusan untuk milestone
 berikutnya, bukan yang ini.
 
 **Berubah secara perilaku, dan itu harus disebut, bukan diselipkan:** `baru` di `hello`
-(`SessionDO.ts:128`) sekarang dibaca dari attachment. Reconnect pada socket yang sama sesudah DO
+(`SessionDO.ts:128` di `a6ea775`, `:138` di `f383335`) sekarang dibaca dari attachment. Reconnect pada socket yang sama sesudah DO
 bangun tidak lagi dihitung hello pertama, jadi ruangan tidak menerima `state` ekstra untuk socket yang
 sudah dikenal. Sebelum perbaikan, Map yang terhapus membuat setiap hello pasca-evict tampak baru.
 Ini searah dengan janji "dua belas HP yang reload serentak tidak boleh mengirim dua belas frame", dan
@@ -92,13 +105,55 @@ socket tanpa attachment dijawab "belum dikenal" (`NOT_LEADER`), bukan melempar `
 arah fail-closed, tapi ia juga berarti harness tes bisa menyembunyikan perbedaan antara runtime asli
 dan palsu. Yang menutupinya bukan penjaga ini, tapi `eviction.spec.ts` yang berjalan di workerd asli.
 
+## Perpanjangan ronde M3a #4: attachment ikut membawa satu fakta yang tidak bisa dikarang dari frame
+
+ADR ini lahir dari satu kalimat vendor: *"In-memory state is reset"*. Jawabannya waktu itu `{sid, did}`
+dipindah ke attachment. Ronde #4 menambahkan satu field lagi ke tempat yang sama, dan itu bukan pilihan
+gaya: kalau "socket ini sudah membuktikan `lk`" disimpan di `Map` instance, jawaban TEMUAN 1 (DO tidur →
+pemimpin sah dijawab `NOT_LEADER`) kembali lewat pintu lain.
+
+Pilihan ini datang sebagai jawaban `S8` dari pemilik via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T23:06:05.165Z
+dan mendarat di `f383335`; isi keputusannya ada di [ADR-0005](0005-kunci-pemimpin-dari-create.md)
+bagian "Batas" + "Dua model".
+
+Yang ditulis, dan hanya di dua tempat:
+
+- `hello` yang verifikasinya lulus — `const lkDibuktikan = lk.length > 0 && (await verifyLeaderKey(...))`
+  (`SessionDO.ts:144`) lalu `this.remember(ws, { sid, did, lkDibuktikan })` (`:145`). Flag ditulis apa
+  adanya: `hello` TANPA `lk` menulis `false`, jadi ia **tidak lengket**.
+- `claim` yang verifikasinya lulus — `:234` (verifikasi) → `:238` (`remember(..., lkDibuktikan: true)`).
+
+Yang membacanya: `peerOf()` (`:102` deserialize, `:107` mengakui flag hanya kalau `=== true`), dan
+`assertLeader` (`:222`) menuntut flag itu **dan** `leaderDid() === peer.did`. Nilai apa pun selain `true` —
+field hilang, string `"true"`, angka `1` — berarti "belum membuktikan", arah gagalnya sama dengan sisa
+kode ini: fail-closed. Tidak ada materi kunci di attachment: yang disimpan cuma hasil verifikasi, satu
+boolean (59 byte, lihat "Konsekuensi").
+
+**Alternatif yang saya tolak di dalam implementasi ini:** flag lengket (sekali lulus, selalu boleh).
+Kerugiannya nyata: HP yang pernah prove `lk` lalu mengirim `hello` tanpa `lk` tetap boleh memerintah, dan
+satu-satunya cara tahu dia masih berhak adalah frame yang tidak bisa dikarang itu sendiri. Pilihan
+"replace" ini tidak memotong jalan pemimpin: `live.ts:94` (`if (this.target.lk) hello.lk = this.target.lk;`)
+mengirim `lk` di SETIAP `hello` selama target masih memegang kuncinya. Konsekuensinya, yang harus disebut
+apa adanya: klien yang kehilangan `lk` dari `localStorage` kehilangan kendali pada `hello` berikutnya,
+meskipun socket itu dulu pemimpin — dan itu persis cabang "Ambil kendali" yang belum saya ukur di browser.
+
+**Buktinya flag ikut terbangun ulang, bukan cuma `{sid, did}`:** `eviction.spec.ts` A/B/C/D hijau di
+`f383335` (`EXIT=0`, 32 passed termasuk 27 `session.spec.ts`, `Duration 9.40s`). A dan B keduanya memakai
+jalur yang sekarang menuntut flag sesudah `evictDurableObject`, jadi kalau flag itu hilang lintas
+hibernasi, kedua tes itu merah — dan E merah di dua fase (sebelum dan sesudah evict) kalau flag bisa
+diisi dari frame.
+
+**Yang TIDAK disentuh:** `proto` tetap 2, `src/shared/limits.ts` tidak berubah, `tempo`/`start`/`stop` tetap
+tidak membawa `lk`/`did` (alternatif 2 di "Alternatif yang dipertimbangkan" tetap ditolak), `seatCount()`
+tetap menghitung socket `OPEN` mentah (S7), dan `webSocketError` tetap diam (`:362-365`).
+
 ## Catatan vendor yang saya temukan dan TIDAK saya ubah
 
 Dokumen yang sama menulis, di contoh `webSocketClose`: *"With `web_socket_auto_reply_to_close`
 (compat date >= 2026-04-07), the runtime auto-replies to Close frames. Calling `close()` is safe but
 no longer required."* Proyek ini memakai `compatibility_date: "2026-11-01"` (`wrangler.jsonc:5`), jadi
 kemungkinan besar runtime sudah membalas frame close sendiri dan `ws.close(legal ? code : 1000, …)` di
-`SessionDO.ts:331` sudah tidak diperlukan lagi. **Saya tidak mengubahnya**, karena tidak ada satu pun
+`SessionDO.ts:331` (di `a6ea775`; `:354` di `f383335`) sudah tidak diperlukan lagi. **Saya tidak mengubahnya**, karena tidak ada satu pun
 ukur di ronde ini yang membuktikan apa yang berubah — normalisasi `code` di baris itu masih punya
 pekerjaannya sendiri (klien boleh mengirim 1005/1006/1015 dan `ws.close()` menolak ketiganya dengan
 `InvalidAccessError`), dan itu masih tes yang ada. Kalau checker mau ini dibuka sebagai pekerjaan
@@ -106,7 +161,8 @@ tersendiri, itu keputusan dia/pemilik — [TANYA], saya berhenti di teks.
 
 ## Test
 
-- `src/worker/eviction.spec.ts` (4 tes, lahir MERAH di `297428a`): **A** pemimpin → evict → `tempo`
+- `src/worker/eviction.spec.ts` (lahir sebagai 4 tes MERAH di `297428a`; sejak `73464b2` berkas ini 5 tes —
+  lihat butir **E** di bawah): **A** pemimpin → evict → `tempo`
   diterima dan `state` disiarkan; **B** pemimpin → evict → `claim` ber-`lk` menyiarkan `state`;
   **C** kontrol positif — `hello` ulang sesudah evict memulihkan kendali dan `members` tetap 2;
   **D** pagar fail-closed — pengikut tanpa `lk` tetap `NOT_LEADER` di `tempo` maupun `claim`, dan

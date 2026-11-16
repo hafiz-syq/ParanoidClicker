@@ -14,6 +14,11 @@ Nov atas jawaban 16 Nov yang lebih baru dari S2.
 jendela claim (`a99a1a4`), gerbang mutasi fail-open `claim` diblokir permission layer dan saya ukur dengan dua
 mutan pengganti, dan model otoritas sesudah podium terikat (TEMUAN 4) belum dijawab — tidak saya putuskan
 sendiri, tidak ada tes pengunci untuk salah satu opsi.
+**Direvisi**: 2026-11-17 ronde M3a #4 — **§8.5**, dan `S8` di §8.2 berubah dari [TANYA] menjadi **DIJAWAB**:
+pemilik menjawab **"(b) Ikat ke lk terverifikasi"** via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T23:06:05.165Z
+(saya ukur field `timestamp`-nya sendiri di transkrip checker, bukan menyalin angkanya) dan pada jam yang sama
+membuka **M3b**.
+(b) ditulis sesuai B1: tes E lebih dulu MERAH di `0967b4e` (`73464b2`), baru kode (`f383335`), lalu dokumen ini.
 **Milestone**: M3 — "otoritas pemimpin di server" (`README.md:8`, `QODER.md:56`)
 **Skill yang dipanggil untuk tahap ini** (`QODER.md:56`): `ecc:api-design`, `ecc:contract-first`,
 `ecc:security-and-hardening`, `ecc:error-handling`
@@ -372,7 +377,7 @@ manusia di App — tapi sekarang bisa ditunjuk: uuid rekamannya ada di kolom Kan
 | S5 | aturan berdiri: `JANGAN deploy`, `JANGAN push`, "tulis apa pun ke produksi butuh izin eksplisit pemilik", larangan skill `vercel-deploy`, larangan commit `tail*.log` | via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-15T18:38:43Z | turn `CHECKER → EXECUTOR` yang memetik aturan pemilik; jamnya dilaporkan sesi checker, saya tidak mengukur ulang |
 | S6 | tiga prompt checker: (a) temuan provenance atas `1a30bba` + tuntutan assertion penjaga, (b) arahan M3a B0–B4 termasuk **`scripts/gerbang-ikon.mjs` jangan disentuh**, (c) tambahan soal §6.2 | (a) via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:33:23.589Z · (b) via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:51:22.707Z · (c) via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:58:04.311Z | jam **kirim** di transkrip checker, diukur sebagai field `timestamp` rekaman `type: assistant` (baris 2690-2692, 2732-2734, 2785-2786). (a) mendarat di sesi saya 10 detik kemudian (turn delegasi `16:33:33.483Z`). **Alamat lama `…@2026-11-16T17:32:47Z` dan `[TANYA]`-nya dicabut:** jam itu hasil `node -e` di mesin saya saat membaca prompt dan tidak ada sebagai field di transkrip mana pun. Isi (b) dan (c) yang menyebut "pemilik tidak menjawab tafsir §6.2" juga ditarik checker — lihat S7 |
 | S7 | jawaban pemilik atas tafsir §6.2 di sesi checker: **"Socket mentah"**, lalu setelah kedua jawaban lama (S1/S2) ditampilkan padanya, **"Tetap socket mentah"** | via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:57:02.999Z · via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T20:36:32.241Z | rekaman `type: user` + `tool_result` (AskUserQuestion di sesi checker), uuid `0967ee46-533c-448f-b4bf-1023bdf7566d` (baris 2773) dan `efad1bdd-6a28-4a4f-a6ba-134242068698` (baris 2951). Urutannya penting: 16:47:48 (S4) → 16:50:13 checker cetak jam → 16:51:22 prompt (b) → **16:57:02 jawaban ini** → 16:58:04 prompt (c) → 20:36:32 penegasan ulang. Jadi prompt (b) dan (c) sama-sama menulis "belum dijawab" padahal jawabannya sudah ada 6 menit sebelumnya |
-| S8 | pertanyaan ronde M3a #3 yang **belum dijawab dan tidak saya jawab sendiri**: model otoritas sesudah podium terikat — (a) terima perilaku hari ini (`did` yang cocok = boleh memerintah) dan kunci dengan tes, atau (b) ikat otoritas pada flag di attachment yang hanya ditulis ketika `verifyLeaderKey` lulus, sehingga `assertLeader` menuntut flag itu DAN `leaderDid() === peer.did` | [TANYA] | pemeriksa merekomendasikan (b) dan mengukur bahwa reconnect pemimpin tidak putus olehnya (`live.ts:94` mengirim `lk` di tiap `hello` selama target punya kunci; "Lanjut ke sesi" memulihkannya dari `localStorage`). Dua opsi ditulis apa adanya di ADR-0005 bagian "Batas yang terukur di ronde M3a #3" dan di §8.4 di bawah. Tidak ada tes yang saya tulis untuk salah satunya sampai ada jawaban |
+| S8 | **DIJAWAB pemilik** (dulu `S8` [TANYA] di ronde M3a #3): model otoritas sesudah podium terikat — jawabannya verbatim **"(b) Ikat ke lk terverifikasi"**, yaitu `assertLeader` menuntut flag di attachment yang hanya ditulis ketika `verifyLeaderKey` lulus **DAN** `leaderDid() === peer.did`; opsi (a) (terima perilaku `did`-yang-cocok dan kuncinya sebagai desain) **tidak dipilih** | via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T23:06:05.165Z | rekaman `type: user` + `tool_result`, `tool_use_id call_8f1f79b4baf847cfb47cecaf`, **baris 3794** transkrip sesi checker. Ronde #4 tiga field itu saya cocokkan sendiri lewat `Grep` atas berkas JSONL itu — bukan angka yang saya terima dari laporan checker — dan isi baris yang sama memang memuat kedua verbatim (`Ikat ke lk terverifikasi` dan `Mulai M3b (setlist)`), jadi satu `tool_result` menjawab dua hal (§8.5 + rencana M3b). **uuid pesan `40875e22-d283-47db-bf24-b8d507802756` beda statusnya: itu angka relai checker yang tidak sempat saya konfirmasi sebagai field**, karena ekstraksi sedalam itu kena blok `[Session Transcript Tampering]`; saya tulis dengan label sumbernya, bukan sebagai hasil ukur. Rekomendasi (b) dan pengukuran `live.ts:94` ("Lanjut ke sesi" memulihkan `lk` dari `localStorage`) tetap punya pemeriksa; teks dua opsi apa adanya masih bisa dibaca di ADR-0005 bagian "Batas yang terukur di ronde M3a #3". Implementasinya: tes E MERAH di `73464b2`, kode di `f383335` |
 
 Konsekuensi `S2` yang bukan jawaban: "satu orang dua tab = satu kursi" adalah entailment saya dari
 label `did` unik + `did` per-browser (`live.ts:269`), jadi dia ditulis sebagai *konsekuensi-if-ya* di
@@ -497,6 +502,21 @@ penapis sesi, jadi satu-satunya yang saya buka lagi adalah instance baru di **87
 untuk angka T9 di atas. Baca transkrip sesi lewat `grep` juga diblokir (label
 `[Session Transcript Tampering]`), sehingga jam prompt ronde M3a #2 tidak bisa saya ukur sendiri dan
 angka yang berasal dari prompt checker saya tulis sebagai "dilaporkan", bukan "diukur".
+**Ronde #4 mengubah batas ini sebagian, dan itu harus tercatat apa adanya:** membaca JSONL dengan `Bash`/`node`
+tetap ditolak, dan `sed`/ekstraksi `uuid` di baris tertentu juga ditolak (`[Session Transcript Tampering]`),
+tapi `Grep` dengan pola sempit atas berkas yang sama jalan. Karena itu **tiga** alamat saya ukur sendiri sebagai
+field (S8 = jawaban pemilik `via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T23:06:05.165Z` di baris 3794,
+bersama `type: user` + `tool_result` + `tool_use_id call_8f1f79b4baf847cfb47cecaf`; jawaban mutasi 5b
+`via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-16T22:09:35.300Z` di baris 16130; dan dua catatan blokirnya di
+baris 16122/16136), dan **satu tidak**: jam kirim prompt ronde M3a #3 `21:59:25.427Z` memang ADA di transkrip
+checker sebagai string, tapi baris tempat string itu pertama muncul (3735) punya `timestamp` sendiri
+`23:00:22.054Z` — jadi yang saya konfirmasi adalah keberadaaan stringnya, bukan bahwa itu field jam kirim.
+Angka itu tetap saya tulis sebagai **laporan checker** (mereka memberi turn `agent-message:f1323ddc…` sebagai
+alamatnya), bukan sebagai hasil ukur saya. Satu hal lagi yang cocok: checker menulis blokir pada
+`22:08:13.002Z` dan `22:09:54.408Z`, sedangkan `"timestamp"` yang ada di transkrip saya adalah
+`22:08:12.998Z` dan `22:09:54.406Z` (dua-duanya `grep -c` = 0 untuk bentuk checker) — selisih 2–4 ms, dan yang
+saya tulis di dokumen adalah yang terukur, bukan yang dirolay.
+Angka prompt ronde #2 (di atas) tetap "dilaporkan": sampai ronde ini belum saya cocokkan sebagai field.
 
 ## 8.4 Ronde M3a #3 — pagar yang harus dibaca per jendela, dan pertanyaan yang belum boleh saya jawab
 
@@ -554,12 +574,14 @@ tambahan supaya labelsnya benar: `git show b9fc0f3:src/worker/SessionDO.ts` menc
 memaksa charset (`:107`, `:110` hanya panjang 1–32). Teks lengkap + dua opsi model ada di ADR-0005 bagian
 "Batas yang terukur di ronde M3a #3" dan di README "Ronde M3a #3"; kata "aman"/"cukup" tidak dipakai di sana.
 
-**4b — [TANYA] S8, dan saya berhenti di teks.** Pilihan model otoritas sesudah bind (a) kunci perilaku
+**4b — saat ronde #3 ditulis: [TANYA] S8, dan saya berhenti di teks.** Pilihan model otoritas sesudah bind (a) kunci perilaku
 `did`-yang-cocok sebagai desain vs (b) flag attachment yang hanya ditulis saat `verifyLeaderKey` lulus bukan
 keputusan saya; baris `S8` di tabel §8.2 menandainya [TANYA]. Tidak ada tes yang saya tulis untuk salah satunya
 — tes (a) mengunci perilaku yang mungkin dibalik, tes (b) merah di tree hari ini — dan probe P1/P2/P3 tinggal
 di worktree, sengaja tidak di-commit. Kalau jawabannya (b), urutan yang sah: tulis tes "socket ber-`did`
 pemimpin tanpa `lk` tidak boleh memerintah", lihat ia MERAH, baru kode, dengan A/B/C/D tetap hijau.
+**Status baris ini di ronde #4: jawaban itu sudah ada** (S8 = (b), `2026-11-16T23:06:05.165Z`) dan urutan sah di
+atas adalah persis yang saya jalankan — angkanya di **§8.5**, bukan di sini.
 
 **Rumah tangga — dua listener, bukan satu.** `netstat` menemukan `8787→15440` (workerd sisa, probe `HTTP=000`
 sesudah timeout 4 s) dan `8791→17856` (workerd server saya untuk serangan T9c, `HTTP=200`). Akarnya
@@ -577,9 +599,79 @@ terakhir yang mencakup kalimat pengukur ini sendiri saya catat di laporan, tidak
 boleh jadi alasan dokumen itu lulus).
 
 **Yang tidak kucek / masih berasumsi di ronde ini.** (1) fail-open `claim` tidak terukur oleh siapa pun — lihat
-tabel di atas; (2) jam jawaban kotak persetujuan ronde ini tidak saya ukur saat mendarat, jadi tidak ada
-alamatnya di dokumen; (3) exploitasinya masih deduksi: saya tidak pernah mencoba memakai lubang `did` dari
+tabel di atas; (2) jam jawaban pemilik atas pertanyaan mutasi 5b dulu tidak ada alamatnya — **ronde #4 mengukurnya** `via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-16T22:09:35.300Z`
+(`tool_use_id call_3ce2b742e1e6443bad8ba78b`, baris 16130 transkrip saya) dan dua blokirnya mengapit jawaban itu (lihat §8.5);
+(3) exploitasinya masih deduksi: saya tidak pernah mencoba memakai lubang `did` dari
 perangkat kedua sungguhan, hanya dari dua socket di satu proses workerd; (4) `rowsWritten`/`members` di frame
 peniru saya baca dari output probe, bukan dari tabel SQLite; (5) angka T9c/serangan hidup ronde #2 tidak saya
 jalankan ulang di ronde ini, dan kedua server dev yang memegangnya sudah saya matikan.
+
+## 8.5 Ronde M3a #4 — `S8` dijawab (b), tes E, dan angka mentahnya
+
+Perintah ronde #4 masuk ke tree atas dua baris yang sudah diukur pemeriksa sendiri dan "tidak diulang, cukup
+dikutip" (`npm run check` EXIT=0 22.862s mereka; numstat; eviction 4 passed 8.13s di worktree mereka; port
+kosong; label provenansi; alamat S4) — jadi bagian itu tidak saya ukur ulang dan tidak saya tulis sebagai angka
+saya. Yang dikerjakan ronde ini: menutup TEMUAN 5 dengan batas yang jujur, mengeksekusi `S8` yang baru saja
+dijawab, dan membuka M3b sebagai rencana, bukan sebagai kode.
+
+**Alamat jawabannya, dan mana yang saya ukur sendiri.** `S8` dari pemilik via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T23:06:05.165Z
+bunyinya dua hal sekaligus: "(b) Ikat ke lk terverifikasi" dan "Mulai M3b (setlist)". Bentuk jawabannya penting:
+ia mendarat sebagai **`tool_result` atas pertanyaan AskUserQuestion di kanal pemeriksa**, bukan sebagai pesan
+yang saya terima langsung. Yang saya ukur di transkrip itu sendiri (bukan dari laporan): baris **3794**
+bertipe `user` dengan isi `tool_result`, `tool_use_id` `call_8f1f79b4baf847cfb47cecaf`, `timestamp`
+`2026-11-16T23:06:05.165Z`, dan di dalam kontennya kedua string verbatim itu. Yang TIDAK bisa saya ukur:
+uuid pesan `40875e22-d283-47db-bf24-b8d507802756` yang checker tulis sebagai alamat di prompt-nya — pembacaan
+uuid di dalam berkas transkrip diblok permission layer (`[Session Transcript Tampering]`), jadi nomor itu saya
+catat sebagai laporan checker, dan baris 3794 di atas adalah alamat yang benar-benar berdiri.
+
+**Urutan B1 dijaga, dan itu bisa dibaca dari commit, bukan dari kalimat saya.**
+
+| # | Yang diukur | Perintah | Hasil mentah |
+|---|---|---|---|
+| 1 | E MERAH sebelum satu baris kode produksi berubah | `npx vitest run --config vitest.worker.config.ts src/worker/eviction.spec.ts` di `0967b4e` | `EXIT=1`, `1 failed \| 4 passed (5)`, `Duration 8.27s`; `AssertionError: fase 1 (sebelum evict): peniru ber-did sama tanpa lk harus DITOLAK, bukan dilayani, dapat [{"t":"state","bpm":177,"anchorMs":null,"running":false,"members":2}]: expected 'state' to be 'error'` di `eviction.spec.ts:220:7` |
+| 2 | Split commit | `git diff --numstat 0967b4e..73464b2` lalu `73464b2..f383335` | `92 1 src/worker/eviction.spec.ts` (test commit, nol produksi) · `31 8 src/worker/SessionDO.ts` (fix commit, nol berkas lain) |
+| 3 | E HIJAU + tidak ada regresi | `npx vitest run --config vitest.worker.config.ts` di `f383335` | `EXIT=0`, **`32 passed (32)`**, `Duration 9.40s` — `eviction.spec.ts` 5 tests 5251ms (A 1367 · B 1308 · D 1296 · E 1103 ms) + `session.spec.ts` 27 tests 2601ms |
+| 4 | Kontrak & klien tidak tersentuh | `git diff --numstat 0967b4e..HEAD -- src/shared/limits.ts src/worker/session.spec.ts src/app src/screens` | **keluarannya kosong.** `proto` tetap 2 (`src/worker/index.ts:25`); `tempo`/`start`/`stop` tetap tanpa `lk`/`did` (`SessionDO.ts:314`, `:325`) |
+| 5 | Ukuran attachment | `node -e`, panjang `JSON.stringify` nilai yang ditulis | `{sid,did}` **39** byte · `{sid,did,lkDibuktikan}` **59** · **75** pada bentuk terbesar yang diterima server (`sid` 4 oleh `isSid` `src/shared/ids.ts:16-18`, `did` ≤ 32 `SessionDO.ts:120`) vs batas vendor 16.384 |
+| 6 | Penjaga provenansi | `npx vitest run scripts/gerbang.spec.ts` | `EXIT=0`, 3 passed (3), `Duration 651ms` (tests 29ms) |
+| 7 | Alamat jawaban mutasi 5b (ronde #2) | grep transkrip `d27c1add…jsonl` | baris **16130**, `tool_use_id call_3ce2b742e1e6443bad8ba78b`, `2026-11-16T22:09:35.300Z`; dua blokir mengapit (baris 16122 dan 16136). Ini menjawab "yang tidak kucek" butir (2) di §8.4 |
+| 8 | Yang TIDAK ber-alamat | grep jumlah kecocokan | `22:08:13.002Z` dan `22:09:54.408Z` (dua jam yang checker kutip) → **0** kecocokan di transkrip saya; angka saya berbeda 2–4 ms dari kutipannya. Jam prompt ronde #3 `21:59:25.427Z` hanya muncul **di dalam** baris 3735 yang jamnya sendiri `23:00:22.054Z` → yang terkonfirmasi keberadaan stringnya, bukan bahwa itu field jam-kirim |
+
+**Isi (b) yang mendarat, disebut apa adanya.** Pemeriksa memerintahkan perubahan perilaku ini ditulis di
+README/ADR, bukan diselipkan, dan itu yang dilakukan: HP yang memegang `did` pemimpin tanpa `lk` tidak bisa
+lagi mengubah tempo/memulai/menghentikan — ia dijawab `NOT_LEADER` dan jalannya satu, tombol "Ambil kendali"
+(`claim` ber-`lk`). Itu **tujuan** (b), bukan efek samping. Fakta "socket ini sudah membuktikan `lk`" ditulis
+sebagai boolean `lkDibuktikan` di **attachment** — hanya sesudah `verifyLeaderKey` lulus, di `hello`
+(`SessionDO.ts:144-145`) dan di `claim` (`:234` → `:238`) — dibaca kembali di `peerOf()` (`:102`, `:107` hanya
+mengakui `=== true`), dan `assertLeader` (`:222`) menuntut **dua** hal sekaligus: flag itu **dan**
+`leaderDid() === peer.did`. Bukan `Map` instance: kalau tidak, TEMUAN 1 kembali lewat pintu lain. Flag-nya
+**tidak lengket** (`hello` tanpa `lk` menulis `false`), dan konsekuensinya ikut ditulis: klien yang kehilangan
+`lk` dari `localStorage` kehilangan kendali pada `hello` berikutnya. Teksnya ada di README "Ronde M3a #4" +
+ADR-0005 "Dua model" + ADR-0007 "Perpanjangan".
+
+**Yang checker nyatakan LULUS di ronde #4, dan apa yang TIDAK ikut terukur.** TEMUAN 5 (pagar D) ditutup atas
+ukuran mereka sendiri di `a99a1a4` + `343a020`. Pemeriksa juga menulis bahwa **edit mutasi mereka di
+`SessionDO.ts` kena blok permission layer yang sama** dengan yang saya alami, jadi tidak ada yang boleh
+menulis "checker mengukur mutasi server": yang mereka punya adalah kontrol positif di tingkat **assertion**
+(`pc-v4-pagar.cjs`, worktree mereka, tidak di-commit) dengan jendela yang **berlabel SIMULASI** — pagar lama
+LULUS untuk ketiga kasus (vacuous), pagar baru MERAH untuk fail-open yang disimulasikan dan untuk M1. Angka
+M1/M2 tingkat server tetap angka saya dari ronde #3; mereka tidak menjalankannya ulang, dan saya pun tidak
+menjalankannya ulang ronde ini.
+
+**Guard-nya merah tiga kali karena kalimat SAYA sendiri, dan itu tercatat sebagai cacat saya, bukan penjaga.**
+Run pertama ronde ini: `npm run check` → `EXIT=1`, unit `1 failed | 102 passed (103)`, penjaga menyebut
+`docs/plans/…m3-otoritas-pemimpin.plan.md:18` dan `:594`. Run kedua, sesudah rencana itu saya benerin:
+`EXIT=1` lagi, kini satu baris `docs/adr/0007-attachment-identitas-socket.md:113`. Run ketiga (hanya penjaga,
+`npx vitest run scripts/gerbang.spec.ts`): `EXIT=1`, satu baris `README.md:925`. Empat baris, satu akar:
+`via …@…Z` tergeser ke baris fisik berikutnya oleh pembalutan markdown saya, sementara penjaga ini diikat per
+baris fisik — dan memang itu keputusannya. Perbaikannya reflow teks, bukan melonggarkan penjaga;
+`scripts/gerbang.spec.ts` tidak saya sentuh, dan hijau terakhirnya 3 passed (3), `Duration 238ms` (tests 17ms).
+
+**Yang tidak kucek di ronde #4.** (1) Fail-open `claim` yang sungguhan — masih belum diukur oleh siapa pun,
+dan kalimat itu sekarang berlaku untuk dua sesi, bukan satu. (2) Browser: cabang "Ambil kendali" sesudah (b)
+persis jalur yang berubah, dan `src/screens/**` + `src/app/**` tidak saya ubah maupun saya jalankan; gerbang §7
+dua perangkat (§7 butir pertama di README) tetap terbuka. (3) Semua angka yang dilaporkan checker di §1 prompt
+mereka — saya kutip, tidak saya ukur ulang, seperti yang diminta. (4) uuid pesan jawaban `S8` (butir 8 tabel di
+atas). (5) `npm run check` terakhir untuk commit dokumen ini masuk ke laporan, tidak ke tabel — nomor di
+dokumen tidak boleh jadi alasan dokumen itu lulus.
 

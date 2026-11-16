@@ -734,8 +734,14 @@ bypass them cannot be cleared by user intent.
 ```
 
 Kalimat kedua itu eksplisit: kotak persetujuan tidak membukanya. Saya sudah bertanya lewat AskUserQuestion
-di sesi ini dan jawabannya "Bolehkan mutasi fail-open di worktree" — tapi jawaban itu tidak saya ukur jamnya
-saat mendarat, jadi tidak saya tulis sebagai alamat, dan gerbangnya memang tidak terbuka karenanya. Saya tidak
+di sesi ini dan jawabannya "Bolehkan mutasi fail-open di worktree" — jawaban itu dulu tidak saya tulis sebagai
+alamat karena jamnya tidak saya ukur saat mendarat; **ronde #4 mengukur jamnya sendiri** di transkrip sesi ini:
+baris 16130, `type: user` dengan `tool_result` `tool_use_id call_3ce2b742e1e6443bad8ba78b` pada
+`2026-11-16T22:09:35.300Z` (`via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-16T22:09:35.300Z`), dan dua catatan
+blokir mengapitnya di baris 16122 (`22:08:12.998Z`) dan 16136 (`22:09:54.406Z`). Angka yang dirolay checker untuk
+dua blokir itu — `22:08:13.002Z` dan `22:09:54.408Z` — tidak ada sebagai field `timestamp` di transkrip saya
+(`grep -c` = 0 untuk kedua bentuk), selisihnya 2–4 ms; yang ditulis di dokumen adalah yang terukur.
+Gerbangnya tetap tidak terbuka karenanya, dan saya tidak
 mengakali bentuk yang sama (tidak menulis lewat `sed`, tidak menaruh mutan di berkas lain). Yang saya ukur
 sebagai gantinya adalah **dua mutan yang tetap menolak dan tidak memindahkan podium**:
 
@@ -767,8 +773,10 @@ saya tidak memindahkan podium, jadi D masih belum pernah dilihat merah karena po
 pemeriksa punya jalur mutasi yang tidak terbendung hard-block, itu gerbang yang masih bolong.
 
 **TEMUAN 4 — sesudah podium terikat, `did` ikut membawa otoritas, dan itu bukan regresi `a6ea775`.** Satu
-baris penyebabnya: `SessionDO.ts:200` `if (peer && this.leaderDid() === peer.did) return true`, sementara
-`did` diambil dari frame `hello` (`:107`, server cuma menjaga panjang 1–32). Probe P3 saya jalankan sendiri
+baris penyebabnya (semua nomor di paragraf ini adalah `343a020`, dan sudah TIDAK berlaku lagi di `f383335`
+— ekuivalennya di kurung): `SessionDO.ts:200` (`:222`) `if (peer && this.leaderDid() === peer.did) return true`,
+sementara
+`did` diambil dari frame `hello` (`:107` → `:117`, server cuma menjaga panjang 1–32: `:110` → `:120`). Probe P3 saya jalankan sendiri
 dan mencetak kesimpulan yang sama dengan pemeriksa, di ruangan berbeda:
 
 ```
@@ -783,15 +791,15 @@ pada `:184`, dan `178e1e9` belum punya `assertLeader`/`leaderDid`/`NOT_LEADER` s
 jadi ini perilaku yang lahir bersama otoritas, bukan sesuatu yang dibawa perbaikan attachment. Prasyaratnya
 juga saya ukur, supaya tidak digembalkan dan tidak dikecilkan: `did` = 8 byte acak → 16 hex
 (`genDid()`, `src/shared/ids.ts:32-36`) di `localStorage` (`live.ts:295`); **tidak pernah disiarkan**
-(`welcome` hanya ke socket pengirim, `SessionDO.ts:144-153`; `state` tidak memuat `did`, `:251-257`;
+(`welcome` hanya ke socket pengirim, `SessionDO.ts:144-153` → `:162-171`; `state` tidak memuat `did`, `:251-257` → `:274-280`;
 `grep -rn "\bdid\b" src/screens` = 3 baris dan tidak satu pun menampilkan `did` pemimpin
 (`ClickRoom.tsx:35`, `:61` = komentar, `DebugScope.tsx:205` = pengiriman `hello`). Jadi pemegang `sid`+`tok`
 allein tidak memakai jalur ini; yang bisa memakainya adalah pihak yang sudah tahu `did` pemimpin — HP dipakai
-bersama, akses fisik, XSS, atau DevTools di HP pemimpin. Batas + dua model otoritas ([TANYA], jangan saya
-jawab sendiri) ada di [ADR-0005](docs/adr/0005-kunci-pemimpin-dari-create.md) bagian "Batas yang terukur di
-ronde M3a #3". Tidak ada tes yang saya tulis untuk salah satu model: tes untuk (a) mengunci perilaku yang
-mungkin dibalik, tes untuk (b) hari ini masih merah, dan permintaannya memang "tulis probe yang tidak
-mengunci apa pun sampai ada jawaban" — probe P1/P2/P3 tinggal di worktree, tidak di-commit.
+bersama, akses fisik, XSS, atau DevTools di HP pemimpin. Batas + dua model otoritas waktu itu masih [TANYA]
+dan ada di [ADR-0005](docs/adr/0005-kunci-pemimpin-dari-create.md) bagian "Batas yang terukur di
+ronde M3a #3". Ronde itu saya tutup tanpa menulis tes untuk salah satu model: tes untuk (a) mengunci perilaku
+yang mungkin dibalik, dan tes untuk (b) memang masih merah — **ronde #4 menjawabnya (b), dan tes E-nya ada di
+bagian berikutnya**; probe P1/P2/P3 tetap tinggal di worktree, tidak di-commit.
 
 **Rumah tangga — dua pendengar lokal, bukan satu.** Yang pemeriksa sebut cuma `15440` di 8787. `netstat`
 menemukan dua: `TCP 127.0.0.1:8787 LISTENING 15440` (workerd, sisa ronde sebelumnya — saya probe: `HTTP=000`
@@ -808,6 +816,78 @@ netstat -ano | grep -E ":(8787|5173|879[0-9]).*LISTENING" → (kosong) "tidak ad
 
 Tidak ada proses sesi lain yang saya sentuh; kedua pohon itu punya `CommandLine` milik proyek ini dan saya
 yang memulai keduanya.
+
+### Ronde M3a #4 — `S8` dijawab (b): bukti `lk` ikut pindah ke attachment, dan punya tes sendiri
+
+Pemilik menjawab `S8` via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T23:06:05.165Z dengan
+**"(b) Ikat ke lk terverifikasi"** — opsi (a) (menerima "`did` yang cocok = boleh memerintah" lalu menguncinya
+sebagai desain) tidak dipilih. Isi keputusannya, dua model apa adanya, dan perubahan perilakunya ada di
+[ADR-0005](docs/adr/0005-kunci-pemimpin-dari-create.md) bagian "Batas" + "Dua model"; tempat
+penyimpanannya ada di [ADR-0007](docs/adr/0007-attachment-identitas-socket.md) bagian "Perpanjangan". Basis
+ukur ronde ini: HEAD `0967b4e`, dua commit, urutan B1 dijaga (tes MERAH dulu, baru kode, lalu dokumen):
+
+```
+73464b2  test(M3a): tes E …   src/worker/eviction.spec.ts  +92/−1   ← nol kode produksi
+f383335  fix(M3a): S8-b …     src/worker/SessionDO.ts      +31/−8   ← nol berkas produksi lain
+```
+
+**RED.** Dijalankan di `0967b4e` sebelum satu baris `SessionDO.ts` pun berubah:
+
+```
+npx vitest run --config vitest.worker.config.ts src/worker/eviction.spec.ts
+EXIT=1   1 failed | 4 passed (5)   Duration 8.27s
+  E — socket ber-did pemimpin tanpa lk tidak boleh memerintah, sebelum maupun sesudah evict
+  AssertionError: fase 1 (sebelum evict): peniru ber-did sama tanpa lk harus DITOLAK, bukan dilayani,
+  dapat [{"t":"state","bpm":177,"anchorMs":null,"running":false,"members":2}]:
+  expected 'state' to be 'error'                                    eviction.spec.ts:220:7
+```
+
+E sengaja dibuat lebih keras dari probe P3 pemeriksa, karena perintahnya "jangan salin byte dari worktree
+saya": peniru (socket kedua, `did` pemimpin dikarang dari frame, tanpa `lk`) harus dijawab TEPAT SATU
+`error NOT_LEADER` **dan** NOL `state` di JENDELANYA SENDIRI (`nungguDalam(dasar, …)`, pelajaran TEMUAN 5:
+`cari()` memindai dari indeks 0), lalu NOL `state` di jendela pemimpin sah — jadi yang dituntut bukan cuma
+"peniru ditolak" tapi "bpm 177 tidak pernah sampai ke SIAPA PUN". Fase yang sama diulang sesudah
+`evictDurableObject` dengan `bpm 188`, angka kedua tidak pernah muncul di riwayat kedua socket, dan ada dua
+kontrol positif (`tempo 140` sebelum serangan, `tempo 199` sesudah dua penolakan) supaya implementasi
+"semua orang ditolak" tidak bisa lulus sebagai perbaikan.
+
+**HIJAU.** Diukur ulang setelah `f383335`, satu perintah penuh (bukan hanya berkas E):
+
+```
+npx vitest run --config vitest.worker.config.ts        → EXIT=0  32 passed (32)  Duration 9.40s
+   src/worker/eviction.spec.ts   5 tests  5251ms   A 1367ms  B 1308ms  D 1296ms  E 1103ms
+   src/worker/session.spec.ts   27 tests  2601ms   ← berkasnya tidak saya sentuh sama sekali
+```
+
+Yang hijau itu bukti dua hal sekaligus: (b) tidak memecah 27 tes `session.spec.ts` yang lama (dugaan
+pemeriksa, sekarang ukuran), dan flag `lkDibuktikan` ikut terbangun ulang lewat
+`serializeAttachment`/`deserializeAttachment` — karena A dan B keduanya melewati jalur yang sekarang menuntut
+flag itu sesudah evict.
+
+**Kontrak tidak disentuh, dan itu saya ukur, bukan saya klaim:** `proto` tetap 2 (`src/worker/index.ts:25`);
+`src/shared/limits.ts` tidak berubah (`git diff --numstat 0967b4e..HEAD -- src/shared/limits.ts` kosong);
+`tempo`/`start`/`stop` tetap TIDAK membawa `lk` maupun `did` — `SessionDO.ts:314` dan `:325` cuma memanggil
+`assertLeader(ws)`; `seatCount()` tetap socket OPEN (S7); `webSocketError` tetap diam (`:362-365`).
+Ukuran attachment (panjang `JSON.stringify` dari nilai yang benar-benar ditulis, `node -e` 2026-11-17):
+`{sid, did}` = **39 byte**, `{sid, did, lkDibuktikan}` = **59 byte**, **75 byte** pada bentuk terbesar yang
+masih diterima server (`sid` dipaksa 4 karakter oleh `isSid` di `src/shared/ids.ts:16-18`, `did` ≤ 32 di
+`SessionDO.ts:120`); batas vendor 16.384, dan tidak ada kunci di dalamnya — yang disimpan cuma hasil
+verifikasi, satu boolean.
+
+**Flag-nya tidak lengket, dan itu pilihan yang harus disebut:** `hello` tanpa `lk` menulis `false`
+(`SessionDO.ts:144-145`), jadi socket yang pernah membuktikan kunci kehilangan hak memerintah begitu ia
+`hello` ulang tanpa kunci. Harganya: klien yang kehilangan `lk` dari `localStorage` kehilangan kendali pada
+`hello` berikutnya. Itu persis cabang "Ambil kendali" — dan **cabang itu belum terukur di browser**:
+`src/screens/**` dan `src/app/**` tidak saya ubah dan tidak saya jalankan ronde ini, jadi tidak ada satu pun
+kalimat di atas yang boleh dibaca sebagai "layar sudah diuji".
+
+**Yang TETAP belum terukur oleh siapa pun, dan tidak berubah karena ronde ini:** fail-open `claim` yang
+sungguhan. Bentuk editnya diblokir permission layer dua kali di sesi saya, dan pemeriksa menulis sendiri di
+ronde #4 bahwa edit mutasi mereka di `SessionDO.ts` kena blok yang sama — jadi tidak ada yang boleh menulis
+"checker mengukur mutasi server". Yang mereka punya adalah kontrol positif **di tingkat assertion**
+(`pc-v4-pagar.cjs`, di worktree mereka, tidak di-commit): pagar lama LULUS untuk ketiga kasus (vacuous), pagar
+baru MERAH untuk fail-open yang **disimulasikan** dan untuk M1. Label SIMULASI itu dari mereka; angkanya tidak
+saya jalankan ulang, dan tidak saya tulis sebagai angka saya.
 
 ### BELUM di M3a
 
@@ -832,12 +912,20 @@ yang memulai keduanya.
 - Setlist (tabel, layar, frame-nya sendiri) keluar ke **M3b** — bukan pekerjaan yang tertinggal.
 - QR menyusul di M4; sampai itu terjadi, tautan join tetap kunci ruangan: siapa pun yang membukanya
   bisa masuk, dan hari ini ia masuk sebagai anggota.
-- M3a **belum LULUS penuh, dan hari ini bukan karena TEMUAN 1.** Pemeriksa menyatakan butir 1/2/3 LULUS atas
-  ukuran yang dia ambil sendiri di `343a020` (prompt ronde M3a #3; jam kirim prompt itu tidak saya ukur, jadi
-  tidak saya tulis sebagai alamat). Yang menahan "LULUS penuh" di awal ronde adalah pagar D (TEMUAN 5), dan itu
-  sudah saya perbaiki test-only di `a99a1a4` — tinggal dia ukur ulang. Yang TIDAK akan jadi perbaikan kode:
-  TEMUAN 4, model otoritas sesudah podium terikat — [TANYA] pemilik, dua opsi (a)/(b) ada di ADR-0005 bagian
-  ronde #3 dan saya berhenti di teks sampai ada jawaban.
+- M3a **belum LULUS penuh, dan sejak ronde #4 alasannya cuma satu: gerbang §7 yang butuh dua perangkat nyata
+  (butir pertama di atas), bukan kode.** Pemeriksa menyatakan butir 1/2/3 LULUS atas ukuran yang dia ambil
+  sendiri di `343a020`. Alamat prompt ronde M3a #3 sekarang ada — `2026-11-16T21:59:25.427Z`, turn
+  `agent-message:f1323ddc0699ea1a499dea7d995fc0467a37ca92faae3b3d8dccf1e78517541a` — tapi statusnya harus
+  disebut apa adanya: angka itu **dilaporkan checker**, dan yang bisa saya ukur di transkrip saya sendiri
+  cuma keberadaan string `21:59:25.427Z` di dalam berkas (baris 3735, jam baris itu sendiri
+  `23:00:22.054Z`), bukan bahwa ia field jam-kirim. Jadi ia bukan alamat yang saya verifikasi; lihat plan
+  §8.3. Pagar D (TEMUAN 5) sudah ditutup lebih dulu: LULUS diukur checker atas `a99a1a4` + `343a020`, dan
+  check EXIT=0 mereka di 22.862s.
+- Yang menahan M3a di awal ronde, TEMUAN 1, sudah TUTUP (`343a020`). Yang tadinya menahan sebagai
+  **TEMUAN 4 — model otoritas sesudah podium terikat — juga sudah tertutup ronde ini:** `S8` dijawab pemilik via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T23:06:05.165Z
+  dengan "(b) Ikat ke lk terverifikasi"; opsinya (a) ditolak, dan jawabannya sudah jadi kode (`f383335`) + tes
+  sendiri (`E`, lihat bagian ronde #4 di atas) + dokumen (ADR-0005 "Dua model", ADR-0007 "Perpanjangan"). Jadi
+  tidak ada lagi [TANYA] yang menggantung di dalam M3a; yang tersisa murni pengukuran dua perangkat dan browser.
 - Gerbang mutasi untuk fail-open `claim` **belum ada di tangan siapa pun.** Bentuk editnya diblokir permission
   layer sebagai hard-block, dan pesan blokirnya menyebut bahwa niat pengguna tidak bisa membukanya, jadi saya
   tidak punya angka "D MERAH karena claim menerima frame tanpa `lk`" — yang saya punya dua mutan pengganti (M1
