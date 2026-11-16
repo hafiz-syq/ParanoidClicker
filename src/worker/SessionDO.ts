@@ -20,14 +20,6 @@ interface Peer {
 export class SessionDO extends DurableObject<Env> {
   // Pola resmi Cloudflare: this.sql = ctx.storage.sql (basis data SQLite, bukan KV).
   private readonly sql: SqlStorage;
-  /**
-   * Kursi = socket hidup (§6.2), dan `did` yang mengikatnya dibaca dari SINI — bukan dari
-   * frame perintah: `did` di dalam frame bisa dikarang siapa pun yang punya socket sesi,
-   * dan justru itulah yang ditutup M3. Kosong untuk socket yang belum pernah hello.
-   * Hilang saat DO di-evict; `leader` tetap terbaca dari SQLite, jadi pemimpin yang
-   * menyambung ulang mendapat kendalinya kembali tanpa `/create` baru.
-   */
-  private readonly peers = new Map<WebSocket, Peer>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -86,6 +78,29 @@ export class SessionDO extends DurableObject<Env> {
     }
   }
 
+  /**
+   * Identitas hasil `hello`, per socket — dibaca dari attachment Hibernation, BUKAN dari memori
+   * DO. `did` tidak pernah diambil dari frame perintah: isinya bisa dikarang siapa pun yang punya
+   * socket sesi, dan justru itulah yang ditutup M3a.
+   *
+   * Tempat ini pernah `Map<WebSocket, Peer>` milik instance. Map itu hilang ketika DO tidur —
+   * `fetch()` memakai `ctx.acceptWebSocket` (Hibernation API) dan runtime membangun ulang DO
+   * dengan objek WebSocket baru — jadi pemimpin sah dijawab NOT_LEADER, bahkan lewat `claim`
+   * ber-`lk` yang sah: tombol "Ambil kendali" menjadi jalur buntu sampai pengguna me-reload.
+   * Attachment ikut tersimpan dan dipulihkan runtime, jadi kebenaran cuma ada satu tempat.
+   */
+  private peerOf(ws: WebSocket): Peer | undefined {
+    // fakeSocket di session.spec.ts cuma meniru kirim/close, jadi metodenya diuji ada; tanpa
+    // penjaga ini socket palsu melempar TypeError, bukan dijawab "belum dikenal".
+    const tersimpan = typeof ws.deserializeAttachment === 'function' ? ws.deserializeAttachment() : null;
+    if (!tersimpan || typeof tersimpan.sid !== 'string' || typeof tersimpan.did !== 'string') return undefined;
+    return { sid: tersimpan.sid, did: tersimpan.did };
+  }
+
+  private remember(ws: WebSocket, peer: Peer): void {
+    if (typeof ws.serializeAttachment === 'function') ws.serializeAttachment(peer);
+  }
+
   // Satu-satunya jalur tulis SQLite di spike ini: transisi keanggotaan, bukan heartbeat.
   // (Tabel `leader` juga ditulis, tapi hanya saat hello/claim — peristiwa yang sama jarangnya.)
   private async hello(ws: WebSocket, frame: Record<string, unknown>): Promise<void> {
@@ -107,10 +122,11 @@ export class SessionDO extends DurableObject<Env> {
       ws.send(JSON.stringify({ t: 'error', code: 'FULL' }));
       return;
     }
-    // Socket ini dihitung "baru" kalau DO belum pernah melihat hello darinya: itu yang membuat
-    // HP yang berpindah rute (socket baru, `did` lama) ikut menyiarkan angkanya ke ruangan.
-    const baru = !this.peers.has(ws);
-    this.peers.set(ws, { sid, did });
+    // Socket ini dihitung "baru" kalau DO belum pernah melihat hello darinya — attachment socket
+    // yang sama bertahan lintas hibernasi, jadi reconnect setelah DO tidur tidak dihitung baru.
+    // Yang berpindah rute (socket baru, `did` lama) tetap dihitung baru dan ikut menyiarkan.
+    const baru = this.peerOf(ws) === undefined;
+    this.remember(ws, { sid, did });
     // OR IGNORE, bukan OR REPLACE: hello ulang dari HP yang sama tidak boleh membayar
     // kuota "rows written" dua kali dan tidak boleh menggeser joined_at aslinya.
     const cursor = this.sql.exec(
@@ -180,7 +196,7 @@ export class SessionDO extends DurableObject<Env> {
    * otoritas tanpa kunci. Kunci identitas diambil dari socket, bukan dari frame.
    */
   private assertLeader(ws: WebSocket): boolean {
-    const peer = this.peers.get(ws);
+    const peer = this.peerOf(ws);
     if (peer && this.leaderDid() === peer.did) return true;
     ws.send(JSON.stringify({ t: 'error', code: 'NOT_LEADER' }));
     return false;
@@ -191,7 +207,7 @@ export class SessionDO extends DurableObject<Env> {
    * dipercaya. Yang tidak membawa kunci dijawab `NOT_LEADER` dan ruangan tidak melihat apa pun.
    */
   private async claim(ws: WebSocket, frame: Record<string, unknown>): Promise<void> {
-    const peer = this.peers.get(ws);
+    const peer = this.peerOf(ws);
     const lk = typeof frame.lk === 'string' ? frame.lk : '';
     if (!peer || !lk || !(await verifyLeaderKey(peer.sid, lk, this.env))) {
       ws.send(JSON.stringify({ t: 'error', code: 'NOT_LEADER' }));
@@ -307,7 +323,8 @@ export class SessionDO extends DurableObject<Env> {
   }
 
   async webSocketClose(ws: WebSocket, code: number): Promise<void> {
-    this.peers.delete(ws);
+    // Tidak ada keadaan per-socket yang perlu dibersihkan di sini: identitas hidup di attachment
+    // socketnya sendiri, dan socket yang tertutup tidak mengembalikan diri ke getWebSockets().
     // Klien bisa mengirim code 1005/1006/1015; ws.close() menolak ketiganya dengan
     // InvalidAccessError, jadi code di luar daftar sah diterjemahkan ke 1000.
     const legal = code >= 1000 && code <= 1011 && code !== 1004 && code !== 1005 && code !== 1006;

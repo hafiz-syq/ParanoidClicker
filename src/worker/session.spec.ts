@@ -601,3 +601,34 @@ it('socket yang ditutup menurunkan jumlah kursi di layar HP yang masih di dalam'
   a.ws.close();
 });
 
+// TEMUAN 2 ronde M3a #2: `webSocketError` tidak memanggil peers.delete maupun broadcast —
+// suspicious, karena itu persis penyakit T6 di jalur close. RANTAINYA diukur, bukan diasumsikan
+// dari kalimat "invoked upon disconnect": spy atas `instance.webSocketClose` terpanggil SATU
+// kali sesudah `ws.close(1011)` dari sisi server, `getWebSockets()` turun 2→1 dengan readyState
+// 3 (CLOSED), dan ruangan menerima `state` dengan kursi yang sudah berkurang. Jadi jalur error
+// tidak perlu beres-beres sendiri; yang perlu adalah kunci supaya perubahan vendor ini ketahuan.
+it('webSocketError menurunkan kursi karena webSocketClose menyusul, bukan karena diam', async () => {
+  const a = await openPeer('ERRS');
+  a.send({ t: 'hello', sid: 'ERRS', did: 'devSatu' });
+  await a.untilStates(1);
+  const b = await openPeer('ERRS');
+  b.send({ t: 'hello', sid: 'ERRS', did: 'devDua' });
+  expect(body((await a.untilStates(2)).at(-1)!)).toMatchObject({ t: 'state', members: 2 });
+
+  await runInDurableObject(stubFor('ERRS'), async (instance: SessionDO) => {
+    // Socket sisi server dipilih lewat attachment, bukan lewat indeks: urutan getWebSockets()
+    // tidak dijamin, dan menebak sockets[0] membuat tes ini bisa menyerang HP yang salah.
+    const ctx = (instance as unknown as { ctx: { getWebSockets(): WebSocket[] } }).ctx;
+    const target = ctx
+      .getWebSockets()
+      .find((s) => (s.deserializeAttachment() as { did?: string } | null)?.did === 'devDua');
+    if (!target) throw new Error('devDua tidak ada di getWebSockets(): identitas tidak lagi di attachment');
+    await instance.webSocketError(target, new Error('sisi server'));
+  });
+
+  // Kalau runtime berhenti menyusulkan webSocketClose, frame ini tidak datang dan tesnya merah.
+  expect(body((await a.untilStates(3)).at(-1)!)).toMatchObject({ t: 'state', bpm: 120, running: false, members: 1 });
+  a.ws.close();
+  b.ws.close();
+});
+
