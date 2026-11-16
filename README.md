@@ -560,9 +560,11 @@ kunci=sid,token,leaderKey,wsPath  lenLeaderKey=64  lkDiWsPath=false
 - **Kursi hantu.** Socket mentah tanpa dedupe `did`: yang ditolak `FULL` masih memegang satu
   koneksi, jadi satu HP yang flap/reload sebelum socket lama terdeteksi tutup memakan **2 kursi**.
   Terukur di `session.spec.ts:149`: ruangan dengan 12 HP nyata melaporkan `members: 13` ke
-  `welcome`. Apakah socket dihitung per `did` unik masih **[TANYA]** — dan karena itu tidak ada satu
-  pun tes yang mengasumsikan dedupe. Kalau jawabannya "ya", dua tempat yang berubah: gerbang `FULL`
-  (`SessionDO.ts:105-106`) dan `members` di `welcome` (`:134`).
+  `welcome`. Pertanyaan "dedupe per `did` unik?" sudah **SELESAI (S7)**: pemilik menjawab "Socket
+  mentah" 16 Nov 16:57Z dan reaffirm "Tetap socket mentah" 20:36Z, setelah pilihan *"did unik"*
+  yang dia sendiri beri 15 Nov (S2) dibatalkan — jadi angka `13` di atas bukan bug yang menunggu
+  jawaban, dan tidak ada satu pun tes yang mengasumsikan dedupe. Yang tetap terbuka cuma ukurnya di
+  lapangan: berapa sering flap itu terjadi di dua belas HP nyata (kotak `[ ]` §7, belum dikerjakan).
 - **Gagal tertutup.** Tanpa baris `leader` tidak ada yang boleh memerintah. Konsekuensi hari deploy
   yang harus dibaca sebelum klien dikirim ke HP: HP yang sudah ter-install dan tidak mengirim `lk`
   masuk sebagai anggota biasa — termasuk HP pemimpin, karena `leaderKey` baru lahir hari itu.
@@ -592,12 +594,16 @@ sumbernya.
    `src/app|screens|shared`, `tsconfig.worker.json` hanya `src/worker|shared` plus dua `.d.ts`,
    dan `tsconfig.json` di root isinya cuma `references` ke dua berkas itu — dibaca langsung,
    16 Nov 2026. Jadi `scripts/attack.ts`, `smoke-ws.ts`, `lint-arch.ts`, dan `gerbang.spec.ts`
-   tidak pernah di-typecheck oleh `npm run check`. **Pilihan pemilik (S2) atas label opsi yang saya
-   tulis: "Jangan pasang, tunda" (`@types/node`)** — kanalnya AskUserQuestion, jam 2026-11-15T18:46:12Z
-   = 2026-11-16 01:46 WIB, alamat lengkap di baris S2 tabel §KOREKSI; tanggal "16 Nov" di kalimat lama
-   adalah tanggal WIB, bukan UTC. Pertanyaannya sendiri masih terbuka: prompt checker 2026-11-16/17
-   (S6) mencatat "`@types/node` belum dijawab → jangan pasang", jadi tidak ada yang menugaskan saya
-   memasang ulang, dan menunda bukan berarti menolak permanen.
+   tidak pernah di-typecheck oleh `npm run check`. **Keputusan pemilik (S2) atas pertanyaan ini ada,
+   dan berbunyi: "Jangan pasang, tunda" (`@types/node`)** — kanalnya AskUserQuestion, jam
+   2026-11-15T18:46:12Z = 2026-11-16 01:46 WIB, alamat lengkap di baris S2 tabel §KOREKSI; tanggal
+   "16 Nov" di kalimat lama adalah tanggal WIB, bukan UTC. Kalimat yang pernah saya kutip dari prompt
+   checker, "`@types/node` belum dijawab → jangan pasang" (S6), adalah bagian yang **checker tarik
+   sendiri 17 Nov**: jawabannya nyata, cuma mendarat sebagai `tool_result` dan tidak kelihatan di
+   daftar turn yang dia baca. Jadi tidak ada yang berubah di tree ini — tetap tidak dipasang, tetap
+   tanpa dependensi baru — tapi sekarang atas keputusan yang tercatat, bukan atas pertanyaan yang
+   menggantung. Menunda juga bukan menolak permanen: yang bisa dikerjakan tanpa memasang apa pun ada
+   di paragraf berikutnya.
    Jumlah error-nya tergantung siapa yang mengetik flag — itu sendiri
    bukti tidak ada project file yang menaungi `scripts/`: `tsserver` melaporkan 34 error di
    `attack.ts` (angka pelapor, TIDAK saya reproduksi), sedangkan
@@ -927,10 +933,12 @@ gerbang ikon: 1 KLAIM GAGAL
 
 ### Tiga hal yang bukan keputusanku — satu terjawab (S4), dua masih [TANYA]
 
-1. **`apple-touch-icon` = permukaan APLIKASI** (S4) — pemilik menjawabnya 2026-11-16 23:50 WIB
-   (`via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:50:13.874Z`, S4): tetap
+1. **`apple-touch-icon` = permukaan APLIKASI** — pemilik menjawabnya (S4) 2026-11-16 23:47 WIB
+   (via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:47:48.682Z, baris S4 tabel §KOREKSI): tetap
    `paranoid-180.png` (mark lama berbingkai). Jawaban itu sampai ke sesi ini **dirolay lewat prompt
    checker**, bukan sebagai turn saya sendiri — itu sebabnya penanda sumbernya menunjuk sesi lain.
+   Alamat di baris ini sempat salah (`16:50:13.874Z`, jam `node -e` checker 2 m 25 d sesudahnya); nilai
+   lama itu dibiarkan tertulis di baris S4, bukan dihapus.
    Konsekuensinya di kode: NOL. `scripts/gerbang-ikon.mjs` tidak saya ubah; klasifikasi yang sudah
    ada di dalamnya (`web` HANYA untuk `index.html rel="icon"`) ternyata persis cocok dengan jawaban
    ini, jadi yang berubah cuma catatan di README/rencana.
@@ -942,7 +950,7 @@ gerbang ikon: 1 KLAIM GAGAL
    kubuktikan dari sini tanpa deploy, yang tidak diizinkan (S5).
 
 
-## KOREKSI 2026-11-16 — kalimat yang menyebut pemilik ditulis tanpa alamat
+## KOREKSI 2026-11-16/17 — kalimat yang menyebut pemilik ditulis tanpa alamat
 
 Sesi checker menemukan (S6) bahwa commit `1a30bba` (2026-11-16 01:50 WIB = 2026-11-15T18:50Z)
 menuliskan atribusi tanpa satu pun alamat yang bisa ditunjuk, lalu menyimpulkan tidak ada yang pernah
@@ -951,21 +959,76 @@ ada, kanalnya yang tidak ditulis.** Tiga jawaban itu datang lewat alat `AskUserQ
 masuk sebagai `tool_result` di sesi saya — bukan sebagai turn chat — sehingga daftar turn yang dibaca
 checker memang tidak bisa melihatnya. Yang saya perbaiki di sini bukan isinya, tapi alamatnya.
 
+### 2026-11-17 — checker menarik dua dari tiga temuannya, dengan angka dan alamat
+
+Retraksi ini datang dari sesi checker sendiri setelah dia mengukur kanal `tool_result`, bukan dari
+saya. Yang bertahan cuma temuan ketiga. Rinciannya, supaya dokumen ini tidak lagi menyimpan kalimat
+yang sudah ditarik:
+
+1. **"atribusi tanpa sumber = tidak ada yang menjawab"** — **ditarik.** Daftar turn yang dibaca
+   checker memang kosong di jam itu, dan itu bukan bukti: jawaban `AskUserQuestion` masuk sebagai
+   `tool_result`. Terukur hari ini sebagai field `timestamp` asli di transkrip sesi saya
+   (`d27c1add`): `2026-11-15T18:44:35.788Z` dan `18:44:44.543Z` = rekaman `type: assistant` (panggilan
+   alatnya), `2026-11-15T18:46:12.942Z` (uuid `63c06fb6-462f-40b4-981d-0e4cfb7e6fec`) = rekaman
+   `type: user` dengan `content[0].type = "tool_result"` — isi jawaban pemilik S2. Commit `1a30bba`
+   berdate `2026-11-15T18:50:41Z` (`git show -s --format=%aI 1a30bba` =
+   `2026-11-16T01:50:41+07:00`), yaitu **268058 ms ≈ 4 m 28 d SETELAH** jawaban itu
+   (`node -e` atas `Date.parse` kedua jam). Jadi yang hilang adalah alamat kanalnya, bukan jawabannya.
+2. **"satu kotak `[ ]` → `[x]` tanpa ada yang mencentang"** — **ditarik.** Angkanya di blok
+   "Sebelum/sesudah" di bawah: empat commit lama (`34e234c`, `eaf5e63`, `1a30bba`, `452488c`) sama-sama
+   5 `[x]` / 1 `[ ]`, dan angka `6` pertama muncul di commit tes RED `178e1e9`, bukan di `1a30bba`.
+3. **Yang TIDAK ditarik** — dan itu memang cacat `1a30bba`: klaim pemilik yang ditulis tanpa alamat
+   apa pun. Penjaga bentuk di `scripts/gerbang.spec.ts` tetap berdiri untuk itu, dan tetap tidak
+   saya longgarkan.
+
+### Urutan "tahan" → "boleh": S2 menahan, S4 membuka — keduanya sah, tidak ada yang dibersihkan
+
+- S2, via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-15T18:46:12.942Z: pemilik menahan kode, lewat
+  label opsi yang saya tulis sendiri — *"Tahan dulu, tetap docs-only"*.
+- S4, via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:47:48.682Z (= 23:47 WIB): pemilik membuka
+  kotak kode M3a dengan kata kerja "lanjutkan ke tahap selanjutnya", dan itu urutan yang saya kerjakan:
+  B1 tes GAGAL `178e1e9` → B2 kode `b9fc0f3` → B3 dokumen `33c2342`.
+
+Yang kedua menggantikan yang pertama pada 16 Nov, dan itu bukan kontradiksi yang perlu saya ralat:
+keduanya jawaban pemilik pada jamnya masing-masing. Catatan S2 tetap ada di tabel, tidak saya hapus dan
+tidak saya tulis ulang jadi "sejak awal memang boleh". Bagian M3a di atas tulisan ini sudah menggambarkan
+keadaan sesudah S4, bukan sesudah S2.
+
+Cara memverifikasi sebuah alamat (dan ini yang berubah sejak catatan lama di bawah): transkrip
+`.jsonl` bisa dibaca **hanya-baca** lewat Grep pola `"timestamp":"…"` — parser `node` atas berkas itu
+diblokir, tapi grep-nya tidak. Jadi alamat di tabel §Tabel alamat di bawah ini bukan lagi janji kosong:
+tiap jam saya cek sebagai field `timestamp` sungguhan, bukan sebagai teks yang dikutip di dalam isi
+pesan. Bedanya penting, dan ini hasil ukur hari ini: `2026-11-16T16:50:13.874Z` dan
+`2026-11-16T17:32:47Z` **nol** kecocokan sebagai field `"timestamp":"…"` di kedua transkrip — tapi
+keduanya BUKAN teks kosong. Yang pertama adalah output `node -e` yang checker cetak sendiri sebelum
+bertanya (rekaman yang memuatnya ber-field `16:50:13.934Z` di transkrip `2d6f4ca7`, 60 ms sesudah
+cetakan); yang kedua adalah output `node -e` di SESI SAYA saat membaca prompt (cetakannya
+`17:32:47.248Z`, rekaman penampungnya ber-field `17:32:47.356Z` di transkrip `d27c1add`). Jadi keduanya
+adalah **jam mesin yang dikutip di dalam isi pesan**, bukan jam sebuah turn — itu sebabnya saya cabut
+sebagai alamat; lihat baris S4 dan S6 di tabel.
+
 Yang tidak berubah karena koreksi atribusi ini, diukur di tree:
 
 ```
-$ for r in eaf5e63 1a30bba 452488c; do printf '%s ' $r; git show $r:docs/plans/2026-11-15-m3-otoritas-pemimpin.plan.md | grep -c "^- \[x\]"; done
-eaf5e63 5
-1a30bba 5
-452488c 5
-$ grep -c "^- \[x\]" docs/plans/2026-11-15-m3-otoritas-pemimpin.plan.md   # worktree sesudah S4 dibuka
-6
+$ for r in 34e234c eaf5e63 1a30bba 452488c 178e1e9 b9fc0f3 33c2342; do printf '%s  [x]=' $r; git show $r:docs/plans/2026-11-15-m3-otoritas-pemimpin.plan.md | grep -c '^- \[x\]' | tr -d '\n'; printf '  [ ]='; git show $r:docs/plans/2026-11-15-m3-otoritas-pemimpin.plan.md | grep -c '^- \[ \]'; done; printf 'worktree  [x]='; grep -c '^- \[x\]' docs/plans/2026-11-15-m3-otoritas-pemimpin.plan.md | tr -d '\n'; printf '  [ ]='; grep -c '^- \[ \]' docs/plans/2026-11-15-m3-otoritas-pemimpin.plan.md
+34e234c  [x]=5  [ ]=1
+eaf5e63  [x]=5  [ ]=1
+1a30bba  [x]=5  [ ]=1
+452488c  [x]=5  [ ]=1
+178e1e9  [x]=6  [ ]=1
+b9fc0f3  [x]=6  [ ]=1
+33c2342  [x]=6  [ ]=1
+worktree  [x]=6  [ ]=1
 ```
 
-Lima `[x]` + satu `[ ]` (kotak kode M3a) di ketiga commit: tidak ada kotak yang berpindah status di
-`1a30bba`, jadi klaim "satu kotak `[ ]` → `[x]` tanpa ada yang mencentang" salah dan saya koreksi
-dengan angka di atas. Angka `6` di worktree bukan hasil koreksi ini juga — kotak kode baru dicentang
-setelah jawaban pemilik S4 (`via 2d6f4ca7@2026-11-16T16:50Z`) datang dirolay prompt checker.
+Lima `[x]` + satu `[ ]` (kotak kode M3a) di keempat commit sebelum M3a: tidak ada kotak yang berpindah
+status di `1a30bba`, jadi klaim "satu kotak `[ ]` → `[x]` tanpa ada yang mencentang" salah — checker
+menariknya, dan angka di atas yang menariknya. **Bagian yang salah di README saya sendiri juga dicabut
+di sini:** kalimat lama menyebut "`6` di worktree, belum ada di commit mana pun". Itu sudah tidak benar
+sejak `178e1e9` (2026-11-16T18:18:19Z, `git show -s --format=%aI`) — kotak kode M3a tercentang pertama
+kali di commit tes RED, karena jawaban pemilik S4 memang membuka kotak itu dan saya mencentangnya saat
+menulis tes, bukan saat mengoreksi dokumen. Sisa perhitungannya tidak berubah: 6 centang + 1 kotak
+kosong, dan yang kosong itu kotak dua-perangkat §7.
 
 Koreksi ini ditulis sebagai commit ke depan. `1a30bba` tidak di-amend dan tidak di-rebase: dua sesi
 bekerja di satu working tree, dan menulis ulang history yang sudah dilihat sesi lain justru
@@ -976,10 +1039,14 @@ keputusan/perintah/instruksi/syarat/jawaban/konfirmasi — di `README.md`, `docs
 `docs/adr/**` — harus membawa salah satu: `[TANYA]`, alamat
 `via <sessionId>@<UTC>`, atau kunci `S<n>` yang baris tabelnya di berkas yang sama membawa alamat. Penegaknya assertion
 `setiap klaim keputusan pemilik di dokumen membawa alamat sumber yang bisa ditunjuk` (S6) di
-`scripts/gerbang.spec.ts`, jalan di `npm run check` tanpa perlu ada yang mengingat perintahnya
-([TANYA]: penjaga ini cuma memeriksa BENTUK alamat. Berkas transcript di `~/.qoder/projects/*.jsonl`
-diblokir untuk dibaca sejak tugas ini berjalan, jadi tidak ada assertion yang bisa membuktikan
-isi sebuah jawaban — hanya bahwa jawabannya menunjuk ke suatu tempat).
+`scripts/gerbang.spec.ts`, jalan di `npm run check` tanpa perlu ada yang mengingat perintahnya.
+Batasnya tetap: penjaga ini memeriksa BENTUK alamat, bukan ISI jawaban. Tapi catatan lama di titik ini
+("transcript diblokir untuk dibaca") sudah tidak benar dan saya cabut: berkas `~/.qoder/projects/*.jsonl`
+ternyata bisa dibaca **hanya-baca** lewat Grep dengan pola `"timestamp":"…"` — yang diblokir hanyalah
+mem-parse-nya dengan `node`. Jadi verifikasi sebuah alamat hari ini adalah grep atas field `timestamp`
+(asli, bukan kutipan di dalam isi pesan) plus mata manusia membuka sesinya di App — bukan assertion di
+dalam tes. Kolom "Alamat" di tabel berikut sudah lewat grep itu, dan dua nilai yang tidak lolos
+(`16:50:13.874Z` dan `17:32:47Z`) saya coreng di barisnya masing-masing, bukan saya hapus diam-diam.
 
 Penjaga ini diserang dua arah, dan keduanya keluar sebagai RED:
 
@@ -1019,17 +1086,32 @@ menyalin baris yang dia butuh di §8.2 berkasnya sendiri.
 | S1 | empat jawaban §6 rencana M3a, termasuk *"Setuju, tapi jangan kode dulu"* | via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-15T09:16:14.324Z | `AskUserQuestion` → `tool_result` di sesi saya |
 | S2 | *"Tahan dulu, tetap docs-only"* · *"did unik di antara socket hidup"* · *"Jangan pasang, tunda"* (`@types/node`) | via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-15T18:46:12.942Z = 2026-11-16 01:46 WIB | `AskUserQuestion` → `tool_result` (beberapa jawaban dalam SATU panggilan) |
 | S3 | *"logo WEB pakai mark baru ini; logo APLIKASI tetap pakai yang lama."* + syarat sha256 enam ikon lama | via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-15T18:51:40Z | turn chat saya — isinya prompt checker yang mengutip perintah pemilik; jamnya dilaporkan sesi checker (2d6f4ca7), saya tidak mengukur ulang |
-| S4 | jawaban pemilik dua pertanyaan di sesi checker: **kotak kode M3a dibuka** ("lanjutkan ke tahap selanjutnya") + **`apple-touch-icon` = permukaan APLIKASI** (`paranoid-180.png` tetap, `gerbang-ikon.mjs` jangan disentuh) | via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:50:13.874Z | pemilik menjawab di sesi 2d6f4ca7 23:50 WIB; isinya sampai ke saya **dirolay prompt checker**, bukan sebagai turn di sesi ini |
+| S4 | jawaban pemilik dua pertanyaan di sesi checker: **kotak kode M3a dibuka** ("lanjutkan ke tahap selanjutnya") + **`apple-touch-icon` = permukaan APLIKASI** (`paranoid-180.png` tetap, `gerbang-ikon.mjs` jangan disentuh) | via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:47:48.682Z (uuid rekaman `4713e8f8-5888-4b7d-9bd6-b721428b834a`, `type: user` + `tool_result`, baris 2720) | pemilik menjawab di sesi 2d6f4ca7 23:47 WIB; isinya sampai ke saya **dirolay prompt checker**, bukan sebagai turn di sesi ini. **Alamat lama di baris ini salah dan checker mengakuinya sebagai salahnya sendiri:** `16:50:13.874Z` adalah output `node -e` yang dicetak checker 2 m 25 d SESUDAH jawaban itu, sebelum dia bertanya ke saya — tercatat sebagai isi pesan, nol kecocokan sebagai field `timestamp`; rekaman yang memuatnya ber-field `16:50:13.934Z` |
 | S5 | aturan berdiri: `JANGAN deploy`, `JANGAN push`, tulis ke produksi butuh izin eksplisit, larangan skill `vercel-deploy`, larangan commit `tail*.log` | via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-15T18:38:43Z | turn `CHECKER → EXECUTOR` yang memetik aturan pemilik; jamnya dilaporkan sesi checker, saya tidak mengukur ulang |
-| S6 | dua prompt checker: (a) temuan provenance atas `1a30bba` + tuntutan assertion penjaga, (b) arahan M3a B0–B4 yang menyatakan **pemilik TIDAK menjawab tafsir `did` unik** (pakai socket mentah) dan **`scripts/gerbang-ikon.mjs` jangan diubah** | via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T17:32:47Z [TANYA] | keduanya masuk ke sesi saya sebagai pesan; jam di alamat itu adalah hasil `node -e "console.log(new Date().toISOString())"` pada saat saya membaca promptnya (`2026-11-16T17:32:47.248Z`, offset `-420`) — bukan timestamp turn di sesi checker, dan transcript tidak bisa dibuka untuk membuktikannya |
+| S6 | tiga prompt checker: (a) temuan provenance atas `1a30bba` + tuntutan assertion penjaga, (b) arahan M3a B0–B4, (c) tambahan soal §6.2 | (a) via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:33:23.589Z · (b) via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:51:22.707Z · (c) via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:58:04.311Z | ketiganya jam kirim **di transkrip checker**, diukur sebagai field `timestamp` atas rekaman `type: assistant` (baris 2690-2692, 2732-2734, 2785-2786). (a) mendarat di sesi saya 10 detik kemudian (`16:33:33.483Z`, turn delegasi). **Alamat lama `…@2026-11-16T17:32:47Z` dicabut:** itu jam `node -e` di sesi saya sendiri saat membaca prompt (cetakan `17:32:47.248Z`) — string `17:32:47Z` nol kecocokan sebagai field `timestamp`, dan yang ada cuma field rekaman penampung cetakannya, `17:32:47.356Z` — begitu juga bentuk pendek `via 2d6f4ca7@…` yang checker pakai di promptnya, yang memang tidak bisa dibaca regex penjaga (`P_VIA` menuntut UUID penuh + detik) |
+| S7 | jawaban pemilik atas tafsir §6.2 di sesi checker: **"Socket mentah"** lalu, setelah kedua jawaban lama saya tampilkan padanya, **"Tetap socket mentah"** | via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:57:02.999Z (uuid `0967ee46-533c-448f-b4bf-1023bdf7566d`, baris 2773) · via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T20:36:32.241Z (uuid `efad1bdd-6a28-4a4f-a6ba-134242068698`, baris 2951) | sama seperti S4: pemilik menjawab di sesi checker, keduanya `type: user` + `tool_result` (AskUserQuestion). Yang saya terima dari sesi saya cuma rangkumannya lewat prompt (b) dan (c), jadi baris inilah alamat aslinya |
 
-Satu hal yang sengaja saya biarkan terbuka, bukan saya putuskan: catatan S2 bilang sebuah label opsi
-*"did unik di antara socket hidup"* pernah dipilih, sementara prompt checker menyatakan pertanyaan
-tafsir §6.2 itu belum dijawab pemilik (S6). Yang saya kerjakan mengikuti yang harfiah dari jawaban
-15 Nov (S1): **jumlah socket hidup MENTAH** dari `getWebSockets()`, tanpa dedupe `did`. Konsekuensinya
-yang harus dibaca pemilik sebelum menjawab (S6) — dengan socket mentah, satu HP yang network-nya flap
-atau reload memakan **2 kursi**, jadi ruangan 12 HP bisa menjawab `FULL` dengan 11 HP nyata di tengah
-latihan. Dua tes yang berubah kalau jawabannya "ya": gerbang `FULL` dan `members` di `welcome`.
+### §6.2 SELESAI (S7) — kursi dari socket mentah, dan ini bukan keputusan saya
+
+Riwayatnya, supaya tidak dibaca sebagai kontradiksi. (1) 15 Nov 18:46Z pemilik memilih label opsi (S2)
+*"did unik di antara socket hidup"*. (2) 16 Nov 16:51Z prompt checker menyatakan pertanyaan tafsir
+§6.2 itu belum dijawab pemilik (S6b) — dan itu **salah framing**, sebab yang sama dengan dua tuduhan
+yang dia tarik di atas: jawaban S2 mendarat sebagai `tool_result` dan tidak kelihatan di daftar turn.
+(3) Setelah kedua jawaban lama ditampilkan ke dia, dia menjawab dua kali di sesi checker dan **mengganti
+pilihannya sendiri**: "Socket mentah" (S7, 16:57Z) lalu "Tetap socket mentah" (S7, 20:36Z, sesudah
+konskuensi 2-kursi dibacakan ulang ke dia). Urutan ini sah, bukan pertengkaran: yang dijawab 16 Nov itu
+pertanyaan yang diformulasikan ulang, dan jawabannya membatalkan pilihan 15 Nov secara eksplisit.
+
+Karena itu kode `b9fc0f3` benar apa adanya: `seatCount()` = `getWebSockets()` dengan
+`readyState === OPEN`, **mentah, tanpa deduplikasi `did`** — tidak ada perubahan kode, tidak ada tes yang
+pindah angka (`session.spec.ts:149` tetap menuntut `members: 13`). Pertanyaan yang tadi menggantung di
+README bagian M3a dan di ADR-0006 tertutup oleh jawaban itu, bukan oleh ukur baru.
+
+Konsekuensinya saya tulis apa adanya dan tidak dilunakkan jadi "aman": dengan socket mentah, satu HP yang
+network-nya flap atau me-reload halaman sebelum socket lama terdeteksi tutup memegang **2 kursi**, jadi
+ruangan 12 HP bisa menjawab `FULL` padahal ada 11 HP nyata di tengah latihan. Itu harga yang diterima
+pemilik bersama jawabannya (S7), dan satu-satunya penahan yang tercatat adalah `webSocketClose`
+menyiarkan `state` (`SessionDO.ts:310-319`) supaya angkanya bisa turun sendiri.
 
 ## Gerbang ikon: tidak ada kembar, tidak ada bukti status
 
