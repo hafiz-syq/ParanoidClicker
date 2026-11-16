@@ -235,7 +235,8 @@ mencetak `sid=NCFB` 10 kali, dan `B298` juga punya DO sendiri di capture yang sa
 sebelumnya — **tidak muncul di artefak mana pun** yang tersisa, jadi angka itu saya tarik
 kembali. Semua jejak di atas berasal dari capture **13 Nov 2026 13:38–14:37 WIB**, bukan dari
 15/16 Nov: tidak ada artefak produksi pada dua tanggal itu, dan capture baru berarti
-lalu-lintas sungguhan ke produksi — itu keputusan pemilik, bukan keputusan saya atau checker.
+lalu-lintas sungguhan ke produksi — itu keputusan pemilik (S5, tabel alamat §KOREKSI), bukan keputusan
+saya atau checker.
 Kesimpulannya tidak berubah: `npm run attack` terhadap URL produksi bukan sesuatu yang dijalankan
 berkali-kali sambil mencari-cari, dan jangan dijalankan dari IP yang sama saat band sedang
 mencoba masuk.
@@ -498,8 +499,13 @@ sumbernya.
    `src/app|screens|shared`, `tsconfig.worker.json` hanya `src/worker|shared` plus dua `.d.ts`,
    dan `tsconfig.json` di root isinya cuma `references` ke dua berkas itu — dibaca langsung,
    16 Nov 2026. Jadi `scripts/attack.ts`, `smoke-ws.ts`, `lint-arch.ts`, dan `gerbang.spec.ts`
-   tidak pernah di-typecheck oleh `npm run check`. **Keputusan pemilik 2026-11-16: `@types/node`
-   jangan dipasang, tunda.** Jumlah error-nya tergantung siapa yang mengetik flag — itu sendiri
+   tidak pernah di-typecheck oleh `npm run check`. **Pilihan pemilik (S2) atas label opsi yang saya
+   tulis: "Jangan pasang, tunda" (`@types/node`)** — kanalnya AskUserQuestion, jam 2026-11-15T18:46:12Z
+   = 2026-11-16 01:46 WIB, alamat lengkap di baris S2 tabel §KOREKSI; tanggal "16 Nov" di kalimat lama
+   adalah tanggal WIB, bukan UTC. Pertanyaannya sendiri masih terbuka: prompt checker 2026-11-16/17
+   (S6) mencatat "`@types/node` belum dijawab → jangan pasang", jadi tidak ada yang menugaskan saya
+   memasang ulang, dan menunda bukan berarti menolak permanen.
+   Jumlah error-nya tergantung siapa yang mengetik flag — itu sendiri
    bukti tidak ada project file yang menaungi `scripts/`: `tsserver` melaporkan 34 error di
    `attack.ts` (angka pelapor, TIDAK saya reproduksi), sedangkan
 
@@ -595,15 +601,16 @@ berikutnya; `favicon-16.png`/`favicon-32.png` yang sekarang dirujuk `index.html:
 
 ## Web pakai mark baru, aplikasi tetap pakai mark lama
 
-Perintah pemilik 2026-11-16: **"logo WEB pakai mark baru ini; logo APLIKASI tetap pakai yang
-lama."** Dua keluarga berkas di satu folder, dipisahkan oleh namanya:
+Perintah pemilik, sampai ke saya sebagai kutipan di dalam prompt checker (S3, tabel §KOREKSI):
+**"logo WEB pakai mark baru ini; logo APLIKASI tetap pakai yang lama."** Dua keluarga berkas di
+satu folder, dipisahkan oleh namanya:
 
 | permukaan | berkas | sumber | dibangun oleh |
 |---|---|---|---|
 | WEB (tab, favicon) | `public/ikon/favicon-16.png`, `favicon-32.png` | `aset/mark-web.png` | `scripts/buat-ikon-web.ps1` |
 | APLIKASI (manifest, iOS, M8) | `public/ikon/paranoid-*.png` | `public/ikon/Paranoid.jpg` | `scripts/buat-ikon.ps1` — TIDAK dijalankan ulang |
 
-Syarat pemilik: sha256 enam ikon lama tidak boleh berubah satu pun. Ini `sha256sum` sebelum dan
+Syarat pemilik (S3): sha256 enam ikon lama tidak boleh berubah satu pun. Ini `sha256sum` sebelum dan
 sesudah build, dan diff-nya hanya MENAMBAH dua baris (baris `0a1,2` = tidak ada satu pun hash lama
 yang bergeser):
 
@@ -811,7 +818,7 @@ Tab asli di HP (dan `apple-touch-icon` di iOS) masih belum terukur, sama seperti
 
 ### Gerbang baru: dua permukaan tidak boleh bertukar keluarga
 
-Keputusan pemilik itu sekarang diperiksa, bukan dipercaya (`scripts/gerbang-ikon.mjs` §2b, jalan di
+Keputusan pemilik itu (S3) sekarang diperiksa, bukan dipercaya (`scripts/gerbang-ikon.mjs` §2b, jalan di
 `npm run cek:ikon` DAN di `npm run check` lewat `scripts/gerbang.spec.ts`): tiap `<link rel="icon">`
 harus menunjuk `favicon-*`, tiap ikon manifest dan `apple-touch-icon` harus menunjuk `paranoid-*`.
 Diserang dengan mengganti favicon kembali ke mark lama:
@@ -825,17 +832,111 @@ gerbang ikon: 1 KLAIM GAGAL
 `index.html` dikembalikan sesudah serangan, dan `npm run cek:ikon` pada tree ini menutup dengan
 `gerbang ikon: 8 berkas, 6 rujukan, tidak ada kembar, semua sha+IHDR cocok`.
 
-### Tiga hal yang jadi keputusan pemilik, bukan keputusanku
+### Tiga hal yang bukan keputusanku — satu terjawab (S4), dua masih [TANYA]
 
-1. **`apple-touch-icon`** sekarang masih `paranoid-180.png` (mark lama). Ia abu-abu: file-nya
-   dipakai saat orang "Add to Home Screen" (= permukaan aplikasi), tapi tag-nya ada di `index.html`
-   (= halaman web). Aku tidak memilih sendiri.
-2. **Mark di dalam layar** (README bagian "Ikon & shell PWA", masih tercatat sebagai keputusan
-   bersama tema M7) — belum disentuh; itu `src/`, dan kotak persetujuan M3a masih kosong.
-3. **`og:image` belum ada sama sekali.** Menambahkannya berarti (a) satu gambar 1200×630 yang
-   layout-nya belum diputuskan dan (b) URL absolut ke produksi — dan itu tidak bisa kubuktikan dari
-   sini tanpa deploy, yang tidak diizinkan.
+1. **`apple-touch-icon` = permukaan APLIKASI** (S4) — pemilik menjawabnya 2026-11-16 23:50 WIB
+   (`via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:50:13.874Z`, S4): tetap
+   `paranoid-180.png` (mark lama berbingkai). Jawaban itu sampai ke sesi ini **dirolay lewat prompt
+   checker**, bukan sebagai turn saya sendiri — itu sebabnya penanda sumbernya menunjuk sesi lain.
+   Konsekuensinya di kode: NOL. `scripts/gerbang-ikon.mjs` tidak saya ubah; klasifikasi yang sudah
+   ada di dalamnya (`web` HANYA untuk `index.html rel="icon"`) ternyata persis cocok dengan jawaban
+   ini, jadi yang berubah cuma catatan di README/rencana.
+2. **Mark di dalam layar** (README bagian "Ikon & shell PWA") — masih `[TANYA]`. Kotak M3a memang
+   terbuka (S4), tapi "boleh menyentuh `src/`" tidak sama dengan "putuskan logonya", dan tema itu
+   tercatat bersama M7.
+3. **`og:image` belum ada sama sekali** — masih `[TANYA]`. Menambahkannya berarti (a) satu gambar
+   1200×630 yang layout-nya belum diputuskan dan (b) URL absolut ke produksi — dan itu tidak bisa
+   kubuktikan dari sini tanpa deploy, yang tidak diizinkan (S5).
 
+
+## KOREKSI 2026-11-16 — kalimat yang menyebut pemilik ditulis tanpa alamat
+
+Sesi checker menemukan (S6) bahwa commit `1a30bba` (2026-11-16 01:50 WIB = 2026-11-15T18:50Z)
+menuliskan atribusi tanpa satu pun alamat yang bisa ditunjuk, lalu menyimpulkan tidak ada yang pernah
+menjawabnya. Kesimpulan itu sebagian salah, dan bagian yang benar adalah cacat yang nyata: **jawabannya
+ada, kanalnya yang tidak ditulis.** Tiga jawaban itu datang lewat alat `AskUserQuestion`, yang hasilnya
+masuk sebagai `tool_result` di sesi saya — bukan sebagai turn chat — sehingga daftar turn yang dibaca
+checker memang tidak bisa melihatnya. Yang saya perbaiki di sini bukan isinya, tapi alamatnya.
+
+Yang tidak berubah karena koreksi atribusi ini, diukur di tree:
+
+```
+$ for r in eaf5e63 1a30bba 452488c; do printf '%s ' $r; git show $r:docs/plans/2026-11-15-m3-otoritas-pemimpin.plan.md | grep -c "^- \[x\]"; done
+eaf5e63 5
+1a30bba 5
+452488c 5
+$ grep -c "^- \[x\]" docs/plans/2026-11-15-m3-otoritas-pemimpin.plan.md   # worktree sesudah S4 dibuka
+6
+```
+
+Lima `[x]` + satu `[ ]` (kotak kode M3a) di ketiga commit: tidak ada kotak yang berpindah status di
+`1a30bba`, jadi klaim "satu kotak `[ ]` → `[x]` tanpa ada yang mencentang" salah dan saya koreksi
+dengan angka di atas. Angka `6` di worktree bukan hasil koreksi ini juga — kotak kode baru dicentang
+setelah jawaban pemilik S4 (`via 2d6f4ca7@2026-11-16T16:50Z`) datang dirolay prompt checker.
+
+Koreksi ini ditulis sebagai commit ke depan. `1a30bba` tidak di-amend dan tidak di-rebase: dua sesi
+bekerja di satu working tree, dan menulis ulang history yang sudah dilihat sesi lain justru
+menghancurkan jejak yang lagi diperiksa.
+
+Aturan dari checker (S6): setiap baris yang memuat kata pemilik di sebelah salah satu dari
+keputusan/perintah/instruksi/syarat/jawaban/konfirmasi — di `README.md`, `docs/plans/**`, atau
+`docs/adr/**` — harus membawa salah satu: `[TANYA]`, alamat
+`via <sessionId>@<UTC>`, atau kunci `S<n>` yang baris tabelnya di berkas yang sama membawa alamat. Penegaknya assertion
+`setiap klaim keputusan pemilik di dokumen membawa alamat sumber yang bisa ditunjuk` (S6) di
+`scripts/gerbang.spec.ts`, jalan di `npm run check` tanpa perlu ada yang mengingat perintahnya
+([TANYA]: penjaga ini cuma memeriksa BENTUK alamat. Berkas transcript di `~/.qoder/projects/*.jsonl`
+diblokir untuk dibaca sejak tugas ini berjalan, jadi tidak ada assertion yang bisa membuktikan
+isi sebuah jawaban — hanya bahwa jawabannya menunjuk ke suatu tempat).
+
+Penjaga ini diserang dua arah, dan keduanya keluar sebagai RED:
+
+```
+# 1) satu kalimat pemilik palsu saya tempel di ujung README (tanpa alamat apa pun)
+$ cp README.md /tmp/readme.bak
+$ printf '\n**Keputusan pemilik 2026-11-17: ADR-0006 memakai socket mentah, jadi tidak perlu ditanya ulang.**\n' >> README.md
+$ npx vitest run scripts/gerbang.spec.ts
+AssertionError: klaim pemilik tanpa [TANYA] / via <sessionId>@<UTC> / S<n> yang baris tabelnya beralamat: expected [ Array(1) ] to deeply equal []
++   "README.md:1086 |**Keputusan pemilik 2026-11-17: ADR-0006 memakai socket mentah, jadi tidak perlu ditanya ulang.**|",
+
+# 2) kontrol positif: kata "pemilik" saya hapus dari README + docs/plans + docs/adr
+$ perl -i -pe 's/pemilik/pengguna/gi' README.md docs/plans/*.md docs/adr/*.md
+$ npx vitest run scripts/gerbang.spec.ts
+AssertionError: README/docs tidak menyisakan satu pun klaim pemilik — penjaga ini hilang, bukan lulus: expected 0 to be greater than 0
+```
+
+Yang pertama menangkap kalimat karangan; yang kedua memastikan penjaganya tidak lulus cuma karena
+kalimatnya dihapus. Setelah serangan berkasnya saya kembalikan dan diverifikasi hash:
+`sha256sum README.md` = `8bb19903039a7d0a4effe5e7e58bfac481a3ad318116e4e0403661bf8f6c1285` sama sebelum
+dan sesudah.
+
+**Kecelakaan selama serangan ini, dicatat bukan disimpan:** backup kedua saya flatten ke satu folder
+(`cp README.md docs/plans/*.md docs/adr/*.md /tmp/dokbak/`), dan `README.md` repo menabrak
+`docs/adr/README.md` yang namanya sama — waktu dipulihkan, README repo ke-tulis ulang jadi ADR index
+(`f920f0b9…`). `sha256sum -c` menangkapnya (`README.md: FAILED`), dan berkasnya kembali utuh dari backup
+pertama (`/tmp/readme.bak`). Tidak ada perubahan yang hilang: tidak satu pun berkas `docs/adr/**`
+berubah, `git diff --stat` sesudah pemulihan hanya menyebut `README.md`, rencana M3a, dan
+`scripts/gerbang.spec.ts`. Lesson yang saya terapkan seterusnya: backup banyak berkas dipakai dengan
+struktur direktori, bukan disatukan berdasarkan basename.
+
+Tabel alamat. Kunci dipakai di dalam README ini saja — assertion resolve per berkas, jadi rencana M3a
+menyalin baris yang dia butuh di §8.2 berkasnya sendiri.
+
+| Kunci | Isi | Alamat | Kanal |
+|---|---|---|---|
+| S1 | empat jawaban §6 rencana M3a, termasuk *"Setuju, tapi jangan kode dulu"* | via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-15T09:16:14.324Z | `AskUserQuestion` → `tool_result` di sesi saya |
+| S2 | *"Tahan dulu, tetap docs-only"* · *"did unik di antara socket hidup"* · *"Jangan pasang, tunda"* (`@types/node`) | via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-15T18:46:12.942Z = 2026-11-16 01:46 WIB | `AskUserQuestion` → `tool_result` (beberapa jawaban dalam SATU panggilan) |
+| S3 | *"logo WEB pakai mark baru ini; logo APLIKASI tetap pakai yang lama."* + syarat sha256 enam ikon lama | via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-15T18:51:40Z | turn chat saya — isinya prompt checker yang mengutip perintah pemilik; jamnya dilaporkan sesi checker (2d6f4ca7), saya tidak mengukur ulang |
+| S4 | jawaban pemilik dua pertanyaan di sesi checker: **kotak kode M3a dibuka** ("lanjutkan ke tahap selanjutnya") + **`apple-touch-icon` = permukaan APLIKASI** (`paranoid-180.png` tetap, `gerbang-ikon.mjs` jangan disentuh) | via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:50:13.874Z | pemilik menjawab di sesi 2d6f4ca7 23:50 WIB; isinya sampai ke saya **dirolay prompt checker**, bukan sebagai turn di sesi ini |
+| S5 | aturan berdiri: `JANGAN deploy`, `JANGAN push`, tulis ke produksi butuh izin eksplisit, larangan skill `vercel-deploy`, larangan commit `tail*.log` | via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-15T18:38:43Z | turn `CHECKER → EXECUTOR` yang memetik aturan pemilik; jamnya dilaporkan sesi checker, saya tidak mengukur ulang |
+| S6 | dua prompt checker: (a) temuan provenance atas `1a30bba` + tuntutan assertion penjaga, (b) arahan M3a B0–B4 yang menyatakan **pemilik TIDAK menjawab tafsir `did` unik** (pakai socket mentah) dan **`scripts/gerbang-ikon.mjs` jangan diubah** | via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T17:32:47Z [TANYA] | keduanya masuk ke sesi saya sebagai pesan; jam di alamat itu adalah hasil `node -e "console.log(new Date().toISOString())"` pada saat saya membaca promptnya (`2026-11-16T17:32:47.248Z`, offset `-420`) — bukan timestamp turn di sesi checker, dan transcript tidak bisa dibuka untuk membuktikannya |
+
+Satu hal yang sengaja saya biarkan terbuka, bukan saya putuskan: catatan S2 bilang sebuah label opsi
+*"did unik di antara socket hidup"* pernah dipilih, sementara prompt checker menyatakan pertanyaan
+tafsir §6.2 itu belum dijawab pemilik (S6). Yang saya kerjakan mengikuti yang harfiah dari jawaban
+15 Nov (S1): **jumlah socket hidup MENTAH** dari `getWebSockets()`, tanpa dedupe `did`. Konsekuensinya
+yang harus dibaca pemilik sebelum menjawab (S6) — dengan socket mentah, satu HP yang network-nya flap
+atau reload memakan **2 kursi**, jadi ruangan 12 HP bisa menjawab `FULL` dengan 11 HP nyata di tengah
+latihan. Dua tes yang berubah kalau jawabannya "ya": gerbang `FULL` dan `members` di `welcome`.
 
 ## Gerbang ikon: tidak ada kembar, tidak ada bukti status
 
