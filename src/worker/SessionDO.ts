@@ -11,10 +11,17 @@ interface TempoState {
   running: boolean;
 }
 
-/** Identitas hasil `hello` yang berhasil, per socket. */
+/**
+ * Identitas hasil `hello` yang berhasil, per socket — plus satu fakta yang TIDAK bisa dikarang
+ * dari frame: `lkDibuktikan`. Sejak S8-b (jawaban pemilik `2026-11-16T23:06:05.165Z`) kecocokan
+ * `did` saja bukan otoritas; yang boleh memerintah cuma socket yang verifikasi `lk`-nya lulus,
+ * dan hasil verifikasi itu ikut tersimpan di attachment socket (ADR-0007) sehingga bertahan
+ * ketika DO tidur dan dibangun ulang.
+ */
 interface Peer {
   sid: string;
   did: string;
+  lkDibuktikan: boolean;
 }
 
 export class SessionDO extends DurableObject<Env> {
@@ -94,7 +101,10 @@ export class SessionDO extends DurableObject<Env> {
     // penjaga ini socket palsu melempar TypeError, bukan dijawab "belum dikenal".
     const tersimpan = typeof ws.deserializeAttachment === 'function' ? ws.deserializeAttachment() : null;
     if (!tersimpan || typeof tersimpan.sid !== 'string' || typeof tersimpan.did !== 'string') return undefined;
-    return { sid: tersimpan.sid, did: tersimpan.did };
+    // Gagal tertutup: attachment tanpa flag — atau dengan nilai apa pun selain `true` — berarti
+    // socket ini tidak pernah membuktikan `lk`. Yang disimpan cuma HASIL verifikasi (boolean),
+    // tidak pernah kuncinya, jadi attachment tetap puluhan byte (ADR-0007 §batas).
+    return { sid: tersimpan.sid, did: tersimpan.did, lkDibuktikan: tersimpan.lkDibuktikan === true };
   }
 
   private remember(ws: WebSocket, peer: Peer): void {
@@ -126,7 +136,13 @@ export class SessionDO extends DurableObject<Env> {
     // yang sama bertahan lintas hibernasi, jadi reconnect setelah DO tidur tidak dihitung baru.
     // Yang berpindah rute (socket baru, `did` lama) tetap dihitung baru dan ikut menyiarkan.
     const baru = this.peerOf(ws) === undefined;
-    this.remember(ws, { sid, did });
+    // Verifikasi terjadi di sini, sebelum hasilnya bisa dibaca siapa pun, dan yang menempel di
+    // socket adalah HASILNYA (boolean), bukan kuncinya. `hello` tanpa `lk` menghasilkan `false` —
+    // termasuk di socket yang dulu sudah mengikat podium, jadi HP yang kehilangan `lk` di
+    // localStorage harus `claim` lagi untuk boleh memerintah. Perubahan perilaku itu disengaja
+    // (ADR-0005, S8-b) dan wajib disebut di README, bukan diselipkan.
+    const lkDibuktikan = lk.length > 0 && (await verifyLeaderKey(sid, lk, this.env));
+    this.remember(ws, { sid, did, lkDibuktikan });
     // OR IGNORE, bukan OR REPLACE: hello ulang dari HP yang sama tidak boleh membayar
     // kuota "rows written" dua kali dan tidak boleh menggeser joined_at aslinya.
     const cursor = this.sql.exec(
@@ -134,11 +150,13 @@ export class SessionDO extends DurableObject<Env> {
       did,
       Date.now()
     );
-    // `lk` diverifikasi tiap hello, bukan dipercaya dari hasil sebelumnya. Kunci yang sama di
-    // dua HP hanya mengikat SATU kali: sesudah podium terisi, jalurnya adalah rebut eksplisit.
+    // `lk` diverifikasi tiap hello, bukan dipercaya dari hasil sebelumnya. Flag di atas tetap
+    // ter-set ketika podium sudah dipegang `did` lain — reconnect pemimpin sah tidak boleh
+    // kehilangan bukti kriptonya cuma karena podium sedang pindah (S8-b butir 5). Yang mengikat
+    // podium tetap SATU kali: sesudah terisi, jalurnya adalah rebut eksplisit lewat `claim`.
     // reconnect pemimpin TIDAK menulis ulang — `claimed_at` tetap jam podium benar-benar direbut,
-    // dan hello ulang tidak membayar kuota tulis lagi (yang dibutuhkan cuma `peers` di atas).
-    if (lk && (await verifyLeaderKey(sid, lk, this.env)) && this.leaderDid() === null) {
+    // dan hello ulang tidak membayar kuota tulis lagi (yang diperbarui cuma attachment socketnya).
+    if (lkDibuktikan && this.leaderDid() === null) {
       this.bindLeader(did, lk);
     }
     ws.send(
@@ -194,10 +212,14 @@ export class SessionDO extends DurableObject<Env> {
    * Gagal tertutup: tanpa baris `leader` — sesi yang belum pernah menyambut HP berkunci —
    * TIDAK ada yang boleh memerintah. Bukan "siapa saja sampai ada yang klaim": §3 menolak
    * otoritas tanpa kunci. Kunci identitas diambil dari socket, bukan dari frame.
+   *
+   * Dua syarat, dan keduanya menempel di SOCKET yang sama (S8-b): bukti kripto `lk` pernah
+   * lulus di socket ini DAN `did`-nya adalah pemegang podium. `did` yang cocok tanpa flag bukan
+   * otoritas — string itu datang dari frame klien dan server cuma menjaga panjangnya.
    */
   private assertLeader(ws: WebSocket): boolean {
     const peer = this.peerOf(ws);
-    if (peer && this.leaderDid() === peer.did) return true;
+    if (peer && peer.lkDibuktikan && this.leaderDid() === peer.did) return true;
     ws.send(JSON.stringify({ t: 'error', code: 'NOT_LEADER' }));
     return false;
   }
@@ -213,6 +235,7 @@ export class SessionDO extends DurableObject<Env> {
       ws.send(JSON.stringify({ t: 'error', code: 'NOT_LEADER' }));
       return;
     }
+    this.remember(ws, { sid: peer.sid, did: peer.did, lkDibuktikan: true });
     this.bindLeader(peer.did, lk);
     this.broadcast(this.readTempo());
   }
