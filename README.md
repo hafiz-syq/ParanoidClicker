@@ -327,6 +327,9 @@ di baris status:
    bukan `total + 1` seperti di `welcome`, supaya orang ke-13 yang ditolak `FULL` tidak menambah
    satu HP hantu. `proto` di `/health` tetap 2: key ekstra diabaikan klien lama, dan klien baru
    tetap benar kalau server lama tidak mengirimnya.
+   *(Koreksi ke depan, M3a: yang berubah bukan `proto` tapi **dasar angkanya** — `members` sekarang
+   jumlah socket `OPEN`, bukan `SELECT COUNT(*) FROM member`; lihat bagian M3a dan
+   [ADR-0006](docs/adr/0006-kursi-dari-socket-hidup.md). Kalimat di atas tetap tulisan M1b apa adanya.)*
 
 Sudah dibuktikan (15 Nov 2026, dua tab Chromium + worker lokal `:8787`; semua angka dibaca oleh
 sampler yang berjalan di dalam halaman, bukan dari DOM yang dibaca lewat round-trip):
@@ -488,6 +491,96 @@ BELUM / batas yang diketahui di M2:
     bar BERIKUTNYA, jadi +0,5 s. Timer ramp berdenyut tiap `TICK_MS` = 25 ms (`ClickRoom.tsx`),
     jadi di atas kertas marginnya 17×; belum diukur pada tab yang benar-benar seret.
 - Otoritas pemimpin masih di sisi layar saja → M3.
+
+## M3a: otoritas pemimpin dijaga server
+
+Dua keputusan ditulis di `docs/adr/`: [0005](docs/adr/0005-kunci-pemimpin-dari-create.md) — kunci
+pemimpin `lk` dicetak terpisah di `/create`, rebut kendali hanya sah dengan tombol;
+[0006](docs/adr/0006-kursi-dari-socket-hidup.md) — dasar hitungan `N HP` pindah dari riwayat SQL ke
+socket hidup (ADR-0006 mengubah janji yang ditulis di M1b, makanya dia punya ADR sendiri). Kode:
+`178e1e9` (tes ditulis GAGAL lebih dulu, RED-nya difoto dengan angka di pesan commit itu) lalu
+`b9fc0f3` (kode §4 rencana M3a). Tidak ada dependensi baru, tidak ada deploy, tidak ada push, tidak
+ada perintah DDL ke produksi.
+
+### Kontrak yang berubah di wire
+
+| Yang lama | Yang sekarang | Di mana |
+|---|---|---|
+| `/create` → `{sid, token, wsPath}` | → `{sid, token, leaderKey, wsPath}`; `leaderKey` 64 hex hanya di JSON ini, `wsPath` (yang disalin ke tautan join, nanti jadi QR) tidak memuatnya | `src/worker/index.ts:39` |
+| `tempo`/`start`/`stop` dari socket mana pun diterima | dijaga `assertLeader`; yang bukan pemegang podium dijawab `{t:'error',code:'NOT_LEADER'}` dan keadaan ruangan tidak tersentuh satu byte pun | `SessionDO.ts:182`, dipakai di `:275` (`tempo`) dan `:286` (`start`/`stop`) |
+| tidak ada frame `claim` | frame masuk baru `{t:'claim', lk}` — `lk` diverifikasi ULANG dari frame, hasil `hello` tidak dipercaya; sah → `leaderDid` pindah + `state` disiarkan | `SessionDO.ts:193-201` |
+| `members` = `SELECT COUNT(*) FROM member` (riwayat siapa yang pernah masuk) | `members` = jumlah socket `OPEN` di DO; angka itu sekarang bisa TURUN | `SessionDO.ts:153-159`, dipakai di `:105` (gerbang `FULL`), `:134` (`welcome`), `:240` (`state`) |
+| `state` hanya disiarkan saat tempo/transport/perubahan anggota | `webSocketClose` ikut menyiarkan | `SessionDO.ts:310-319` |
+| `leader` = peran dari URL | `leader` = punya `lk` DAN server belum menjawab `NOT_LEADER`; tombol "Ambil kendali" lahir dari penolakan itu | `ClickRoom.tsx:43-44`, `:62`, `:167`, `:315-318` |
+
+Isi frame `state` tidak bertambah dan tidak berkurang (`bpm`, `anchorMs`, `running`, `members`),
+`proto` tetap 2, dan `src/shared/limits.ts` tidak disentuh: `FrameCode` adalah daftar penolakan
+*BENTUK* frame, bukan daftar kode di wire, dan `live.ts` mencetak apa pun yang datang sebagai
+`server menolak: <kode>`. Tabel `member` tetap ada — ia tidak lagi jadi dasar angka apa pun, kecuali `rowsWritten` di
+`welcome`.
+
+### Bukti dari stack hidup lokal
+
+Command dan keluaran mentah, `wrangler dev --local` di `127.0.0.1:8787`. Yang diukur adalah `b9fc0f3`
+plus dokumen B3 ini di working tree; jam ukur `node -e
+"console.log(new Date().toISOString(), new Date().getTimezoneOffset())"` = 2026-11-16T19:09:46Z untuk
+`curl` di bawah, dan 2026-11-16T19:25:20.891Z / 2026-11-16T19:33:33.724Z (offset `-420`) untuk rerun
+gerbang sesudah dokumen:
+
+```
+curl -s -X POST http://127.0.0.1:8787/create
+kunci=sid,token,leaderKey,wsPath  lenLeaderKey=64  lkDiWsPath=false
+```
+
+- `npm run check` hijau. Durasi `real` tiga rerun: **0m8.403s** di `b9fc0f3` bersih (19:09Z),
+  **0m8.438s** dengan draf dokumen di tree (19:24Z), **0m8.321s** sesudah dokumen final (19:32Z) —
+  yang tidak berubah adalah isinya: typecheck bersih, `lint:arch OK — 4 berkas src/app/sync bersih`,
+  **103 tes unit** dalam 9 berkas (`live.spec` naik 16 → **18**, `gerbang.spec` 2 → **3**), **26 tes
+  worker** di `session.spec.ts` (20 → 26; +5 otoritas, +1 siaran saat close).
+- `npm run attack` hijau tanpa satu pun GAGAL, **real 0m2.098s** (run pertama) dan **0m3.404s**
+  (rerun 19:25Z) — T6a/b/c/e/d, T7a/b, T5a/b, dan empat kasus baru:
+  - **T12c** `/create` mencetak `leaderKey` 64 karakter, tidak ada di `wsPath`.
+  - **T12s** 12 socket `hello` → 12 `welcome` + `state`: kursi dihitung dari koneksi nyata.
+  - **T12a** 11 anggota × `tempo` → **11 `NOT_LEADER`**; siaran `state` di ruangan berjalan
+    `12/11/10/9/8/7/6/5/4/3/2/1` sebelum dan sesudah serangan — **identik byte** di layar pemimpin.
+  - **T12b** 100× `claim` tanpa `lk` → 100 `NOT_LEADER`; podium lama masih pegang kendali
+    (bpm 118), penolakan naik 101 → 102 untuk satu `tempo` tambahan, dan teks state pemimpin tidak
+    berubah.
+- `PC_LOG_FILE=/tmp/pc-dev.log npm run attack`: **T9a/T9b/T9d OK** di atas log yang tumbuh dari 97
+  baris / 4819 byte (run pertama) jadi 257 baris / 12839 byte (rerun — angka itu dihitung serangan
+  sendiri di dalam log yang sama), dan `grep -ac "sid=\|tok=" /tmp/pc-dev.log` → **0** (exit 1).
+  **T9c KOSONG** — `wrangler dev --local` build ini mencatat `GET /ws 101 Switching Protocols (29ms)`
+  TANPA query string, jadi localhost memang tidak bisa membuktikan apa-apa tentang `sid`; buktinya
+  tetap harus log produksi lewat `npm run tail`.
+- `npm run cek:ikon` tetap `8 berkas, 6 rujukan, tidak ada kembar, semua sha+IHDR cocok` — M3a tidak
+  menyentuh satu byte ikon pun, dan `scripts/gerbang-ikon.mjs` tidak diubah.
+
+### Konsekuensi yang sudah terukur, bukan diduga
+
+- **Kursi hantu.** Socket mentah tanpa dedupe `did`: yang ditolak `FULL` masih memegang satu
+  koneksi, jadi satu HP yang flap/reload sebelum socket lama terdeteksi tutup memakan **2 kursi**.
+  Terukur di `session.spec.ts:149`: ruangan dengan 12 HP nyata melaporkan `members: 13` ke
+  `welcome`. Apakah socket dihitung per `did` unik masih **[TANYA]** — dan karena itu tidak ada satu
+  pun tes yang mengasumsikan dedupe. Kalau jawabannya "ya", dua tempat yang berubah: gerbang `FULL`
+  (`SessionDO.ts:105-106`) dan `members` di `welcome` (`:134`).
+- **Gagal tertutup.** Tanpa baris `leader` tidak ada yang boleh memerintah. Konsekuensi hari deploy
+  yang harus dibaca sebelum klien dikirim ke HP: HP yang sudah ter-install dan tidak mengirim `lk`
+  masuk sebagai anggota biasa — termasuk HP pemimpin, karena `leaderKey` baru lahir hari itu.
+  Sesi yang dibuatnya tidak pernah mengikat `did` apa pun, jadi seluruh `tempo`/`start`/`stop`
+  miliknya dijawab `NOT_LEADER` sampai klien-nya diperbarui. Jalur pemulihannya ada di layar:
+  "Ambil kendali" (`ClickRoom.tsx:315-318`) hanya muncul kalau HP itu memegang `lk`.
+- `hello` pemimpin TIDAK menulis SQLite lagi kalau podium sudah terikat (`SessionDO.ts:125-127`):
+  `claimed_at` tetap jam podium benar-benar direbut, dan reconnect tidak membayar kuota tulis.
+
+### BELUM di M3a
+
+- Gerbang rencana §7 butir "ukur di stack hidup DUA perangkat" **belum dikerjakan**: pengikut yang
+  memaksa `tempo` dari layar → `NOT_LEADER` terlihat, `bpm`/`anchor` kedua layar tetap identik,
+  `0 hilang` tidak berubah, dan `N HP` TURUN saat satu perangkat ditutup. Yang terbukti hari ini
+  adalah jalur itu di socket (`T12a`/`T12b`) dan di layar lewat unit test, bukan di dua HP.
+- Setlist (tabel, layar, frame-nya sendiri) keluar ke **M3b** — bukan pekerjaan yang tertinggal.
+- QR menyusul di M4; sampai itu terjadi, tautan join tetap kunci ruangan: siapa pun yang membukanya
+  bisa masuk, dan hari ini ia masuk sebagai anggota.
 
 ## Antrean defect yang belum punya gerbang
 

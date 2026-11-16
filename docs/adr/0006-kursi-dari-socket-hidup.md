@@ -1,0 +1,101 @@
+# ADR-0006: `N HP` dihitung dari socket hidup, bukan dari riwayat tabel `member`
+
+**Tanggal**: 2026-11-17 (= 2026-11-16T19:33:33.724Z dengan offset `-420`, jam `node -e
+"console.log(new Date().toISOString(), new Date().getTimezoneOffset())"` saat dokumen ini diukur;
+kode yang didokumentasikan diukur di `127.0.0.1:8787` pada 2026-11-16T19:09:46Z)
+**Status**: accepted — satu tafsirnya masih **[TANYA]**, lihat "Alternatif 2" dan "Risiko"
+**Dasar perintah**: arahan B0–B4 + §6.2 sesi pemeriksa `2d6f4ca7-3aba-44e4-ab8d-470daf00b560`
+(penanda `S6`, `docs/plans/2026-11-15-m3-otoritas-pemimpin.plan.md` §8.2). Dua jawaban §6 yang
+pemilik berikan 2026-11-15 lewat AskUserQuestion, via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-15T09:16:14.324Z
+(baris `S1` tabel §8.2): "Socket hidup (getWebSockets)" dan "Rebut dengan lk, eksplisit". Apakah
+socket itu harus dihitung per `did` unik dinyatakan **tidak** terjawab oleh arahan 16 Nov itu, jadi
+kode hari ini memakai socket MENTAH dan pertanyaannya dibiarkan terbuka — ini bukan pilihan saya.
+
+## Konteks
+
+Janji yang ditulis M1b di README (bagian "M1b: klik yang terdengar", butir 7) ada dua: angka `N HP`
+disegarkan oleh server lewat frame `state`, dan angkanya dibaca ulang dari `SELECT COUNT(*) FROM
+member` "supaya orang ke-13 yang ditolak `FULL` tidak menambah satu HP hantu". Janji pertama benar;
+yang kedua punya lubang yang tidak terlihat dari balik kalimat itu: `member` adalah **riwayat** (satu
+baris per `did` yang pernah masuk, `INSERT OR IGNORE`), jadi angkanya hanya bisa NAIK. HP yang menutup
+tab, HP yang baterainya mati, dan HP yang network-nya putus tidak pernah menghapus barisnya. Setelah
+latihan pertama, ruangan melaporkan `12 HP` selamanya dan gerbang `FULL` menolak orang baru padahal
+kursinya kosong.
+
+M3a menyentuh angka yang sama dari sisi lain: otoritas pemimpin membuat identitas socket jadi hal
+yang harus ada (`Map<WebSocket, {sid, did}>`, `SessionDO.ts:113`), dan identitas per-socket adalah
+tepat satu hal yang dibutuhkan untuk menghitung kursi.
+
+## Keputusan
+
+Satu fungsi, dipakai di tiga tempat: `seatCount()` (`SessionDO.ts:153-159`) menghitung socket yang
+`readyState === OPEN` dari `this.ctx.getWebSockets()`. **Angka mentah, tanpa deduplikasi `did`.**
+
+- Gerbang `FULL`: `!terdaftar && kursi > MAX_MEMBERS` (`:105-106`). Bentuk `total + 1` yang lama
+  hilang karena socket yang masuk sudah menghitung dirinya sendiri.
+- `members` di `welcome`: `kursi` (`:134`), sama seperti di `state`.
+- `members` di `state`: `this.seatCount()` (`:240`) — dan supaya angka itu bisa TURUN,
+  `webSocketClose` sekarang menyiarkan `state` (`:310-319`). Ini perilaku baru di wire: sebelumnya
+  `state` hanya lahir dari perubahan tempo/transport/anggota.
+- Tabel `member` TETAP ada. Ia tidak lagi jadi dasar angka apa pun kecuali `rowsWritten` di
+  `welcome`, yang masih dipakai untuk memutuskan apakah satu `hello` layak disiarkan. Aturan
+  siaran `hello` jadi: socket baru **atau** `rowsWritten > 0` (`:141-144`) — dua belas HP yang reload
+  serentak tetap tidak boleh mengirim dua belas frame ke ruangan yang sedang menghitung beat.
+- `proto` tetap 2; isi frame `state` tidak bertambah dan tidak berkurang, hanya **arti** `members`
+  yang berubah. Klien lama tetap membaca angka itu sebagai "N HP", dan mulai hari ini angkanya bisa
+  turun — itu justru yang dijanjikan M1b.
+
+## Alternatif yang dipertimbangkan
+
+1. **Tetap `SELECT COUNT(*) FROM member`** — tolak: tidak menjawab penyakitnya. Angka tak pernah
+   turun dan `FULL` jadi permanen sampai DO di-evict (terukur di `session.spec.ts:151-160`: sesudah
+   satu HP pulang, `members` turun ke 12 dan orang yang tadi ditolak boleh masuk — dasar riwayat
+   tidak bisa melakukan itu).
+2. **Socket hidup dihitung per `did` unik** (`new Set(peers.map(p => p.did)).size`) — **tidak
+   dikerjakan, bukan ditolak**: ini pertanyaan bernama yang statusnya **[TANYA]** di atas. Kalau
+   jawabannya "ya", dua tempat yang berubah: gerbang `FULL` (`SessionDO.ts:105-106`) dan `members`
+   di `welcome` (`:134`) — dan tes `session.spec.ts:149` yang hari ini menuntut `members: 13` ikut
+   pindah jadi `12`.
+3. **Hitung jumlah entri `peers`** (socket yang sudah `hello`) — tolak: yang membuka koneksi lalu
+   tidak pernah `hello` jadi gratis, padahal socket itu tetap hidup dan tetap memakan koneksi DO.
+   Kursi yang gratis adalah kursi yang bisa diborong.
+4. **`getWebSockets()` tanpa filter `readyState`** — tolak: socket yang sedang dalam proses ditutup
+   (`CLOSING`) masih terhitung, jadi siaran di `webSocketClose` melaporkan angka yang belum turun.
+   Dua assertion yang menuntut angka SESUDAH penutupan meleset satu kursi kalau begitu:
+   `session.spec.ts:156` (`members: 12`, sesudah satu HP pulang) dan `:595-599` (`members: 1`,
+   sesudah socket kedua ditutup).
+
+## Konsekuensi
+
+**Lebih mudah:** `N HP` sekarang berarti kursi, bukan riwayat — ia naik saat orang masuk dan TURUN
+saat orang keluar, dan tidak ada lagi ruangan yang terkunci `FULL` permanen; identitas socket yang
+sudah dibutuhkan `assertLeader` (ADR-0005) dipakai untuk dua hal, tidak perlu dicatat dua kali.
+
+**Lebih sulit, dan ini yang harus dibaca sebelum menjawab [TANYA]:** satu HP yang network-nya flap
+atau me-reload halaman sebelum socket lama terdeteksi tutup memegang **dua kursi**. Terukur di
+`session.spec.ts:145-149`: ruangan dengan 12 HP nyata melaporkan `members: 13` di `welcome`. Efek
+lengkapnya: **kalimat M1b "orang ke-13 yang ditolak `FULL` tidak menambah satu HP hantu" tidak lagi
+berlaku untuk angka kursi** — yang ditolak memang tidak menyiarkan apa pun (tes `:302-331` masih
+menuntut `members` terakhir ruangan tetap 12 dan tidak ada frame baru sama sekali), tapi socket-nya
+hidup dan terhitung di siaran berikutnya. Dua belas HP yang reload serentak di tengah latihan bisa
+menjatuhkan orang-orang berikutnya ke `FULL` palsu.
+
+**Risiko & penahan:** `getWebSockets()` hanya menghitung socket di isolate DO ini — itu memang
+defenisi "kursi di ruangan ini", tapi berarti angka itu ikut hilang saat DO di-evict sementara baris
+`member` bertahan; untungnya `peers` dibangun ulang dari `hello` berikutnya dan `leader` terbaca dari
+SQLite, jadi tidak ada keadaan yang bercabang dua. Kapasitas 12 masih bisa dihabiskan oleh koneksi
+yang sengaja dibuka dan tidak pernah `hello`; tidak ada penahan untuk itu di M3a (rate limit ada di
+`/create`, bukan di `/ws`), dan itu konsekuensi langsung dari Alternatif 3.
+
+## Test
+
+`src/worker/session.spec.ts`: `ke-13 ditolak FULL, dan kursi dari socket yang ditutup bisa dipakai
+lagi` (`:122`, termasuk angka hantu `members: 13` di `:149`), `orang ke-13 ditolak FULL tanpa membuat
+hitungan HP jadi 13` (`:302` — kesimpulannya tetap, alasannya pindah dari SQL ke socket), dan tes baru
+`socket yang ditutup menurunkan jumlah kursi di layar HP yang masih di dalam` (`:584`; tanpa tes ini
+butir 2c jadi cabang tak teruji). Rencana §4 mendaftarkan delapan posisi assertion `members` lama;
+barisnya sudah bergeser karena enam tes baru, jadi yang saya baca ulang adalah **19** assertion
+`members` yang ada di berkas hari ini (`:105, :116, :118, :135, :149, :156, :160, :256, :267, :276,
+:295, :327, :351, :468, :492, :560, :569, :590, :599`) dan `rowsWritten: 0` pada tes reconnect
+(`:118`) tetap sah karena tabel `member` tidak dihapus. Sisi stack hidup: `scripts/attack.ts`
+**T12s** — 12 socket `hello` dijawab 12 `welcome` + `state`, kursi dihitung dari koneksi nyata.
