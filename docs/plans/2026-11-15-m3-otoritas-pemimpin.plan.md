@@ -439,7 +439,7 @@ menjadi jalur buntu. Rantai yang saya kutip sebagai janji ada di `live.ts:146-15
   saya = A→A, B→B, "hello ulang"→C, "kursi/`getWebSockets` bertahan"→C; **D** saya (fail-closed)
   adalah yang mereka minta saya tambah sendiri. Yang belum ada di versi saya sebelum lampiran masuk:
   DO dibangunkan lebih dulu lewat socket **pengikut** (`q.kirim({t:'ping'})`, berkas mereka `:109`)
-  sebelum `hello` pemimpin — sekarang di `eviction.spec.ts:120-122` dengan syarat `pong` pengikut
+  sebelum `hello` pemimpin — sekarang di `eviction.spec.ts:120-122` (baris `343a020`/`0967b4e`; di HEAD `:132-134`) dengan syarat `pong` pengikut
   lebih dulu. Kontrol positif ini lahir **sesudah** hijau, jadi ia tidak saya klaim sebagai RED;
   yang RED tetap A/B di `297428a`. Ukur ulang: `4 passed (4)`, 2,82 s; `npm run check` **EXIT=0**,
   `real 0m9.387s`, 103 unit + 31 worker.
@@ -768,4 +768,122 @@ unit `103 passed (103)` dalam 9 berkas (456 ms), worker `32 passed (32)` dalam 2
 provenance: checker melaporkan "103 unit + 40 worker" di `9328e25`; angka worker itu punya mereka dan tidak bisa saya
 reproduksi — berkas tes worker di HEAD ini dua (`session.spec.ts` 27 + `eviction.spec.ts` 5 = 32), dan `git diff`
 menyatakan tidak ada berkas tes baru sejak `0967b4e`.
+
+## 8.7 Susulan ronde #4 — lampiran mendarat, satu kalimatnya dikoreksi seperlunya, dan peta langkah probe ↔ D/E
+
+**Peristiwanya.** Checker mencabut kalimatnya sendiri di §3a ronde #4 ("lampiran prompt ini = berkasnya,
+`probe-checker.spec.ts:91-110`") karena berkasnya tidak dilampirkan, lalu benar-benar melampirkannya di susulan.
+Dua berkas itu sekarang ada dan saya ukur — dibaca, tidak disalin:
+
+| berkas | byte | baris | sha256 | mtime filesystem (UTC) |
+|---|---|---|---|---|
+| `Temp/pc-verify3/src/worker/probe-checker.spec.ts` | 4638 | 112 | `3738fe1fa26b7de51707675c651ff7a06ed3bc71e611d22f4647fce60bbd415d` | 2026-11-16T21:54:18.585Z |
+| `Temp/pc-v4-pagar.cjs` | 1621 | 32 | `1988de251213aba5d8438600d644faa7cce32ea5fb9a7afe2cdc3ce26efaf385` | 2026-11-16T23:04:30.099Z |
+
+mtime adalah metadata berkas, bukan jam kirim pesan, dan tidak saya naikkan jadi alamat turn. Commit tes E saya
+(`73464b2`) berjam committer `2026-11-17T06:21:08+07:00` = `2026-11-16T23:21:08Z`, jadi mtime probe **mendahului**
+E; saya karena itu tidak mengklaim "tidak mungkin menyalin" dari jam. Yang bisa saya tunjuk adalah isinya: E
+ditulis dengan helper saya sendiri (`sejak`/`nungguDalam`/`kerangka`, `eviction.spec.ts:60-76`) dan gerbang yang
+lebih ketat dari probe, dan `git diff --numstat f383335..HEAD -- src/worker/eviction.spec.ts` **kosong** — D dan E
+byte-identik dengan yang checker ukur (sha256 `c2368cf3211b126a9e662440e0a71ab16dd0259dae3ffeb367935d68d5fea8be`).
+
+**Struktur probe, setiap hitungan dengan polanya.** Grep atas berkas lampiran: `^it\(` = **3** (baris 44, 70, 91);
+`expect\(` = **4** (65, 85, 86, 110); `console\.log\(` = **5** (62, 84, 102, 107, 109).
+
+**Koreksi seperlunya atas kalimat susulan, bukan penolakan atas kesimpulannya.** "P3 (`:91-110`) … tidak satu pun
+`expect` yang menggerbang" tidak persis benar: P3 menutup di baris **113**, dan di dalamnya ada tepat satu `expect`
+— **`:110` `expect(w).not.toBeNull()`** — yang menggerbang kedatangan `welcome` peniru, bukan otoritasnya. Inti
+kalimat itu berdiri: `diterima` dihitung di `:108`, dicetak di `:109`, dan tidak pernah di-assert, jadi "3 passed"
+memang tidak berarti aman. Saya catat koreksinya supaya tidak diwarisi jadi "probe itu tanpa expect sama sekali".
+
+**Angka run probe tetap angka checker.** `3 passed (3)`, `3944ms`, `EXIT=0` saya kutip dan tidak saya ukur ulang:
+menjalankan vitest di worktree mereka menulis cache ke direktori yang standing order-nya "jangan kamu sentuh".
+Fakta yang P3 catat sudah saya ukur sendiri lewat jalur lain — RED tes E di `73464b2` menangkap
+`{"t":"state","bpm":177,…}` mendarat di socket peniru ber-did pemimpin tanpa lk.
+
+**Worktree mereka sudah bergerak, dan itu mengubah cara membaca "@0967b4e".** Diukur read-only ronde ini:
+`git -C pc-verify3 rev-parse HEAD` = **9328e25**; sha256 `SessionDO.ts` di sana = `293db161…d161`, **identik dengan
+HEAD saya** (post-(b)), sedangkan versi `0967b4e` = `6ba3285a…af71`; `eviction.spec.ts` di sana juga identik dengan
+HEAD saya (sudah memuat E). Jadi direktori itu hari ini bukan keadaan tempat "177 diterima = true" diukur. Saya
+tidak checkout, tidak menulis, dan tidak menjalankan apa pun di sana; angka historis mereka tetap sah dengan label
+"dilaporkan checker".
+
+**`pc-v4-pagar.cjs` saya jalankan sendiri** (`node Temp/pc-v4-pagar.cjs`; 32 baris yang seluruhnya deklarasi +
+`console.log`, tidak menulis berkas, tidak menyentuh jaringan), `EXIT=0`:
+
+```
+kasus                                          pagarLama  pagarBaru
+claim DITOLAK (terukur P2)                     LULUS     LULUS
+claim fail-open (SIMULASI)                     LULUS     MERAH
+claim ditolak tapi code INTERNAL (M1 executor) LULUS     MERAH
+```
+
+Label **SIMULASI tidak saya naikkan**: baris kedua tetap simulasi karena mutasi server yang sungguh masih diblokir
+permission layer di dua sesi. Yang berubah hanya kepemilikan angka — tabel ini sekarang ukuran saya juga. Dua
+catatan provenance atas skrip itu, keduanya terukur: (1) komentar `:11` menunjuk `eviction.spec.ts:150` dan itu
+**cocok persis** dengan `0967b4e` (baris 150 di commit itu = `expect … NOT_LEADER … 'tempo dari pengikut harus tetap
+ditolak'`); (2) fixture `sebelum` memakai `did: 'ikut0004'` dan `bpm: 120` (`:9-10`), sementara P1/P2 yang terlampir
+memakai `ikut0011`/`ikut0012` dan `bpm: 180` (`:50`, `:54`, `:76`) — jadi kalimat "output NYATA yang diukur probe
+P1/P2 ronde #3" (`:2`) tidak cocok dengan identifier fixture-nya sendiri; `ikut0004` adalah did pengikut di tes **D
+saya**. Kesimpulan strukturalnya tidak berubah: `pagarLama` = `.find` atas riwayat gabungan (`:14-15`) → vacuous,
+`pagarBaru` = tepat 1 NOT_LEADER + 0 state di jendela (`:17-19`) → bentuk yang sama dengan D `:171-178` dan
+E `:221-228`.
+
+**Peta langkah probe ↔ suite saya.** Semua baris di kolom kanan adalah `src/worker/eviction.spec.ts` di HEAD:
+
+| langkah probe | baris probe | di suite saya |
+|---|---|---|
+| lahir dari `/create`, IP sendiri per tes | 12-19; 45, 71, 92 | `lahir()` 27-34; E pakai `205` (193) |
+| pemimpin `hello` ber-lk → tunggu `welcome` | 47-48, 73-74, 94-95 | E 195-196 |
+| socket kedua `hello` tanpa lk → `state members 2` | 50-51, 76-77 | E 202-203 (did-nya did pemimpin) |
+| `evictDurableObject` | 53, 79 | D 159; E 242 (fase 2) |
+| `tempo` dari socket tanpa lk → `NOT_LEADER` | 54-55 | D 161-162 |
+| hitung `NOT_LEADER` yang sudah ada sebelum claim | 57, **65** | **tidak ada sebagai assertion** (celah 1) |
+| jendela terpisah: `dasar` lalu `slice(dasar)` | 58-61, 80-83, 103-106 | `sejak()` 60; D 163+170; E 211-215 |
+| `claim` tanpa lk **tanpa tempo mendahului**, sesudah evict | 70-89 (79-86) | **tidak ada** (celah 2) |
+| settle tetap `tenang()` 1200 ms | 38-40; 60, 82, 105 | E `nungguDalam` 214 + `tenang(400)` 232, ditutup sapuan riwayat 247-250 |
+| `welcome` peniru di-assert | 101-102, **110** | **tidak ada di suite saya** (celah 3) |
+| `tempo 177` dari peniru ber-did sama | 104 | E 240 |
+| `diterima` hanya dicetak, tidak digerbang | 108-109 | E menggerbangnya: 221-224 (tepat 1), 225-228 (0 state peniru), 234-237 (0 state pemimpin), 247-250 (riwayat penuh kedua socket) |
+| kontrol positif pemimpin sesudah dua penolakan | tidak ada di probe | E 253-258 (199 harus diterima) |
+| fase serangan sesudah evict | tidak ada di P3 | E 242-243 (188) |
+
+**Tiga langkah probe yang hilang dari suite saya, disebut namanya seperti yang diminta:**
+
+1. **`expect(sebelum).toBeGreaterThan(0)` — probe `:65`.** Ini assertion *meta*: ia membuktikan pagar D yang lama
+   vacuous, bukan perilaku server. Di D saya fakta yang sama dijamin oleh penolakan tempo yang di-assert di `:162`
+   plus `toBe(1)` di `:174`: kalau seseorang mengembalikan pemindaian dari indeks 0, hitungannya jadi 2 dan D merah.
+   Itu **deduksi dari bentuk pagar, bukan ukuran** — saya tidak menjalankan mutan pagar untuk membuktikannya.
+2. **P2 seluruhnya — probe `:70-89`, khususnya `:79-86`: `claim` tanpa lk sesudah evict tanpa satu pun penolakan
+   sebelumnya.** Ini benar-benar tidak ada di suite saya: D selalu mendahului claim dengan `tempo 180` (`:161`),
+   dan B menguji claim **ber**-lk (`:107`). Jalur ini bukan lubang untuk fail-open (jendela D `:171-178` akan merah
+   kalau claim menyiarkan state), tapi ia mengikat sifat yang berbeda: penolakan tidak boleh bergantung pada
+   penolakan yang sudah tercatat. Kalau checker mau ini jadi tes permanen, itu perintah baru dan saya kerjakan
+   terbuka — dengan laporan apa adanya bahwa ia kemungkinan hijau di `0967b4e` maupun di HEAD (P2 mereka sendiri
+   mencatat claim DITOLAK di `0967b4e`), jadi ia tes cakupan, bukan reproducer, dan tidak punya RED.
+3. **`expect(w).not.toBeNull()` untuk `welcome` peniru — probe `:101-102` + `:110`.** E menunggu `members === 2` di
+   socket **pemimpin** (`:203`), yang membuktikan hello peniru diproses dan duduk, tapi tidak menggerbang bahwa
+   peniru sendiri menerima `welcome`. Dari berkas lain di worktree mereka (bukan lampiran susulan ini):
+   `probe-independen-r5.spec.ts:206` menggerbangnya langsung (`'hello tanpa lk harus tetap diterima sebagai
+   anggota'`), jadi celah ini sudah tertutup di sisi mereka, tidak di sisi saya.
+
+**Yang saya temukan di direktori itu tapi TIDAK dilampirkan dan tidak saya jalankan:**
+`probe-independen-r5.spec.ts`, 11179 byte, mtime `2026-11-16T23:35:45.559Z`, lima `^it\(` di baris 61, 108, 142,
+173, 201 (I1 start/stop peniru · I2 hello ulang tanpa lk = downgrade lalu claim memulihkan · I3 lk sah + did lain
+tidak merebut podium · I4 flag bertahan lintas hibernasi tanpa hello ulang · I5 sesi tanpa pemimpin ber-lk).
+Saya hanya membaca baris grep-nya; tidak dijalankan (menulis ke worktree mereka), tidak disalin, dan tidak saya
+klaim sebagai ukuran saya. Keberadaannya saya catat supaya tidak jadi lampiran hantu ronde berikutnya.
+
+**Kutipan lama yang saya verifikasi ulang, bukan saya cabut.** README `:653-663` dan plan `:436-445` menunjuk
+lampiran ronde #2 di `Temp/pc-verify/src/worker/eviction.spec.ts`; ronde ini saya baca ulang berkas itu dan
+anchor-nya cocok: nama tes keempat di `:98`, `q.kirim({ t: 'ping', nonce: 1, t1: Date.now() })` di **`:109`**.
+Yang perlu disebut: anchor `:120-122` dan `:138` di dua dokumen itu adalah baris versi **158 baris** (`343a020`,
+`git show … | wc -l`), dan keduanya masih berlaku di `0967b4e` (171 baris); di HEAD (262 baris, `wc -l`) langkah ping
+pengikut pindah ke `:132-134` dan tes D ke `:150`. Saya beri label commitnya di tempat masing-masing supaya tidak
+ada yang membaca anchor itu sebagai baris HEAD.
+
+**Tidak ada tes baru dan tidak ada baris produksi yang berubah karena susulan ini.** Susulannya menyatakan semua
+syarat ronde #4 tidak berubah, §3 sudah hijau dan terukur (`73464b2` RED → `f383335` GREEN → `9328e25` docs), dan
+§4 sudah jadi dokumen (`acc8afd`). Yang susulan ini tambah hanyalah bukti: lampiran yang bisa dibaca, koreksi atas
+satu kalimatnya, dan peta celah di atas.
 

@@ -660,7 +660,7 @@ berpindah tangan **atau ter-evict**" — dibayar oleh tombol yang tidak bisa bek
   bangkitnya DO lewat **socket pengikut** — di berkas mereka `q.kirim({t:'ping'})` di `:109`
   mendahului `hello` pemimpin. Versi saya membangunkan DO lewat socket pemimpin saja, yang masih
   membuktikan cacatnya tapi bukan urutan yang terjadi di ruangan sungguhan. Sekarang ikut di tes
-  **C** (`eviction.spec.ts:120-122`): ping pengikut harus dijawab `pong` lebih dulu, baru `hello`
+  **C** (`eviction.spec.ts:120-122` di `343a020`/`0967b4e`; di HEAD yang memuat E: `:132-134`): ping pengikut harus dijawab `pong` lebih dulu, baru `hello`
   pemimpin, dan `members` harus tetap 2. Ini **kontrol positif yang lahir setelah hijau**, bukan
   reproduksi MERAH — yang MERAH tetap A dan B di `297428a`. Ukur ulang sesudah langkah itu:
   `npx vitest run --config vitest.worker.config.ts src/worker/eviction.spec.ts` → **4 passed (4)**,
@@ -905,8 +905,27 @@ sungguhan. Bentuk editnya diblokir permission layer dua kali di sesi saya, dan p
 ronde #4 bahwa edit mutasi mereka di `SessionDO.ts` kena blok yang sama — jadi tidak ada yang boleh menulis
 "checker mengukur mutasi server". Yang mereka punya adalah kontrol positif **di tingkat assertion**
 (`pc-v4-pagar.cjs`, di worktree mereka, tidak di-commit): pagar lama LULUS untuk ketiga kasus (vacuous), pagar
-baru MERAH untuk fail-open yang **disimulasikan** dan untuk M1. Label SIMULASI itu dari mereka; angkanya tidak
-saya jalankan ulang, dan tidak saya tulis sebagai angka saya.
+baru MERAH untuk fail-open yang **disimulasikan** dan untuk M1. Label SIMULASI itu dari mereka dan tidak saya
+naikkan. **Koreksi ronde #5:** kalimat "angkanya tidak saya jalankan ulang" sudah tidak berlaku — sesudah
+lampirannya benar-benar datang, skrip 32 baris itu saya jalankan sendiri (`node`, `EXIT=0`, hanya `console.log`)
+dan tabelnya sekarang ukuran saya juga; angka mentahnya di plan §8.7. Baris `claim fail-open` tetap **SIMULASI**.
+
+**Susulan ronde #4 — lampiran mendarat, dan satu kalimatnya saya koreksi seperlunya.** Checker mencabut klaim
+"lampiran prompt ini = berkasnya, `probe-checker.spec.ts:91-110`" karena berkasnya tidak dilampirkan, lalu
+melampirkannya. Sekarang terukur: `probe-checker.spec.ts` 4638 byte / 112 baris / sha256 `3738fe1f…415d`, dan
+`pc-v4-pagar.cjs` 1621 byte / 32 baris / sha256 `1988de25…f385`. Strukturnya (Grep, pola disebut): `^it\(` = 3
+(44, 70, 91), `expect\(` = 4 (65, 85, 86, 110), `console\.log\(` = 5 (62, 84, 102, 107, 109). Jadi "P3 tidak satu
+pun `expect`" tidak persis benar — ada satu di **`:110`** (`expect(w).not.toBeNull()`, menggerbang kedatangan
+`welcome`, bukan otoritas), dan P3 menutup di `:113` bukan `:110`; inti kalimatnya berdiri karena `diterima`
+(`:108`) hanya dicetak (`:109`). Angka run mereka (`3 passed`, 3944 ms) tetap saya kutip: menjalankan vitest di
+worktree mereka menulis ke direktori yang tidak boleh saya sentuh. Yang juga terukur ronde ini: worktree
+`pc-verify3` hari ini ber-HEAD **9328e25** dengan `SessionDO.ts` sha256 identik dengan HEAD saya (post-(b)), jadi
+"@0967b4e" pada angka itu adalah keadaan historis, bukan isi direktori itu sekarang. Peta langkah P1/P2/P3 ↔ tes
+D/E saya, termasuk **tiga langkah probe yang tidak ada di suite saya** (assertion `sebelum > 0` di `:65`; P2
+`claim` tanpa lk tanpa tempo mendahului `:79-86`; `welcome` peniru di-assert `:110`), ada di plan §8.7 — disebut
+namanya dan ditunjuk barisnya, bukan disembunyikan. Tidak ada tes baru dan tidak ada baris produksi yang berubah
+karena susulan ini: `git diff --numstat f383335..HEAD -- src/worker/eviction.spec.ts` kosong, D dan E byte-identik
+dengan yang checker ukur.
 
 ### BELUM di M3a
 
