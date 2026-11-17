@@ -737,10 +737,29 @@ Kalimat kedua itu eksplisit: kotak persetujuan tidak membukanya. Saya sudah bert
 di sesi ini dan jawabannya "Bolehkan mutasi fail-open di worktree" — jawaban itu dulu tidak saya tulis sebagai
 alamat karena jamnya tidak saya ukur saat mendarat; **ronde #4 mengukur jamnya sendiri** di transkrip sesi ini:
 baris 16130, `type: user` dengan `tool_result` `tool_use_id call_3ce2b742e1e6443bad8ba78b` pada
-`2026-11-16T22:09:35.300Z` (`via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-16T22:09:35.300Z`), dan dua catatan
-blokir mengapitnya di baris 16122 (`22:08:12.998Z`) dan 16136 (`22:09:54.406Z`). Angka yang dirolay checker untuk
-dua blokir itu — `22:08:13.002Z` dan `22:09:54.408Z` — tidak ada sebagai field `timestamp` di transkrip saya
-(`grep -c` = 0 untuk kedua bentuk), selisihnya 2–4 ms; yang ditulis di dokumen adalah yang terukur.
+`2026-11-16T22:09:35.300Z` (`via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-16T22:09:35.300Z`).
+
+**KOREKSI (TEMUAN 7, 17 Nov).** Yang saya commit di `9328e25` menyebut "dua catatan blokir **mengapit**"
+jawaban itu, dan itu salah bentuk. Rantai yang terukur di berkas yang sama, berurutan:
+
+```
+16122  22:08:12.998Z  tool_result call_22b6132cb6fc4492b8eaae86   Error: … [Security Weaken] …
+16128  22:08:32.060Z  tool_use    call_3ce2b742e1e6443bad8ba78b   ← saya bertanya
+16130  22:09:35.300Z  tool_result call_3ce2b742e1e6443bad8ba78b   ← "Bolehkan mutasi fail-open di worktree"
+16134  22:09:40.387Z  tool_use    call_6c8fb71e59424a4f95c60c66   ← saya coba ulang edit yang sama
+16136  22:09:54.406Z  tool_result call_6c8fb71e59424a4f95c60c66   Error: … [Security Weaken] … HARD BLOCK …
+```
+
+Kedua blokir itu mengapit **dua percobaan saya**, bukan respons pemilik. Dan yang lebih penting: penolakan
+kedua mendarat **19,106 s SESUDAH** izin (`22:09:54.406Z` − `22:09:35.300Z`, hitung dari dua field jam di
+atas). Bentuk kalimat yang benar karena itu bukan "saya belum minta izin", tapi **izin sudah diberikan dan
+layer itu tetap menolak** — itu memperkuat, bukan melemahkan, catatan jujur di bawah. Angka yang dirolay
+checker untuk dua blokir itu — `22:08:13.002Z` dan `22:09:54.408Z` — tetap tidak ada sebagai field `timestamp`
+di transkrip saya (`grep -c` = 0 untuk kedua bentuk), selisihnya 2–4 ms; yang ditulis di dokumen yang terukur.
+Satu label lain jangan ditukar dengan `[Security Weaken]`: blokir `[Session Transcript Tampering]` di baris
+**16389** (`22:22:09.030Z`, `call_1b81bcebfbd942e98831fab1`) adalah kejadian berbeda dan lebih akhir — itu
+pembacaan uuid di dalam berkas transkrip, bukan mutasi di `SessionDO.ts`.
+
 Gerbangnya tetap tidak terbuka karenanya, dan saya tidak
 mengakali bentuk yang sama (tidak menulis lewat `sed`, tidak menaruh mutan di berkas lain). Yang saya ukur
 sebagai gantinya adalah **dua mutan yang tetap menolak dan tidak memindahkan podium**:
@@ -909,7 +928,10 @@ saya jalankan ulang, dan tidak saya tulis sebagai angka saya.
   Apakah butir §7 perlu diformulasikan ulang ("jalur UI-nya memang tidak ada, jadi yang diuji di
   kawat") atau perlu jalur UI baru supaya penolakan itu bisa terlihat — [TANYA] untuk checker/pemilik;
   saya berhenti di sini dan tidak menjawabnya sendiri.
-- Setlist (tabel, layar, frame-nya sendiri) keluar ke **M3b** — bukan pekerjaan yang tertinggal.
+- Setlist (tabel, layar, frame-nya sendiri) keluar ke **M3b** — bukan pekerjaan yang tertinggal. Rencana
+  M3b-nya sudah ditulis 17 Nov di `docs/plans/2026-11-17-m3b-setlist.plan.md`, dan berkas itu adalah dokumen:
+  baris yang membuka kode masih kosong, jadi tidak satu pun berkas `src/**` untuk setlist boleh saya sentuh
+  sebelum ada izin bertangan.
 - QR menyusul di M4; sampai itu terjadi, tautan join tetap kunci ruangan: siapa pun yang membukanya
   bisa masuk, dan hari ini ia masuk sebagai anggota.
 - M3a **belum LULUS penuh, dan sejak ronde #4 alasannya cuma satu: gerbang §7 yang butuh dua perangkat nyata

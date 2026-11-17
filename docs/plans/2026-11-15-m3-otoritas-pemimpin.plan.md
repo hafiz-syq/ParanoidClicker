@@ -600,7 +600,9 @@ boleh jadi alasan dokumen itu lulus).
 
 **Yang tidak kucek / masih berasumsi di ronde ini.** (1) fail-open `claim` tidak terukur oleh siapa pun — lihat
 tabel di atas; (2) jam jawaban pemilik atas pertanyaan mutasi 5b dulu tidak ada alamatnya — **ronde #4 mengukurnya** `via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-16T22:09:35.300Z`
-(`tool_use_id call_3ce2b742e1e6443bad8ba78b`, baris 16130 transkrip saya) dan dua blokirnya mengapit jawaban itu (lihat §8.5);
+(`tool_use_id call_3ce2b742e1e6443bad8ba78b`, baris 16130 transkrip saya); **bentuk kalimat saya salah dan sudah
+dikoreksi di README "KOREKSI (TEMUAN 7)"**: dua blokir itu mengapit dua percobaan saya, bukan respons itu, dan
+penolakan kedua mendarat 19,106 s SESUDAH izin (lihat baris 7 dan 9 tabel §8.5);
 (3) exploitasinya masih deduksi: saya tidak pernah mencoba memakai lubang `did` dari
 perangkat kedua sungguhan, hanya dari dua socket di satu proses workerd; (4) `rowsWritten`/`members` di frame
 peniru saya baca dari output probe, bukan dari tabel SQLite; (5) angka T9c/serangan hidup ronde #2 tidak saya
@@ -633,9 +635,11 @@ catat sebagai laporan checker, dan baris 3794 di atas adalah alamat yang benar-b
 | 3 | E HIJAU + tidak ada regresi | `npx vitest run --config vitest.worker.config.ts` di `f383335` | `EXIT=0`, **`32 passed (32)`**, `Duration 9.40s` — `eviction.spec.ts` 5 tests 5251ms (A 1367 · B 1308 · D 1296 · E 1103 ms) + `session.spec.ts` 27 tests 2601ms |
 | 4 | Kontrak & klien tidak tersentuh | `git diff --numstat 0967b4e..HEAD -- src/shared/limits.ts src/worker/session.spec.ts src/app src/screens` | **keluarannya kosong.** `proto` tetap 2 (`src/worker/index.ts:25`); `tempo`/`start`/`stop` tetap tanpa `lk`/`did` (`SessionDO.ts:314`, `:325`) |
 | 5 | Ukuran attachment | `node -e`, panjang `JSON.stringify` nilai yang ditulis | `{sid,did}` **39** byte · `{sid,did,lkDibuktikan}` **59** · **75** pada bentuk terbesar yang diterima server (`sid` 4 oleh `isSid` `src/shared/ids.ts:16-18`, `did` ≤ 32 `SessionDO.ts:120`) vs batas vendor 16.384 |
-| 6 | Penjaga provenansi | `npx vitest run scripts/gerbang.spec.ts` | `EXIT=0`, 3 passed (3), `Duration 651ms` (tests 29ms) |
-| 7 | Alamat jawaban mutasi 5b (ronde #2) | grep transkrip `d27c1add…jsonl` | baris **16130**, `tool_use_id call_3ce2b742e1e6443bad8ba78b`, `2026-11-16T22:09:35.300Z`; dua blokir mengapit (baris 16122 dan 16136). Ini menjawab "yang tidak kucek" butir (2) di §8.4 |
+| 6 | Penjaga provenansi (diukur sebelum berkas rencana M3b ada) | `npx vitest run scripts/gerbang.spec.ts` | `EXIT=0`, 3 passed (3), `Duration 651ms` (tests 29ms) |
+| 7 | Alamat jawaban mutasi 5b (ronde #2) | grep transkrip `d27c1add…jsonl` | baris **16130**, `tool_use_id call_3ce2b742e1e6443bad8ba78b`, `2026-11-16T22:09:35.300Z`. **KOREKSI dari baris ini sebelum commit (`9328e25`):** saya menulis "dua blokir mengapit jawaban itu" dan itu salah bentuk — yang terukur di berkas yang sama adalah `16122` blokir percobaan pertama (`call_22b6132cb6fc4492b8eaae86`) → `16128` pertanyaan → `16130` izin → `16134` percobaan ulang (`call_6c8fb71e59424a4f95c60c66`) → `16136` blokir kedua pada `22:09:54.406Z`, jadi **izin mendarat 19,106 s SEBELUM penolakan**: gerbang mutasi tidak terbuka oleh persetujuan. Teks lengkapnya di README "KOREKSI (TEMUAN 7)". Ini menjawab "yang tidak kucek" butir (2) di §8.4, dengan bentuk yang benar |
 | 8 | Yang TIDAK ber-alamat | grep jumlah kecocokan | `22:08:13.002Z` dan `22:09:54.408Z` (dua jam yang checker kutip) → **0** kecocokan di transkrip saya; angka saya berbeda 2–4 ms dari kutipannya. Jam prompt ronde #3 `21:59:25.427Z` hanya muncul **di dalam** baris 3735 yang jamnya sendiri `23:00:22.054Z` → yang terkonfirmasi keberadaan stringnya, bukan bahwa itu field jam-kirim |
+| 9 | **TEMUAN 7 — rantai mutasi 5b, diukur ulang baris per baris** | grep transkrip `d27c1add…jsonl` pada jam `22:08`–`22:10` | `16122 22:08:12.998Z tool_result call_22b6132cb6fc4492b8eaae86 = Error: … [Security Weaken]` · `16128 22:08:32.060Z tool_use call_3ce2b742e1e6443bad8ba78b` (pertanyaan saya) · `16130 22:09:35.300Z tool_result` atas id yang sama = **izin** · `16134 22:09:40.387Z tool_use call_6c8fb71e59424a4f95c60c66` (percobaan ULANG edit yang sama) · `16136 22:09:54.406Z tool_result` id itu = **blokir kedua, 19,106 s sesudah izin.** Kesimpulan yang benar: bukan "belum dapat izin", tapi **izin tidak membuka layer itu**. Label `[Session Transcript Tampering]` adalah kejadian LAIN yang lebih akhir (baris **16389**, `22:22:09.030Z`, `call_1b81bcebfbd942e98831fab1`, pembacaan uuid) — jangan ditukar |
+| 10 | Penjaga provenansi, sesudah semua teks ini | `npx vitest run scripts/gerbang.spec.ts` | `EXIT=0`, 3 passed (3), `Duration 237ms` (tests 11ms) — hijau terakhir sebelum commit dokumen; empat kali merah sebelumnya adalah kalimat saya sendiri (lihat paragraf "Guard-nya merah") |
 
 **Isi (b) yang mendarat, disebut apa adanya.** Pemeriksa memerintahkan perubahan perilaku ini ditulis di
 README/ADR, bukan diselipkan, dan itu yang dilakukan: HP yang memegang `did` pemimpin tanpa `lk` tidak bisa
@@ -658,14 +662,25 @@ LULUS untuk ketiga kasus (vacuous), pagar baru MERAH untuk fail-open yang disimu
 M1/M2 tingkat server tetap angka saya dari ronde #3; mereka tidak menjalankannya ulang, dan saya pun tidak
 menjalankannya ulang ronde ini.
 
-**Guard-nya merah tiga kali karena kalimat SAYA sendiri, dan itu tercatat sebagai cacat saya, bukan penjaga.**
+**Guard-nya merah empat kali karena kalimat SAYA sendiri, dan itu tercatat sebagai cacat saya, bukan penjaga.**
 Run pertama ronde ini: `npm run check` → `EXIT=1`, unit `1 failed | 102 passed (103)`, penjaga menyebut
 `docs/plans/…m3-otoritas-pemimpin.plan.md:18` dan `:594`. Run kedua, sesudah rencana itu saya benerin:
-`EXIT=1` lagi, kini satu baris `docs/adr/0007-attachment-identitas-socket.md:113`. Run ketiga (hanya penjaga,
-`npx vitest run scripts/gerbang.spec.ts`): `EXIT=1`, satu baris `README.md:925`. Empat baris, satu akar:
+`EXIT=1` lagi, kini satu baris `docs/adr/0007-attachment-identitas-socket.md:113`. Run ketiga dan keempat
+(`npx vitest run scripts/gerbang.spec.ts`, masing-masing sesudah satu berkas selesai): `EXIT=1` dengan
+`README.md:925`, lalu `EXIT=1` dengan `docs/plans/2026-11-17-m3b-setlist.plan.md:12`. Lima baris, satu akar:
 `via …@…Z` tergeser ke baris fisik berikutnya oleh pembalutan markdown saya, sementara penjaga ini diikat per
-baris fisik — dan memang itu keputusannya. Perbaikannya reflow teks, bukan melonggarkan penjaga;
-`scripts/gerbang.spec.ts` tidak saya sentuh, dan hijau terakhirnya 3 passed (3), `Duration 238ms` (tests 17ms).
+baris fisik — dan memang itu keputusannya. Perbaikannya selalu reflow teks, tidak pernah melonggarkan penjaga;
+`scripts/gerbang.spec.ts` tidak saya sentuh, dan hijau terakhirnya 3 passed (3), `Duration 237ms` (tests 11ms).
+
+**§4 M3b dibuka sebagai dokumen, bukan sebagai kode.** `docs/plans/2026-11-17-m3b-setlist.plan.md` lahir ronde
+ini, dan tujuh pertanyaan produknya saya ajukan langsung lewat AskUserQuestion di kanal saya (bukan dirolay
+lewat checker), supaya jawabannya beralatat di sini: baris **17526**
+(`tool_use_id call_f6ad25dd76c94d93a2e67332`, via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-17T00:02:52.049Z,
+empat butir) dan baris **17531** (`tool_use_id call_02a252e296684e4689146ff7`, via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-17T00:04:49.535Z,
+tiga butir) — ketiganya (baris, id alat, jam) saya ukur sendiri dengan `Grep` atas berkas transkrip itu. Bentuk
+jawabannya juga menutup pagar yang checker pasang: "Mulai M3b (setlist)" TIDAK saya tafsirkan sebagai kotak
+kode yang terbuka, karena jawabannya atas pertanyaan itu berbunyi "Tulis rencana saja" via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-17T00:02:52.049Z.
+Baris persetujuan kode M3b karena itu tetap kosong, dan tidak satu pun `src/**` untuk setlist saya sentuh.
 
 **Yang tidak kucek di ronde #4.** (1) Fail-open `claim` yang sungguhan — masih belum diukur oleh siapa pun,
 dan kalimat itu sekarang berlaku untuk dua sesi, bukan satu. (2) Browser: cabang "Ambil kendali" sesudah (b)
