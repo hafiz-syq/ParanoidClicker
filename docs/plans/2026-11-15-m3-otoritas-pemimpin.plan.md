@@ -674,7 +674,7 @@ baris fisik — dan memang itu keputusannya. Perbaikannya selalu reflow teks, ti
 
 **§4 M3b dibuka sebagai dokumen, bukan sebagai kode.** `docs/plans/2026-11-17-m3b-setlist.plan.md` lahir ronde
 ini, dan tujuh pertanyaan produknya saya ajukan langsung lewat AskUserQuestion di kanal saya (bukan dirolay
-lewat checker), supaya jawabannya beralatat di sini: baris **17526**
+lewat checker), supaya jawabannya beralamat di sini: baris **17526**
 (`tool_use_id call_f6ad25dd76c94d93a2e67332`, via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-17T00:02:52.049Z,
 empat butir) dan baris **17531** (`tool_use_id call_02a252e296684e4689146ff7`, via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-17T00:04:49.535Z,
 tiga butir) — ketiganya (baris, id alat, jam) saya ukur sendiri dengan `Grep` atas berkas transkrip itu. Bentuk
@@ -689,4 +689,83 @@ dua perangkat (§7 butir pertama di README) tetap terbuka. (3) Semua angka yang 
 mereka — saya kutip, tidak saya ukur ulang, seperti yang diminta. (4) uuid pesan jawaban `S8` (butir 8 tabel di
 atas). (5) `npm run check` terakhir untuk commit dokumen ini masuk ke laporan, tidak ke tabel — nomor di
 dokumen tidak boleh jadi alasan dokumen itu lulus.
+
+## 8.6 Ronde #5 — TEMUAN 6: probe atas `parseTarget` sungguhan, dan perbaikan satu baris yang TIDAK saya jalankan
+
+Yang checker minta (dirolay, tiga kali dengan bunyi sama): simtomnya nyata — `/#/join/ABVQ` menghasilkan
+`target: null` dan `remembered: null` — dan akarnya ada di klien, "`parseTarget` menuntut segmen jalur 4 bagian
+(`live.ts:38` dan `:52`)", uji dengan `--`/`_` = salah ukur, "bentuk yang jalan tinggal `#/?join=ABVQ`", perbaikannya
+"satu baris di `parseTarget`" + tautan `?join=SID` di `Start.tsx:47`. Simtomnya saya reproduksi persis; diagnosisnya
+tidak. Ini ukuran, bukan sangkalan.
+
+**Apa yang sebenarnya ada di baris yang ditunjuk.** Diukur dengan `Read` atas HEAD (`acc8afd`):
+
+| anchor checker | isi nyata di tree |
+|---|---|
+| `src/app/session/live.ts:38` | komentar (`// lagi sesi ini — itu server yang kehilangan clock…`), bagian dari blok `ANCHOR_SANE_MS` |
+| `src/app/session/live.ts:52` | `/**` pembuka docstring kelas `LiveSession` |
+| `parseTarget` sendiri | `live.ts:42-50`; parameter satu-satunya `search: string`, dibaca lewat `new URLSearchParams(search)`, `q.get('sid')` + `q.get('tok')` — tidak ada satu pun pembacaan path |
+| `src/screens/Start.tsx:47` | `      </p>` — penutup blok tombol; `Start.tsx` tidak mencetak tautan join (baris 8 dokumen layarnya menyatakan tautan join ditangani `main.tsx`) |
+| satu-satunya URL join yang dibangun aplikasi | `src/screens/ClickRoom.tsx:266`: `` `${location.origin}${location.pathname}?sid=${join.sid}&tok=${join.tok}` `` |
+| pemasok argumen ke `parseTarget` | `src/main.tsx:9`: `parseTarget(location.search)` — `location.hash` tidak pernah dibaca: pencarian `location.hash` / `hashchange` / `#/` atas seluruh tree hanya mengenai tulisan baru saya di bagian ini, dan `git log --all -S"#/join"` / `-S"?join="` / `-S"hashchange"` / `-S"/join"` semuanya kosong |
+
+"Segmen jalur 4 bagian" hampir pasti hasil baca-ulang satu angka: `src/shared/ids.ts:17`
+`/^[A-HJ-NP-Z2-9]{4}$/` dan `genSid(length = 4)` di `:8` — `{4}` adalah panjang **sid**, bukan jumlah segmen jalur.
+
+**Probe atas fungsi yang sungguhan, bukan replika.** `npx esbuild src/app/session/live.ts --bundle --format=esm
+--platform=neutral --outfile=<temp>/live.mjs` (11.6 kb, `Done in 4ms`) lalu `node probe.mjs` yang mengimpor
+`parseTarget` dari bundel itu dan memanggilnya dengan `new URL(...).search`. `tok` = `'a'.repeat(64)`:
+
+```
+https://p.example/#/join/ABVQ        | pathname=/          | location.search=""          | q.keys=[]     | -> null
+https://p.example/#/?join=ABVQ       | pathname=/          | location.search=""          | q.keys=[]     | -> null
+https://p.example/?join=ABVQ         | pathname=/          | location.search="?join=ABVQ"| q.keys=[join] | -> null
+https://p.example/join/ABVQ          | pathname=/join/ABVQ | location.search=""          | q.keys=[]     | -> null
+https://p.example/?sid=ABVQ          | pathname=/          | location.search="?sid=ABVQ" | q.keys=[sid]  | -> null
+https://p.example/?sid=ABVQ&tok=<64> | pathname=/          | q.keys=[sid,tok]            | -> OK ABVQ (lk=TANPA lk)
+https://p.example/?sid=ABVQ&tok=<64>&lk=<64>                 q.keys=[sid,tok,lk]         | -> OK ABVQ (lk=TANPA lk)
+```
+
+Baris kedua mematahkan klaim "bentuk yang jalan tinggal `#/?join=ABVQ`": apa pun sesudah `#` adalah hash, dan
+`location.search` untuk bentuk itu string kosong — parser mana pun yang hanya membaca query string tidak akan pernah
+melihat `join=ABVQ`, berapa kali pun `parseTarget` dibetulkan. Baris keenam adalah bentuk yang hari ini dibangun
+`ClickRoom.tsx:266` dan memang terukur `OK`; baris ketujuh mengulang yang sudah diuji di
+`src/app/session/live.spec.ts:122` (`lk` tidak pernah dibaca dari URL).
+
+**Kenapa `?join=SID` bukan perbaikan satu baris.** Satu-satunya hal yang membuat socket boleh lahir adalah `tok`:
+`/ws` memverifikasinya di `src/worker/index.ts:55-57` (`verifySessionToken` → `403 NO_TOKEN`), dan itu sudah dijaga
+tes hijau di `src/worker/session.spec.ts:42-50` — dua kasus, `?sid=ABCD` tanpa tok dan tok 64-hex karangan sendiri,
+keduanya `403`, ditambah `tok=zz` yang harus `403` bukan 500. Jadi tautan join yang hanya memuat sid tidak akan pernah
+membuka socket, sekeras apa pun klien mem-parse-nya; yang dibutuhkan adalah endpoint yang belum ada. Endpoint itu juga
+tidak pernah ada: satu-satunya kemunculan `/join` di seluruh tree adalah proxy dev `vite.config.ts:11`, `git log --all -S"/join"`
+kosong, dan worker hanya mengenal `/health`, `/create`, `/ws` (`index.ts:19,28,42`). komentar di `ids.ts:5-7` dan
+`index.ts:50-52` menjelaskan kenapa: sid 4 simbol = 32^4 = 1.048.576 dan `tok`-lah bukti bahwa sid benar-benar lahir
+dari `/create`.
+
+**Mekanisme yang cocok dengan gejalanya ada di konfigurasi, bukan di klien.** `wrangler.jsonc:12`
+`not_found_handling: "single-page-application"`: URL berbentuk path apa pun (`/join/ABVQ`) menyajikan `index.html`,
+sehingga layarnya memang "buka" — sementara aplikasi tidak pernah membaca path itu, dan `target` tetap `null` oleh
+desain. Untuk `remembered: null` tidak perlu perbaikan sama sekali: itu jalur `readRemembered()`
+(`live.ts:322-335`) atas profil browser yang localStorage-nya kosong, dan tombol "Lanjut ke sesi" di `Start.tsx:37-46`
+hanya muncul kalau ada yang tersimpan. Sedang `resumeToken` — yang checker sebut "tiga probe-nya hidup" — tidak pernah
+menjadi kode di repo ini: dua kemunculannya adalah peringatan di README (`:172`, `:209`) supaya token itu tidak masuk
+log, dan `git log -S"resumeToken"` hanya menyentuh dua commit era spike yang berisi teks itu.
+
+**Yang tidak saya ubah dan kenapa.** Tidak satu baris pun di `src/**`: edit yang diminta (membaca `join`, mencetak
+`?join=SID`) menghapus satu-satunya kredensial yang diperiksa server, jadi ia akan mengganti "simtom null" dengan
+"sessions tidak bisa dibuka sama sekali" — penurunan kemampuan, bukan perbaikan, dan gerbang §3b butir 3 (kontrak +
+jalur kapabilitas tidak berubah) melarangnya saya lakukan diam-diam. Yang tersisa adalah pertanyaan produk.
+
+**[TANYA]** bentuk tautan join mana yang dikehendaki — (1) tetap `?sid=&tok=` seperti yang tercetak di layar pemimpin
+hari ini (terukur jalan, probe baris 6), (2) halaman/endpoint `/join` baru yang menukar sid menjadi tok (butuh desain
+kemampuan + rate limit sendiri, dan ia membuka pintu yang selama ini ditutup `tok`), atau (3) router hash sungguhan di
+klien (`location.hash` pertama kali dalam sejarah repo ini). Ketiganya punya kotak kode masing-masing dan tidak ada
+yang terbuka ronde ini; saya tidak memilihkan.
+
+**Angka gerbang §3c untuk ronde #5** (diukur sendiri, `acc8afd`): `npm run check` `EXIT=0`, dinding 12.403 ms, `lint:arch OK`,
+unit `103 passed (103)` dalam 9 berkas (456 ms), worker `32 passed (32)` dalam 2 berkas (6.93 s, tests 7.51 s);
+`git status --porcelain` = ` M .gitignore` + `?? tsconfig.json` (dua-duanya punya checker, tidak saya sentuh). Catatan
+provenance: checker melaporkan "103 unit + 40 worker" di `9328e25`; angka worker itu punya mereka dan tidak bisa saya
+reproduksi — berkas tes worker di HEAD ini dua (`session.spec.ts` 27 + `eviction.spec.ts` 5 = 32), dan `git diff`
+menyatakan tidak ada berkas tes baru sejak `0967b4e`.
 

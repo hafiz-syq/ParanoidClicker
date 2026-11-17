@@ -947,12 +947,32 @@ saya jalankan ulang, dan tidak saya tulis sebagai angka saya.
   **TEMUAN 4 — model otoritas sesudah podium terikat — juga sudah tertutup ronde ini:** `S8` dijawab pemilik via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T23:06:05.165Z
   dengan "(b) Ikat ke lk terverifikasi"; opsinya (a) ditolak, dan jawabannya sudah jadi kode (`f383335`) + tes
   sendiri (`E`, lihat bagian ronde #4 di atas) + dokumen (ADR-0005 "Dua model", ADR-0007 "Perpanjangan"). Jadi
-  tidak ada lagi [TANYA] yang menggantung di dalam M3a; yang tersisa murni pengukuran dua perangkat dan browser.
+  tidak ada [TANYA] yang tertunda di dalam M3a sampai ronde #5 membuka satu lagi — dan yang baru itu bukan kode,
+  melainkan bentuk tautan join (butir TEMUAN 6 di bawah).
 - Gerbang mutasi untuk fail-open `claim` **belum ada di tangan siapa pun.** Bentuk editnya diblokir permission
   layer sebagai hard-block, dan pesan blokirnya menyebut bahwa niat pengguna tidak bisa membukanya, jadi saya
   tidak punya angka "D MERAH karena claim menerima frame tanpa `lk`" — yang saya punya dua mutan pengganti (M1
   label jawaban, M2 bocor `state`). Kalau ada jalur yang sah untuk mengukur fail-open, itu pekerjaan terbuka;
   sampai saat itu klaim "D mengikat jalur claim" bersandar ke M1/M2, bukan ke fail-open.
+- **TEMUAN 6 (ronde #5, `/#/join/ABVQ` → `target: null`): simtomnya saya reproduksi, akarnya bukan yang dilaporkan,
+  dan tidak satu baris pun `src/**` saya ubah.** Yang terukur di HEAD ini: `parseTarget`
+  (`src/app/session/live.ts:42-50`) hanya membaca *query string*; baris yang checker tunjuk (`live.ts:38` dan `:52`)
+  adalah komentar, dan `Start.tsx:47` adalah `</p>` — layar `Start` tidak mencetak tautan join sama sekali, satu-satunya
+  URL join yang dibangun aplikasi ada di `src/screens/ClickRoom.tsx:266` dengan bentuk `?sid=…&tok=…`. "Segmen jalur
+  4 bagian" itu adalah `isSid` (`src/shared/ids.ts:17`): `{4}` = 4 karakter sid, bukan 4 segmen. Probe tujuh bentuk URL
+  atas fungsi yang di-bundle dari HEAD (tabel lengkap + perintahnya di plan §8.6): `#/?join=ABVQ` → `location.search=""`
+  → `null` (jadi "bentuk yang jalan" itu tidak jalan), `?join=ABVQ` → `null`, `?sid=ABVQ` → `null`, dan
+  `?sid=ABVQ&tok=<64 hex>` → OK tanpa `lk`. Menurunkan tautan jadi `?join=SID` berarti membuang satu-satunya kredensial
+  yang diperiksa server: `/ws` tanpa `tok` dijawab `403 NO_TOKEN` (`src/worker/index.ts:55-57`), dan kasus itu sudah
+  diafirmasi tes hijau termasuk varian tok palsu 64-hex (`src/worker/session.spec.ts:42-50`). Endpoint `/join` tidak
+  pernah ada: satu-satunya kemunculan `/join` di seluruh tree adalah entri proxy dev `vite.config.ts:11`, dan
+  `git log --all -S"/join"` kosong. Mekanisme yang cocok dengan gejalanya ada di konfigurasi:
+  `not_found_handling: "single-page-application"` (`wrangler.jsonc:12`) — URL berbentuk path apa pun menyajikan
+  `index.html`, jadi layarnya "buka" tapi aplikasinya tidak pernah membaca path itu. **[TANYA]** bentuk tautan join mana
+  yang diinginkan — (1) tetap `?sid&tok`, sudah terukur jalan; (2) tautan pendek `?join=SID`, yang butuh endpoint baru
+  yang menukar sid menjadi tok dan karena itu kemampuan baru atas sid 20 bit yang bisa ditebak
+  (`src/shared/ids.ts:5-7`): itu
+  keputusan desain + keamanan, bukan perbaikan satu baris, dan saya tidak menjawabnya sendiri.
 
 ## Antrean defect yang belum punya gerbang
 
