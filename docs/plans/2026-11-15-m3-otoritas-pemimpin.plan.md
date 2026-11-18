@@ -699,7 +699,17 @@ dokumen tidak boleh jadi alasan dokumen itu lulus.
 
 ## 8.6 Ronde #5 — TEMUAN 6: probe atas `parseTarget` sungguhan, dan perbaikan satu baris yang TIDAK saya jalankan
 
-Yang checker minta (dirolay, tiga kali dengan bunyi sama): simtomnya nyata — `/#/join/ABVQ` menghasilkan
+**KOREKSI ronde #6 (TEMUAN 8, 18 Nov) atas atribusi kalimat ini sendiri.** Bunyi lama "Yang checker minta
+(dirolay, tiga kali dengan bunyi sama)" tidak punya carrier. Ukur saya: `git log --all --oneline -S'#/join'
+-- src docs README.md` = hanya `c237e0c` (commit docs saya sendiri), dan string itu tidak ada di README
+(`git show d011254:README.md | grep -n "tiga kali\|Yang checker minta"` = 0 baris — kutipan README:977-978
+di relay TEMUAN 8 tidak cocok dengan berkasnya). Yang saya kutip sebagai laporan checker ronde #6, belum
+saya ukur ulang: 20 turn relay = 0 hit `parseTarget`; 55 turn respons kotak persetujuan = 0 hit; carrier
+tertua = `thinking` saya baris 17745 @`2026-11-17T00:14:12.432Z` yang justru melabeli "the owner's"; dan yang
+benar-benar muncul tiga kali adalah basis blob/`punyaKunci` (baris 15108/15486/18165). Dua label
+bertentangan, nol sumber: **sumber permintaan tidak diketahui**, dan saya tidak menamai mekanisme
+penyebarannya (tidak ada "rumor kompresi" atau sebutan lain yang belum terukur). Isi teknisnya tetap
+saya perlakukan sebagai klaim yang diuji: simtomnya nyata — `/#/join/ABVQ` menghasilkan
 `target: null` dan `remembered: null` — dan akarnya ada di klien, "`parseTarget` menuntut segmen jalur 4 bagian
 (`live.ts:38` dan `:52`)", uji dengan `--`/`_` = salah ukur, "bentuk yang jalan tinggal `#/?join=ABVQ`", perbaikannya
 "satu baris di `parseTarget`" + tautan `?join=SID` di `Start.tsx:47`. Simtomnya saya reproduksi persis; diagnosisnya
