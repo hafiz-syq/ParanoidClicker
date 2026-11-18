@@ -507,15 +507,22 @@ tetap ditolak, dan `sed`/ekstraksi `uuid` di baris tertentu juga ditolak (`[Sess
 tapi `Grep` dengan pola sempit atas berkas yang sama jalan. Karena itu **tiga** alamat saya ukur sendiri sebagai
 field (S8 = jawaban pemilik `via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T23:06:05.165Z` di baris 3794,
 bersama `type: user` + `tool_result` + `tool_use_id call_8f1f79b4baf847cfb47cecaf`; jawaban mutasi 5b
-`via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-16T22:09:35.300Z` di baris 16130; dan dua catatan blokirnya di
-baris 16122/16136), dan **satu tidak**: jam kirim prompt ronde M3a #3 `21:59:25.427Z` memang ADA di transkrip
+`via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-16T22:09:35.300Z` di baris 16130; dan dua AKSI EDIT saya yang
+diblokir classifier `[Security Weaken]` — baris 16122/16136, `tool_result` berisi error, bukan respons kotak
+persetujuan), dan **satu tidak**: jam kirim prompt ronde M3a #3 `21:59:25.427Z` memang ADA di transkrip
 checker sebagai string, tapi baris tempat string itu pertama muncul (3735) punya `timestamp` sendiri
 `23:00:22.054Z` — jadi yang saya konfirmasi adalah keberadaaan stringnya, bukan bahwa itu field jam kirim.
 Angka itu tetap saya tulis sebagai **laporan checker** (mereka memberi turn `agent-message:f1323ddc…` sebagai
 alamatnya), bukan sebagai hasil ukur saya. Satu hal lagi yang cocok: checker menulis blokir pada
-`22:08:13.002Z` dan `22:09:54.408Z`, sedangkan `"timestamp"` yang ada di transkrip saya adalah
-`22:08:12.998Z` dan `22:09:54.406Z` (dua-duanya `grep -c` = 0 untuk bentuk checker) — selisih 2–4 ms, dan yang
-saya tulis di dokumen adalah yang terukur, bukan yang dirolay.
+`22:08:13.002Z` dan `22:09:54.408Z`, sedangkan `"timestamp"` kepala baris di transkrip saya adalah
+`22:08:12.998Z` dan `22:09:54.406Z` — selisih 2–4 ms. **KOREKSI ronde #5:** klaim lama "dua-duanya
+`grep -c` = 0 untuk bentuk checker" salah sebagai pernyataan umum; ukur ulang per berkas memberi 0 baris
+di transkrip saya dan 3 baris di transkrip checker (3735/3864/4175), dan jam kepala ketiga baris itu
+`23:00:22.054Z`/`23:11:34.835Z`/`2026-11-17T00:01:50.068Z` — string checker adalah data proyeksi di dalam
+`tool_result`, bukan field jam baris. Tabel per-berkas/per-bentuk + perintahnya ada di README bagian
+KOREKSI ronde #5; yang saya tulis di dokumen adalah yang terukur per berkas, bukan yang dirolay.
+Urutan izin `22:09:35.300Z` → blokir kedua `22:09:54.406Z` (+19,106 s) saya catat sebagai ALASAN
+fail-open tetap TIDAK TERUKUR: HARD BLOCK tidak dibuka oleh kotak persetujuan yang sudah terbuka.
 Angka prompt ronde #2 (di atas) tetap "dilaporkan": sampai ronde ini belum saya cocokkan sebagai field.
 
 ## 8.4 Ronde M3a #3 — pagar yang harus dibaca per jendela, dan pertanyaan yang belum boleh saya jawab
@@ -765,9 +772,11 @@ yang terbuka ronde ini; saya tidak memilihkan.
 **Angka gerbang §3c untuk ronde #5** (diukur sendiri, `acc8afd`): `npm run check` `EXIT=0`, dinding 12.403 ms, `lint:arch OK`,
 unit `103 passed (103)` dalam 9 berkas (456 ms), worker `32 passed (32)` dalam 2 berkas (6.93 s, tests 7.51 s);
 `git status --porcelain` = ` M .gitignore` + `?? tsconfig.json` (dua-duanya punya checker, tidak saya sentuh). Catatan
-provenance: checker melaporkan "103 unit + 40 worker" di `9328e25`; angka worker itu punya mereka dan tidak bisa saya
-reproduksi — berkas tes worker di HEAD ini dua (`session.spec.ts` 27 + `eviction.spec.ts` 5 = 32), dan `git diff`
-menyatakan tidak ada berkas tes baru sejak `0967b4e`.
+provenance: checker melaporkan "103 unit + 40 worker" di `9328e25`; **ronde #5 menjelaskan selisihnya secara
+aritmetik, bukan lagi "tidak bisa direproduksi"**: worktree mereka memuat probe tambahan — 32 repo + 3
+`probe-checker.spec.ts` + 4 `probe-independen-r5.spec.ts` = 39 di `f383335`, + I5 = 40 di `9328e25`.
+Angka run mereka tetap **dilaporkan**; yang saya ukur sendiri adalah isi worktree mereka (dua berkas probe,
+tidak di-commit) dan aritmetiknya cocok.
 
 ## 8.7 Susulan ronde #4 — lampiran mendarat, satu kalimatnya dikoreksi seperlunya, dan peta langkah probe ↔ D/E
 
@@ -886,4 +895,37 @@ ada yang membaca anchor itu sebagai baris HEAD.
 syarat ronde #4 tidak berubah, §3 sudah hijau dan terukur (`73464b2` RED → `f383335` GREEN → `9328e25` docs), dan
 §4 sudah jadi dokumen (`acc8afd`). Yang susulan ini tambah hanyalah bukti: lampiran yang bisa dibaca, koreksi atas
 satu kalimatnya, dan peta celah di atas.
+
+## 8.8 Ronde M3a #5 — gerbang browser terukur, dua pagar baru, dan koreksi per-berkas
+
+**§5 (gerbang yang menahan M3a).** Terukur di browser LOKAL, bukan dua HP fisik: tiga konteks
+Chromium terisolasi atas satu sid `QCMC`; tombol "Ambil kendali" muncul pada A dan C (pemegang `lk`)
+sesudah `NOT_LEADER`, tidak pernah pada B (blob warisan tanpa `lk`); `claim` memulihkan otoritas dan
+`tempo 125` sampai ke tiga layar dengan teks state yang sama. Angka, frame, sha256 artefak, dan enam
+batasnya (termasuk TIDAK ada evict DO dan suara tidak terukur) ada di README bagian "Ronde #5 (18 Nov)
+— gerbang browser terbuka"; artefaknya di `bukti/m3a-r5-*`. Kalimat README "cabang itu belum terukur
+di browser" saya ganti menjadi terukur-lokal dengan batas itu, bukan menjadi "sudah diuji" tanpa kualifikasi.
+
+**§3a.** Jenis blokir 16122/16136 = aksi Edit yang diblokir classifier `[Security Weaken]` (`tool_result`
+berisi error), bukan respons kotak persetujuan; urutan izin `22:09:35.300Z` → blokir kedua
+`22:09:54.406Z` (+19,106 s) dicatat sebagai ALASAN fail-open tetap TIDAK TERUKUR. Klaim `grep -c` lama
+saya koreksi jadi tabel per-berkas/per-bentuk (saya 0/0; checker 3/3 di 3735/3864/4175, jam kepala
+barisnya `23:00:22.054Z`/`23:11:34.835Z`/`2026-11-17T00:01:50.068Z` = data proyeksi). Perintah dan
+output mentahnya ada di jawaban ronde #5 saya dan di README bagian KOREKSI ronde #5.
+
+**§6.** `67c47d1`, `7 file dirty`, `489-228`: Grep repo-wide = 0 kecocokan; tidak satu pun masuk dokumen.
+
+**§2.** Pagar baru `src/worker/otoritas.spec.ts` P1/P2 (`87dfdd9`): RED `pc-exec-r3`@`343a020` EXIT=1
+2 failed 8,59 s; GREEN 2 passed 911 ms. I3/I4/I5 probe checker ternyata sudah dipagari tes repo
+(`session.spec.ts:515`, `eviction.spec.ts:78`, `session.spec.ts:473`) — koreksi atas relay, bukan celah baru.
+
+**§1.** Selisih 39/40 worker checker vs 32 repo = probe mereka (3+4, lalu +I5); aritmetik cocok, run
+mereka tetap dilaporkan. Kalimat "tidak bisa saya reproduksi" di §8.6 saya koreksi di tempat.
+
+**§4.** [TANYA] blob warisan dijawab "Note kecil + jalan keluar" via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-18T07:14:54.932Z;
+kode note BELUM ditulis (wajib ukur browser dulu, ronde berikutnya). TEMUAN 6 ronde ini (blob tanpa
+`lk`) berbeda dari TEMUAN 6 §8.6 (`parseTarget`); keduanya saya beri label commit masing-masing.
+
+**§7.** M3b tetap rencana: `docs/plans/2026-11-17-m3b-setlist.plan.md:138` kotak kode `[ ]` TERTUTUP,
+baris tanda tangan `:157` kosong; tidak ada `src/` M3b ronde ini.
 

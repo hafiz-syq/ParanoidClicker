@@ -1,0 +1,871 @@
+{
+ "sid": "QCMC",
+ "konteksUnik": 3,
+ "versi": "HeadlessChrome/156.0.8078.4",
+ "langkah": [
+  {
+   "nomor": 1,
+   "judul": "Start: blob dibaca, tombol Lanjut ada",
+   "konteks": "A",
+   "jam": "2026-11-18T06:59:31.445Z",
+   "ui": {
+    "url": "http://127.0.0.1:8787/",
+    "h1": "ParanoidClick",
+    "status": null,
+    "catatan": [
+     "Metronom yang sama di beberapa HP. Yang membuat sesi memegang tempo; yang lain membuka tautan join-nya.",
+     "Alat ukur spike M0 (60 ping + latensi audio)"
+    ],
+    "spanBad": [],
+    "tombol": [
+     {
+      "teks": "Buat sesi baru (saya pemimpin)",
+      "disabled": false
+     },
+     {
+      "teks": "Lanjut ke sesi QCMC",
+      "disabled": false
+     }
+    ],
+    "adaAmbilKendali": false,
+    "blob": "{\"sid\":\"QCMC\",\"tok\":\"<tok:64hex-disensor>\",\"lk\":\"<lk:64hex-disensor>\",\"leader\":true}",
+    "did": "a1a1a1a1a1a1a1a1"
+   },
+   "frames": []
+  },
+  {
+   "nomor": 2,
+   "judul": "Start: blob warisan tanpa lk",
+   "konteks": "B",
+   "jam": "2026-11-18T06:59:31.448Z",
+   "ui": {
+    "url": "http://127.0.0.1:8787/",
+    "h1": "ParanoidClick",
+    "status": null,
+    "catatan": [
+     "Metronom yang sama di beberapa HP. Yang membuat sesi memegang tempo; yang lain membuka tautan join-nya.",
+     "Alat ukur spike M0 (60 ping + latensi audio)"
+    ],
+    "spanBad": [],
+    "tombol": [
+     {
+      "teks": "Buat sesi baru (saya pemimpin)",
+      "disabled": false
+     },
+     {
+      "teks": "Lanjut ke sesi QCMC",
+      "disabled": false
+     }
+    ],
+    "adaAmbilKendali": false,
+    "blob": "{\"sid\":\"QCMC\",\"tok\":\"<tok:64hex-disensor>\",\"leader\":true}",
+    "did": "b2b2b2b2b2b2b2b2"
+   },
+   "frames": []
+  },
+  {
+   "nomor": 3,
+   "judul": "A masuk: pemimpin, tombol perintah hidup",
+   "konteks": "A",
+   "jam": "2026-11-18T06:59:33.942Z",
+   "ui": {
+    "url": "http://127.0.0.1:8787/",
+    "h1": "ParanoidClick — Pemimpin",
+    "status": "120 BPM · diam · 1 HP · masuk sebagai anggota (2 baris ditulis)",
+    "catatan": [],
+    "spanBad": [],
+    "tombol": [
+     {
+      "teks": "-5",
+      "disabled": false
+     },
+     {
+      "teks": "-1",
+      "disabled": false
+     },
+     {
+      "teks": "+1",
+      "disabled": false
+     },
+     {
+      "teks": "+5",
+      "disabled": false
+     },
+     {
+      "teks": "Start",
+      "disabled": false
+     },
+     {
+      "teks": "Mulai ramp",
+      "disabled": true
+     },
+     {
+      "teks": "Salin tautan",
+      "disabled": false
+     },
+     {
+      "teks": "Terapkan",
+      "disabled": false
+     }
+    ],
+    "adaAmbilKendali": false,
+    "blob": "{\"sid\":\"QCMC\",\"tok\":\"<tok:64hex-disensor>\",\"lk\":\"<lk:64hex-disensor>\",\"leader\":true}",
+    "did": "a1a1a1a1a1a1a1a1"
+   },
+   "frames": [
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:32.437Z",
+     "data": "{\"t\":\"hello\",\"sid\":\"QCMC\",\"did\":\"a1a1a1a1a1a1a1a1\",\"lk\":\"<lk:64hex-disensor>\"}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:32.437Z",
+     "data": "{\"t\":\"ping\",\"nonce\":0,\"t1\":1794985172435}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:32.449Z",
+     "data": "{\"t\":\"welcome\",\"sid\":\"QCMC\",\"did\":\"a1a1a1a1a1a1a1a1\",\"serverNow\":1794985172440,\"members\":1,\"rowsWritten\":2}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:32.449Z",
+     "data": "{\"t\":\"state\",\"bpm\":120,\"anchorMs\":null,\"running\":false,\"members\":1}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:32.452Z",
+     "data": "{\"t\":\"pong\",\"nonce\":0,\"t1\":1794985172435,\"t2\":1794985172444,\"t3\":1794985172444}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:33.442Z",
+     "data": "{\"t\":\"ping\",\"nonce\":1,\"t1\":1794985173441}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:33.445Z",
+     "data": "{\"t\":\"pong\",\"nonce\":1,\"t1\":1794985173441,\"t2\":1794985173442,\"t3\":1794985173442}"
+    }
+   ]
+  },
+  {
+   "nomor": 4,
+   "judul": "B masuk: tanpa lk -> Pengikut, tombol mati, tanpa Ambil kendali",
+   "konteks": "B",
+   "jam": "2026-11-18T06:59:36.243Z",
+   "ui": {
+    "url": "http://127.0.0.1:8787/",
+    "h1": "ParanoidClick — Pengikut",
+    "status": "120 BPM · diam · 2 HP · masuk sebagai anggota (2 baris ditulis)",
+    "catatan": [
+     "Hanya pemimpin yang mengubah tempo, dan sejak M3a yang memeriksa itu server: HP tanpa kunci pemimpin tetap masuk dan mendengar, tapi tempo/start/stop darinya dijawab NOT_LEADER."
+    ],
+    "spanBad": [],
+    "tombol": [
+     {
+      "teks": "-5",
+      "disabled": true
+     },
+     {
+      "teks": "-1",
+      "disabled": true
+     },
+     {
+      "teks": "+1",
+      "disabled": true
+     },
+     {
+      "teks": "+5",
+      "disabled": true
+     },
+     {
+      "teks": "Start",
+      "disabled": true
+     },
+     {
+      "teks": "Terapkan",
+      "disabled": false
+     }
+    ],
+    "adaAmbilKendali": false,
+    "blob": "{\"sid\":\"QCMC\",\"tok\":\"<tok:64hex-disensor>\",\"leader\":false}",
+    "did": "b2b2b2b2b2b2b2b2"
+   },
+   "frames": [
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:34.723Z",
+     "data": "{\"t\":\"hello\",\"sid\":\"QCMC\",\"did\":\"b2b2b2b2b2b2b2b2\"}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:34.723Z",
+     "data": "{\"t\":\"ping\",\"nonce\":0,\"t1\":1794985174722}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:34.730Z",
+     "data": "{\"t\":\"welcome\",\"sid\":\"QCMC\",\"did\":\"b2b2b2b2b2b2b2b2\",\"serverNow\":1794985174723,\"members\":2,\"rowsWritten\":2}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:34.730Z",
+     "data": "{\"t\":\"state\",\"bpm\":120,\"anchorMs\":null,\"running\":false,\"members\":2}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:34.731Z",
+     "data": "{\"t\":\"pong\",\"nonce\":0,\"t1\":1794985174722,\"t2\":1794985174729,\"t3\":1794985174729}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:35.723Z",
+     "data": "{\"t\":\"ping\",\"nonce\":1,\"t1\":1794985175723}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:35.725Z",
+     "data": "{\"t\":\"pong\",\"nonce\":1,\"t1\":1794985175723,\"t2\":1794985175723,\"t3\":1794985175723}"
+    }
+   ]
+  },
+  {
+   "nomor": 5,
+   "judul": "C masuk: blob sama dengan A, did berbeda, UI mengira dirinya pemimpin",
+   "konteks": "C",
+   "jam": "2026-11-18T06:59:38.575Z",
+   "ui": {
+    "url": "http://127.0.0.1:8787/",
+    "h1": "ParanoidClick — Pemimpin",
+    "status": "120 BPM · diam · 3 HP · masuk sebagai anggota (2 baris ditulis)",
+    "catatan": [],
+    "spanBad": [],
+    "tombol": [
+     {
+      "teks": "-5",
+      "disabled": false
+     },
+     {
+      "teks": "-1",
+      "disabled": false
+     },
+     {
+      "teks": "+1",
+      "disabled": false
+     },
+     {
+      "teks": "+5",
+      "disabled": false
+     },
+     {
+      "teks": "Start",
+      "disabled": false
+     },
+     {
+      "teks": "Mulai ramp",
+      "disabled": true
+     },
+     {
+      "teks": "Salin tautan",
+      "disabled": false
+     },
+     {
+      "teks": "Terapkan",
+      "disabled": false
+     }
+    ],
+    "adaAmbilKendali": false,
+    "blob": "{\"sid\":\"QCMC\",\"tok\":\"<tok:64hex-disensor>\",\"lk\":\"<lk:64hex-disensor>\",\"leader\":true}",
+    "did": "c3c3c3c3c3c3c3c3"
+   },
+   "frames": [
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:37.066Z",
+     "data": "{\"t\":\"hello\",\"sid\":\"QCMC\",\"did\":\"c3c3c3c3c3c3c3c3\",\"lk\":\"<lk:64hex-disensor>\"}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:37.067Z",
+     "data": "{\"t\":\"ping\",\"nonce\":0,\"t1\":1794985177066}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:37.072Z",
+     "data": "{\"t\":\"welcome\",\"sid\":\"QCMC\",\"did\":\"c3c3c3c3c3c3c3c3\",\"serverNow\":1794985177067,\"members\":3,\"rowsWritten\":2}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:37.072Z",
+     "data": "{\"t\":\"state\",\"bpm\":120,\"anchorMs\":null,\"running\":false,\"members\":3}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:37.073Z",
+     "data": "{\"t\":\"pong\",\"nonce\":0,\"t1\":1794985177066,\"t2\":1794985177071,\"t3\":1794985177071}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:38.069Z",
+     "data": "{\"t\":\"ping\",\"nonce\":1,\"t1\":1794985178070}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:38.071Z",
+     "data": "{\"t\":\"pong\",\"nonce\":1,\"t1\":1794985178070,\"t2\":1794985178070,\"t3\":1794985178070}"
+    }
+   ]
+  },
+  {
+   "nomor": 6,
+   "judul": "C menekan +1: server menjawab NOT_LEADER -> tombol Ambil kendali LAHIR",
+   "konteks": "C",
+   "jam": "2026-11-18T06:59:39.298Z",
+   "ui": {
+    "url": "http://127.0.0.1:8787/",
+    "h1": "ParanoidClick — Pengikut",
+    "status": "120 BPM · diam · 3 HP · server menolak: NOT_LEADER",
+    "catatan": [],
+    "spanBad": [
+     "server tidak mengakui HP ini sebagai pemimpin"
+    ],
+    "tombol": [
+     {
+      "teks": "-5",
+      "disabled": true
+     },
+     {
+      "teks": "-1",
+      "disabled": true
+     },
+     {
+      "teks": "+1",
+      "disabled": true
+     },
+     {
+      "teks": "+5",
+      "disabled": true
+     },
+     {
+      "teks": "Start",
+      "disabled": true
+     },
+     {
+      "teks": "Ambil kendali",
+      "disabled": false
+     },
+     {
+      "teks": "Terapkan",
+      "disabled": false
+     }
+    ],
+    "adaAmbilKendali": true,
+    "blob": "{\"sid\":\"QCMC\",\"tok\":\"<tok:64hex-disensor>\",\"lk\":\"<lk:64hex-disensor>\",\"leader\":true}",
+    "did": "c3c3c3c3c3c3c3c3"
+   },
+   "frames": [
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:38.583Z",
+     "data": "{\"t\":\"tempo\",\"bpm\":121}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:38.585Z",
+     "data": "{\"t\":\"error\",\"code\":\"NOT_LEADER\"}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:39.066Z",
+     "data": "{\"t\":\"ping\",\"nonce\":2,\"t1\":1794985179066}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:39.067Z",
+     "data": "{\"t\":\"pong\",\"nonce\":2,\"t1\":1794985179066,\"t2\":1794985179067,\"t3\":1794985179067}"
+    }
+   ]
+  },
+  {
+   "nomor": 7,
+   "judul": "C merebut podium lewat claim ber-lk",
+   "konteks": "C",
+   "jam": "2026-11-18T06:59:41.286Z",
+   "ui": {
+    "url": "http://127.0.0.1:8787/",
+    "h1": "ParanoidClick — Pemimpin",
+    "status": "120 BPM · diam · 3 HP · kendali diminta ulang dengan kunci pemimpin",
+    "catatan": [],
+    "spanBad": [],
+    "tombol": [
+     {
+      "teks": "-5",
+      "disabled": false
+     },
+     {
+      "teks": "-1",
+      "disabled": false
+     },
+     {
+      "teks": "+1",
+      "disabled": false
+     },
+     {
+      "teks": "+5",
+      "disabled": false
+     },
+     {
+      "teks": "Start",
+      "disabled": false
+     },
+     {
+      "teks": "Mulai ramp",
+      "disabled": true
+     },
+     {
+      "teks": "Salin tautan",
+      "disabled": false
+     },
+     {
+      "teks": "Terapkan",
+      "disabled": false
+     }
+    ],
+    "adaAmbilKendali": false,
+    "blob": "{\"sid\":\"QCMC\",\"tok\":\"<tok:64hex-disensor>\",\"lk\":\"<lk:64hex-disensor>\",\"leader\":true}",
+    "did": "c3c3c3c3c3c3c3c3"
+   },
+   "frames": [
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:39.370Z",
+     "data": "{\"t\":\"claim\",\"lk\":\"<lk:64hex-disensor>\"}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:39.372Z",
+     "data": "{\"t\":\"state\",\"bpm\":120,\"anchorMs\":null,\"running\":false,\"members\":3}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:40.069Z",
+     "data": "{\"t\":\"ping\",\"nonce\":3,\"t1\":1794985180068}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:40.071Z",
+     "data": "{\"t\":\"pong\",\"nonce\":3,\"t1\":1794985180068,\"t2\":1794985180070,\"t3\":1794985180070}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:41.068Z",
+     "data": "{\"t\":\"ping\",\"nonce\":4,\"t1\":1794985181067}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:41.069Z",
+     "data": "{\"t\":\"pong\",\"nonce\":4,\"t1\":1794985181067,\"t2\":1794985181068,\"t3\":1794985181068}"
+    }
+   ]
+  },
+  {
+   "nomor": 8,
+   "judul": "A (pemimpin sah, pemegang lk) ditolak sesudah podium pindah -> tombolnya LAHIR",
+   "konteks": "A",
+   "jam": "2026-11-18T06:59:42.003Z",
+   "ui": {
+    "url": "http://127.0.0.1:8787/",
+    "h1": "ParanoidClick — Pengikut",
+    "status": "120 BPM · diam · 3 HP · server menolak: NOT_LEADER",
+    "catatan": [],
+    "spanBad": [
+     "server tidak mengakui HP ini sebagai pemimpin"
+    ],
+    "tombol": [
+     {
+      "teks": "-5",
+      "disabled": true
+     },
+     {
+      "teks": "-1",
+      "disabled": true
+     },
+     {
+      "teks": "+1",
+      "disabled": true
+     },
+     {
+      "teks": "+5",
+      "disabled": true
+     },
+     {
+      "teks": "Start",
+      "disabled": true
+     },
+     {
+      "teks": "Ambil kendali",
+      "disabled": false
+     },
+     {
+      "teks": "Terapkan",
+      "disabled": false
+     }
+    ],
+    "adaAmbilKendali": true,
+    "blob": "{\"sid\":\"QCMC\",\"tok\":\"<tok:64hex-disensor>\",\"lk\":\"<lk:64hex-disensor>\",\"leader\":true}",
+    "did": "a1a1a1a1a1a1a1a1"
+   },
+   "frames": [
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:41.289Z",
+     "data": "{\"t\":\"tempo\",\"bpm\":121}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:41.302Z",
+     "data": "{\"t\":\"error\",\"code\":\"NOT_LEADER\"}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:41.442Z",
+     "data": "{\"t\":\"ping\",\"nonce\":9,\"t1\":1794985181440}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:41.442Z",
+     "data": "{\"t\":\"pong\",\"nonce\":9,\"t1\":1794985181440,\"t2\":1794985181441,\"t3\":1794985181441}"
+    }
+   ]
+  },
+  {
+   "nomor": 9,
+   "judul": "A merebut kembali podium",
+   "konteks": "A",
+   "jam": "2026-11-18T06:59:43.970Z",
+   "ui": {
+    "url": "http://127.0.0.1:8787/",
+    "h1": "ParanoidClick — Pemimpin",
+    "status": "120 BPM · diam · 3 HP · kendali diminta ulang dengan kunci pemimpin",
+    "catatan": [],
+    "spanBad": [],
+    "tombol": [
+     {
+      "teks": "-5",
+      "disabled": false
+     },
+     {
+      "teks": "-1",
+      "disabled": false
+     },
+     {
+      "teks": "+1",
+      "disabled": false
+     },
+     {
+      "teks": "+5",
+      "disabled": false
+     },
+     {
+      "teks": "Start",
+      "disabled": false
+     },
+     {
+      "teks": "Mulai ramp",
+      "disabled": true
+     },
+     {
+      "teks": "Salin tautan",
+      "disabled": false
+     },
+     {
+      "teks": "Terapkan",
+      "disabled": false
+     }
+    ],
+    "adaAmbilKendali": false,
+    "blob": "{\"sid\":\"QCMC\",\"tok\":\"<tok:64hex-disensor>\",\"lk\":\"<lk:64hex-disensor>\",\"leader\":true}",
+    "did": "a1a1a1a1a1a1a1a1"
+   },
+   "frames": [
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:42.053Z",
+     "data": "{\"t\":\"claim\",\"lk\":\"<lk:64hex-disensor>\"}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:42.059Z",
+     "data": "{\"t\":\"state\",\"bpm\":120,\"anchorMs\":null,\"running\":false,\"members\":3}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:42.449Z",
+     "data": "{\"t\":\"ping\",\"nonce\":10,\"t1\":1794985182449}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:42.451Z",
+     "data": "{\"t\":\"pong\",\"nonce\":10,\"t1\":1794985182449,\"t2\":1794985182450,\"t3\":1794985182450}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:43.446Z",
+     "data": "{\"t\":\"ping\",\"nonce\":11,\"t1\":1794985183446}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:43.447Z",
+     "data": "{\"t\":\"pong\",\"nonce\":11,\"t1\":1794985183446,\"t2\":1794985183446,\"t3\":1794985183446}"
+    }
+   ]
+  },
+  {
+   "nomor": 10,
+   "judul": "A memerintah lagi: +5 diterima, state disiarkan",
+   "konteks": "A",
+   "jam": "2026-11-18T06:59:46.195Z",
+   "ui": {
+    "url": "http://127.0.0.1:8787/",
+    "h1": "ParanoidClick — Pemimpin",
+    "status": "125 BPM · diam · 3 HP · kendali diminta ulang dengan kunci pemimpin",
+    "catatan": [],
+    "spanBad": [],
+    "tombol": [
+     {
+      "teks": "-5",
+      "disabled": false
+     },
+     {
+      "teks": "-1",
+      "disabled": false
+     },
+     {
+      "teks": "+1",
+      "disabled": false
+     },
+     {
+      "teks": "+5",
+      "disabled": false
+     },
+     {
+      "teks": "Start",
+      "disabled": false
+     },
+     {
+      "teks": "Mulai ramp",
+      "disabled": true
+     },
+     {
+      "teks": "Salin tautan",
+      "disabled": false
+     },
+     {
+      "teks": "Terapkan",
+      "disabled": false
+     }
+    ],
+    "adaAmbilKendali": false,
+    "blob": "{\"sid\":\"QCMC\",\"tok\":\"<tok:64hex-disensor>\",\"lk\":\"<lk:64hex-disensor>\",\"leader\":true}",
+    "did": "a1a1a1a1a1a1a1a1"
+   },
+   "frames": [
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:43.973Z",
+     "data": "{\"t\":\"tempo\",\"bpm\":125}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:43.985Z",
+     "data": "{\"t\":\"state\",\"bpm\":125,\"anchorMs\":null,\"running\":false,\"members\":3}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:44.436Z",
+     "data": "{\"t\":\"ping\",\"nonce\":12,\"t1\":1794985184436}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:44.438Z",
+     "data": "{\"t\":\"pong\",\"nonce\":12,\"t1\":1794985184436,\"t2\":1794985184436,\"t3\":1794985184436}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:45.448Z",
+     "data": "{\"t\":\"ping\",\"nonce\":13,\"t1\":1794985185448}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:45.449Z",
+     "data": "{\"t\":\"pong\",\"nonce\":13,\"t1\":1794985185448,\"t2\":1794985185449,\"t3\":1794985185449}"
+    }
+   ]
+  },
+  {
+   "nomor": 11,
+   "judul": "B mendengar state yang sama, tetap tanpa tombol Ambil kendali",
+   "konteks": "B",
+   "jam": "2026-11-18T06:59:46.196Z",
+   "ui": {
+    "url": "http://127.0.0.1:8787/",
+    "h1": "ParanoidClick — Pengikut",
+    "status": "125 BPM · diam · 3 HP · masuk sebagai anggota (2 baris ditulis)",
+    "catatan": [
+     "Hanya pemimpin yang mengubah tempo, dan sejak M3a yang memeriksa itu server: HP tanpa kunci pemimpin tetap masuk dan mendengar, tapi tempo/start/stop darinya dijawab NOT_LEADER."
+    ],
+    "spanBad": [],
+    "tombol": [
+     {
+      "teks": "-5",
+      "disabled": true
+     },
+     {
+      "teks": "-1",
+      "disabled": true
+     },
+     {
+      "teks": "+1",
+      "disabled": true
+     },
+     {
+      "teks": "+5",
+      "disabled": true
+     },
+     {
+      "teks": "Start",
+      "disabled": true
+     },
+     {
+      "teks": "Terapkan",
+      "disabled": false
+     }
+    ],
+    "adaAmbilKendali": false,
+    "blob": "{\"sid\":\"QCMC\",\"tok\":\"<tok:64hex-disensor>\",\"leader\":false}",
+    "did": "b2b2b2b2b2b2b2b2"
+   },
+   "frames": [
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:43.978Z",
+     "data": "{\"t\":\"state\",\"bpm\":125,\"anchorMs\":null,\"running\":false,\"members\":3}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:44.734Z",
+     "data": "{\"t\":\"ping\",\"nonce\":10,\"t1\":1794985184734}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:44.735Z",
+     "data": "{\"t\":\"pong\",\"nonce\":10,\"t1\":1794985184734,\"t2\":1794985184735,\"t3\":1794985184735}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:45.731Z",
+     "data": "{\"t\":\"ping\",\"nonce\":11,\"t1\":1794985185730}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:45.733Z",
+     "data": "{\"t\":\"pong\",\"nonce\":11,\"t1\":1794985185730,\"t2\":1794985185731,\"t3\":1794985185731}"
+    }
+   ]
+  },
+  {
+   "nomor": 12,
+   "judul": "C melihat podium pindah lagi, tetap tanpa lk? (C punya lk)",
+   "konteks": "C",
+   "jam": "2026-11-18T06:59:46.197Z",
+   "ui": {
+    "url": "http://127.0.0.1:8787/",
+    "h1": "ParanoidClick — Pemimpin",
+    "status": "125 BPM · diam · 3 HP · kendali diminta ulang dengan kunci pemimpin",
+    "catatan": [],
+    "spanBad": [],
+    "tombol": [
+     {
+      "teks": "-5",
+      "disabled": false
+     },
+     {
+      "teks": "-1",
+      "disabled": false
+     },
+     {
+      "teks": "+1",
+      "disabled": false
+     },
+     {
+      "teks": "+5",
+      "disabled": false
+     },
+     {
+      "teks": "Start",
+      "disabled": false
+     },
+     {
+      "teks": "Mulai ramp",
+      "disabled": true
+     },
+     {
+      "teks": "Salin tautan",
+      "disabled": false
+     },
+     {
+      "teks": "Terapkan",
+      "disabled": false
+     }
+    ],
+    "adaAmbilKendali": false,
+    "blob": "{\"sid\":\"QCMC\",\"tok\":\"<tok:64hex-disensor>\",\"lk\":\"<lk:64hex-disensor>\",\"leader\":true}",
+    "did": "c3c3c3c3c3c3c3c3"
+   },
+   "frames": [
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:43.978Z",
+     "data": "{\"t\":\"state\",\"bpm\":125,\"anchorMs\":null,\"running\":false,\"members\":3}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:44.069Z",
+     "data": "{\"t\":\"ping\",\"nonce\":7,\"t1\":1794985184069}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:44.070Z",
+     "data": "{\"t\":\"pong\",\"nonce\":7,\"t1\":1794985184069,\"t2\":1794985184070,\"t3\":1794985184070}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:45.068Z",
+     "data": "{\"t\":\"ping\",\"nonce\":8,\"t1\":1794985185068}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:45.069Z",
+     "data": "{\"t\":\"pong\",\"nonce\":8,\"t1\":1794985185068,\"t2\":1794985185069,\"t3\":1794985185069}"
+    },
+    {
+     "arah": "KIRIM",
+     "jam": "2026-11-18T06:59:46.069Z",
+     "data": "{\"t\":\"ping\",\"nonce\":9,\"t1\":1794985186068}"
+    },
+    {
+     "arah": "TERIMA",
+     "jam": "2026-11-18T06:59:46.071Z",
+     "data": "{\"t\":\"pong\",\"nonce\":9,\"t1\":1794985186068,\"t2\":1794985186070,\"t3\":1794985186070}"
+    }
+   ]
+  }
+ ],
+ "wsUrl": {
+  "A": "ws://127.0.0.1:8787/ws?sid=QCMC&tok=<tok:64hex-disensor>",
+  "B": "ws://127.0.0.1:8787/ws?sid=QCMC&tok=<tok:64hex-disensor>",
+  "C": "ws://127.0.0.1:8787/ws?sid=QCMC&tok=<tok:64hex-disensor>"
+ }
+}

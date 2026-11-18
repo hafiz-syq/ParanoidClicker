@@ -753,9 +753,31 @@ jawaban itu, dan itu salah bentuk. Rantai yang terukur di berkas yang sama, beru
 Kedua blokir itu mengapit **dua percobaan saya**, bukan respons pemilik. Dan yang lebih penting: penolakan
 kedua mendarat **19,106 s SESUDAH** izin (`22:09:54.406Z` − `22:09:35.300Z`, hitung dari dua field jam di
 atas). Bentuk kalimat yang benar karena itu bukan "saya belum minta izin", tapi **izin sudah diberikan dan
-layer itu tetap menolak** — itu memperkuat, bukan melemahkan, catatan jujur di bawah. Angka yang dirolay
-checker untuk dua blokir itu — `22:08:13.002Z` dan `22:09:54.408Z` — tetap tidak ada sebagai field `timestamp`
-di transkrip saya (`grep -c` = 0 untuk kedua bentuk), selisihnya 2–4 ms; yang ditulis di dokumen yang terukur.
+layer itu tetap menolak** — itu memperkuat, bukan melemahkan, catatan jujur di bawah.
+
+**KOREKSI ronde #5 (18 Nov) atas kalimat `grep -c` saya sendiri.** "Dua-duanya `grep -c` = 0 untuk bentuk
+checker" salah sebagai pernyataan umum: nol itu milik BERKAS SAYA saja. Ukur ulang per berkas dengan Grep
+tool, pola tetap `"timestamp":"2026-11-16T22:08:13.002Z` dan `"timestamp":"2026-11-16T22:09:54.408Z`:
+
+| pola | transkrip saya `d27c1add….jsonl` | transkrip checker `2d6f4ca7….jsonl` |
+|---|---|---|
+| `…22:08:13.002Z` | 0 baris | 3 baris (3735, 3864, 4175) |
+| `…22:09:54.408Z` | 0 baris | 3 baris (3735, 3864, 4175) |
+
+Tiga baris checker itu bukan field jam barisnya sendiri: pola berjangkar `^\{.{0,600}?"timestamp":"…"`
+memberi jam kepala baris 3735/3864/4175 = `23:00:22.054Z` / `23:11:34.835Z` / `2026-11-17T00:01:50.068Z`.
+String `.002Z`/`.408Z` hidup di dalam `tool_result` sebagai DATA proyeksi (rolay blokir saya), bukan
+sebagai `timestamp` baris. Bentuk yang benar karena itu: **0 di berkas saya, 3 di berkas checker, dan
+ketiganya data proyeksi** — bukan "0 untuk checker". Selisih 2–4 ms terhadap jam blokir saya
+(`22:08:12.998Z` / `22:09:54.406Z`) tetap seperti yang dirolay.
+
+**Jenis dua blokir itu disebut eksplisit, bukan "catatan blokir" tanpa jenis:** baris 16122 dan 16136
+adalah baris `type: user` yang isinya `tool_result` BERISI ERROR permission classifier berlabel
+`[Security Weaken]` (`tool_use_id call_22b6132cb6fc4492b8eaae86` dan `call_6c8fb71e59424a4f95c60c66`) —
+dua AKSI EDIT saya yang diblokir, bukan respons kotak persetujuan. Urutan 16130 (izin `22:09:35.300Z`)
+lalu 16136 (blokir kedua `22:09:54.406Z`, +19,106 s) adalah ALASAN fail-open `claim` tetap TIDAK TERUKUR
+oleh siapa pun: kotaknya sudah terbuka lebih dulu dan layer itu tetap menolak, dan HARD BLOCK tidak
+boleh diakali lewat tool, berkas, atau jalur lain.
 Satu label lain jangan ditukar dengan `[Security Weaken]`: blokir `[Session Transcript Tampering]` di baris
 **16389** (`22:22:09.030Z`, `call_1b81bcebfbd942e98831fab1`) adalah kejadian berbeda dan lebih akhir — itu
 pembacaan uuid di dalam berkas transkrip, bukan mutasi di `SessionDO.ts`.
@@ -896,9 +918,87 @@ verifikasi, satu boolean.
 **Flag-nya tidak lengket, dan itu pilihan yang harus disebut:** `hello` tanpa `lk` menulis `false`
 (`SessionDO.ts:144-145`), jadi socket yang pernah membuktikan kunci kehilangan hak memerintah begitu ia
 `hello` ulang tanpa kunci. Harganya: klien yang kehilangan `lk` dari `localStorage` kehilangan kendali pada
-`hello` berikutnya. Itu persis cabang "Ambil kendali" — dan **cabang itu belum terukur di browser**:
-`src/screens/**` dan `src/app/**` tidak saya ubah dan tidak saya jalankan ronde ini, jadi tidak ada satu pun
-kalimat di atas yang boleh dibaca sebagai "layar sudah diuji".
+`hello` berikutnya. Itu persis cabang "Ambil kendali" — dan **cabang itu sekarang terukur di browser lokal**
+(ronde #5, 18 Nov, bagian di bawah): tombol muncul pada pemegang kunci sesudah penolakan, dan tidak pernah
+muncul pada HP tanpa `lk`. Batasnya: bukan dua HP fisik dan bukan lintas evict DO. `src/screens/**` dan
+`src/app/**` tetap tidak saya ubah ronde ini, jadi tidak ada kalimat di atas yang boleh dibaca sebagai
+"layar sudah diubah dan diuji".
+
+### Ronde #5 (18 Nov) — gerbang browser terbuka: cabang "Ambil kendali" terukur di browser lokal
+
+**Perintah.** Satu panggilan Bash menjalankan server + ukur + bersih-bersih:
+`bash C:/Users/LENOVO/AppData/Local/Temp/pc-r5-jalan.sh` (sha256 `f87bc14c02d8bf192ade067624adb15c017703951d7ec37d421da67bd4ab9690`,
+1.633 B); di dalamnya `npx wrangler dev --assets=dist --local --port 8787`, poll `/health`, lalu
+`node C:/Users/LENOVO/AppData/Local/Temp/pc-r5-browser.mjs` (sha256 `ca299a5810cc7c41a41d5415a777b048424c695019aa6088d69f22b81fc09e35`,
+14.117 B) — CDP mentah lewat WebSocket bawaan Node 24, tanpa dependensi baru. Kedua skrip TIDAK saya
+commit: perintah copy gabungan diblokir classifier (stage-2, tanpa label keamanan); yang masuk repo
+hanya artefak buktinya. `NODE_EXIT=0`, `RUNNER_EXIT=0`; port 8787 bersih sesudah cleanup.
+Stack: workerd lokal + HeadlessChrome/156.0.8078.4, viewport 420×900, sid `QCMC`, tiga
+`browserContextId` unik (`6E7B66AB…`, `DCD7922F…`, `4AC204C1…`) — storage terisolasi per konteks.
+
+| konteks | blob `paranoidclick.session` (did) | h1 | tombol "Ambil kendali" |
+|---|---|---|---|
+| A | `{sid,tok,lk,leader:true}` (`a1a1a1a1a1a1a1a1`) | Pemimpin → Pengikut sesudah NOT_LEADER → Pemimpin sesudah claim | **muncul** sesudah `+1` ditolak |
+| B | `{sid,tok,leader:true}` TANPA `lk`, warisan `452488c:283` (`b2b2b2b2b2b2b2b2`) | Pengikut | **tidak pernah muncul** |
+| C | sama dengan A (`c3c3c3c3c3c3c3c3`) | Pemimpin → Pengikut → Pemimpin | muncul sesudah NOT_LEADER, hilang sesudah claim |
+
+**Frame yang terlihat** (mentah disensor, `bukti/m3a-r5-mentah.json`): C `+1` → KIRIM
+`{"t":"tempo","bpm":121}` → TERIMA `{"t":"error","code":"NOT_LEADER"}` → `span.bad` "server tidak
+mengakui HP ini sebagai pemimpin"; C "Ambil kendali" → KIRIM `{"t":"claim","lk":…}` → TERIMA
+`{"t":"state","bpm":120,"anchorMs":null,"running":false,"members":3}`; A `+1` → NOT_LEADER → tombol
+muncul di A (pemegang kunci yang sah); A claim → state; A `+5` → KIRIM tempo 125 → TERIMA
+`state bpm 125 members 3`, dan B serta C menerima teks state yang sama. Total frame A=40, B=31, C=29;
+NOT_LEADER diterima A=1, C=1, **B=0**; lima tombol perintah B semuanya `disabled:true`.
+Artefak commit: `bukti/m3a-r5-A-ambil-kendali.png` sha256 `ad49f778e213f06ff61bd132dde5d748a2cb0d891552248a54bf88b135f825a2`,
+`bukti/m3a-r5-B-tanpa-lk.png` `fdd57af2dd9ba01c6f7b42d252bd49e1c9460acd7256bcf98d520d7c31cc45b1`,
+`bukti/m3a-r5-C-ambil-kendali.png` `057811bb28348d6241cc4365d08a9782e0eaf3f98658d6f4e59ef8352f2fb013`,
+`bukti/m3a-r5-mentah.json` `c15f0429088036d32fa707fd872547174c56520d0b717fb8a81d30b52e72d18c` (22.313 B;
+`grep -c -E "[0-9a-f]{64}"` = **0**, jadi tidak ada tok/lk di dalamnya).
+
+**Batas yang wajib dibaca bersama angka itu.** (1) Bukan dua HP fisik — task #26 (stack hidup dua
+perangkat) tetap terbuka. (2) TIDAK ada evict DO di run ini: cabang yang terukur adalah pindah podium
+lewat `claim`, jadi "Ambil kendali" SESUDAH hibernasi tetap **TIDAK TERUKUR** di browser. (3) Ketiadaan
+tombol di B over-determined: `punyaKunci=false` DAN `podiumLepas=false`, dan B menerima 0 NOT_LEADER
+karena tombolnya disabled — run ini tidak mengisolasi variabel mana yang menyembunyikan tombol.
+(4) `--mute-audio` + `--autoplay-policy=no-user-gesture-required`: suara TIDAK terukur. (5) Screenshot
+diambil saat `leader=false`, sehingga tautan join (pembawa `tok`) tidak ter-render di dalamnya.
+(6) Efek samping terukur: `ClickRoom.tsx:109` menulis ulang blob B `leader:true → leader:false`.
+Itulah **TEMUAN 6 ronde ini** — berbeda dari "TEMUAN 6" ronde #5 sebelumnya tentang `parseTarget`
+(commit `c237e0c`, plan §8.6); dua label yang sama untuk dua temuan berbeda, saya pisahkan di sini.
+
+**Kesalahan instrumentasi saya sendiri, disebut apa adanya.** Run pertama hanya menekan "Lanjut ke
+sesi" dan berhenti di layar `!live` (0 frame, semua flag tombol false): `Start` → `ClickRoom` butuh
+klik KEDUA ("Masuk ke sesi", gerbang gestur audio). Run kedua mencetak `tok`/`lk` mentah ke stdout
+sebelum sensor dipasang; log Temp ditimpa run ketiga yang disensor, dan tidak ada artefak repo yang
+pernah memuat keduanya (hitung hex64 = 0 di atas).
+
+**§6 ronde #5 — tiga string sampah tidak masuk dokumen.** Grep repo-wide pola
+`67c47d1|7 file dirty|489-228` → **No matches found** (0 berkas), 2026-11-18.
+
+**§1 ronde #5 — angka checker dikutip, tidak diulang.** RED mereka di `73464b2`: 1 failed | 4 passed,
+8,29 s; GREEN di `f383335`: 5 passed, 9,42 s; `git show --numstat f383335 -- src/worker/SessionDO.ts` =
+31 insertions / 8 deletions, satu berkas; `npm run check` EXIT=0 dengan 103 unit + 39 worker
+(`f383335`) dan 103 + 40 (`9328e25`, worktree mereka). Selisih 39/40 terhadap 32 repo terjelaskan
+secara aritmetik: 32 + 3 probe-checker + 4 probe-independen = 39, + I5 = 40 — **dilaporkan + aritmetik
+cocok**, bukan ukuran saya atas run mereka; koreksi kalimat plan ada di §8.8.
+
+**§2 ronde #5 — probe yang benar-benar kosong saya pagari, yang tidak kosong saya koreksi.** I3 sudah
+dipagari `session.spec.ts:515-535`, I4 oleh `eviction.spec.ts:78-97` (A), I5 oleh `session.spec.ts:473-484`;
+klaim "tidak ada tes repo yang memagari I4" karena itu tidak tepat — delta I4 hanyalah urutan
+ping-wake sebelum perintah, dan itu sudah ada di C (`:132-134`). Yang kosong: I1 dan I2. Saya tulis
+ulang dengan byte saya sendiri sebagai `src/worker/otoritas.spec.ts` (P1/P2, commit `87dfdd9`):
+RED di worktree saya `pc-exec-r3` (`343a020`, pra-S8-b) EXIT=1, 2 failed, 8,59 s — P1 "start dari
+peniru harus dijawab NOT_LEADER, dapat null", P2 "expected undefined to be 'NOT_LEADER'"; GREEN di
+tree utama 2 passed, 911 ms. Run RED pertama saya memakai testTimeout bawaan 5 s dan P1 mati sebagai
+timeout, bukan sebagai assertion; saya ulang dengan `--testTimeout=20000` supaya alasan gagalnya
+adalah assertion yang dimaksud — angka 8,59 s di atas adalah run kedua itu.
+
+**§4 ronde #5 — note jalan keluar DIIZINKAN, belum dikerjakan.** Jawaban atas [TANYA] blob warisan:
+"Note kecil + jalan keluar" via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-18T07:14:54.932Z (baris
+18565, `tool_result` `call_0f8fc892f63c42b395fb36e5`). Isi izin: layar boleh menambah note "sesi ini
+tersimpan tanpa kunci pemimpin — buka ulang tautan join atau buat sesi baru", syarat ketat `lk` tidak
+pernah lewat URL. Status kode: BELUM ditulis — perubahan `src/screens/**` wajib ukur browser dulu,
+dan itu ronde berikutnya, bukan ronde ini.
 
 **Yang TETAP belum terukur oleh siapa pun, dan tidak berubah karena ronde ini:** fail-open `claim` yang
 sungguhan. Bentuk editnya diblokir permission layer dua kali di sesi saya, dan pemeriksa menulis sendiri di
