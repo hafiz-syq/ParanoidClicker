@@ -253,7 +253,7 @@ export class LiveSession {
         if (Number.isFinite(n)) this.opts.onMembers(n);
         const wrote = Number(frame.rowsWritten);
         if (wrote > 0) {
-          this.opts.onStatus(`masuk sebagai anggota (${wrote} baris ditulis)`);
+          this.opts.onStatus(`masuk sebagai anggota`);
         }
         return;
       }
