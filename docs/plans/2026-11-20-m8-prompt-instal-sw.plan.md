@@ -1,7 +1,7 @@
 # M8 irisan 5 — prompt instal & penundaan aktivasi SW
 
 **Tanggal**: 20 November 2026
-**Status**: bagian yang tidak butuh jawaban sudah dikerjakan. Tiga keputusan [TANYA] di §2 menunggu pemilik produk.
+**Status**: bagian yang tidak butuh jawaban sudah dikerjakan. Keputusan D1–D3 **DIJAWAB 21 Nov 2026** (pakai usulan sementara): D1 tetap menunggu tap, D2 semua HP, D3 auto sekali (30 hari).
 
 ## 1. Masalah
 

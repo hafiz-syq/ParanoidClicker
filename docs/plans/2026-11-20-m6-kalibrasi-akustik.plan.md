@@ -3,7 +3,10 @@
 **Tanggal**: 2026-11-20
 **Status**: **IRISAN 1 DIKERJAKAN (20 Nov 2026)** — estimator murni `src/app/audio/calibrate.ts`
 ada beserta 6 tes sintetis. UI pengukuran, mikrofon, dan angka perangkat **belum** disentuh; §4
-K1–K3 masih harus dijawab sebelum irisan 2.
+K1–K3 **DIJAWAB 21 Nov 2026**:
+- K1: lingkar penuh (speaker → mikrofon → telinga)
+- K2: auto-apply jika `used ≥ 6` (dari 8 klik), else wajib tekan "Terapkan"
+- K3: usulan sekarang (0–500 ms, ±40 ms dari median, 8 klik), field data nanti
 **Basis**: tree setelah M3b/M4/M5 dan sesudah dua perbaikan 20 Nov (ramp berhenti saat lagu dipilih;
 hitungan menyebut judul lagu aktif).
 **Dasar**: README §"M2: servo θ …" menutup dengan "kompensasi latensi baru `baseLatency +
