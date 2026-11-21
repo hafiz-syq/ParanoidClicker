@@ -33,6 +33,17 @@ export default {
     const url = new URL(request.url);
     if ((env as unknown as Record<string, string | undefined>)['PC_LOG_URLS'] === '1') logRequest(request);
 
+    // CORS untuk WebSocket upgrade dan POST /create saat frontend di domain lain (Vercel).
+    if (request.method === 'OPTIONS' && (url.pathname === '/ws' || url.pathname === '/create')) {
+      return new Response(null, {
+        headers: {
+          'Access-Control-Allow-Origin': (env as unknown as Record<string, string | undefined>)['PC_ALLOWED_ORIGIN'] ?? '*',
+          'Access-Control-Allow-Methods': 'POST,GET,PUT,DELETE,OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type,Authorization,Upgrade,Connection',
+        },
+      });
+    }
+
     if (url.pathname === '/health') {
       // keyPresent, bukan panjangnya: cukup untuk membuktikan `wrangler secret put` menempel
       // di deployment tanpa membocorkan apa pun tentang kunci.

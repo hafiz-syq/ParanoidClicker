@@ -93,7 +93,9 @@ export class LiveSession {
     private readonly target: LiveTarget,
     private readonly opts: LiveOptions
   ) {
-    this.url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?sid=${target.sid}&tok=${target.tok}`;
+    const api = import.meta.env.VITE_PC_API as string | undefined;
+    const apiBase = api ? (api.startsWith('http') ? api : `https://${api}`) : `${location.protocol}//${location.host}`;
+    this.url = `${apiBase.replace(/^http/, 'ws')}/ws?sid=${target.sid}&tok=${target.tok}`;
   }
 
   connect(): void {

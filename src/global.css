@@ -14,6 +14,11 @@
  */
 :root {
   color-scheme: dark;
+  /* Warna akcent metal/rock: perakabu/hitam dengan biru electric & merah agresif */
+  --accent-primary: #9cf;
+  --accent-secondary: #00d4aa;
+  --accent-danger: #ff4757;
+  --accent-warm: #ffa502;
 }
 
 /* Diukur di browser bukti (viewport 390px): textarea .fill punya width:100% + padding
@@ -30,33 +35,55 @@ body {
   margin: 0;
   background: #0b0b0f;
   color: #eee;
-}
-
-body {
   font-family: system-ui, sans-serif;
+  text-rendering: optimizeLegibility;
 }
 
-/* Elemen, bukan kelas: tiap layar merender tepat satu <main>, dan `.wide` satu-satunya
-   yang boleh menyimpang dari lebar baca. */
+/* Latar depan: logo Paranoid sebagai background menempel di tengah, overlay gelap
+   memastikan kontras teks tetap terbaca di semua layar (termasip laptop/desktop). */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: url("/ikon/Paranoid.jpg") center/cover no-repeat,
+              linear-gradient(180deg, #0b0b0f 0%, #121218 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Konten di atas overlay latar. */
 main {
+  position: relative;
+  z-index: 1;
   padding: 16px;
   max-width: 520px;
+  margin: 0 auto;
 }
 
 main.wide {
   max-width: 720px;
+  padding: 16px;
 }
 
 h1 {
   font-size: 20px;
+  font-weight: 600;
+  color: #eee;
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
 }
 
 h2 {
   font-size: 15px;
+  font-weight: 600;
+  color: #9cf;
+  margin-top: 24px;
+  margin-bottom: 12px;
 }
 
 a {
   color: #9cf;
+  text-decoration: underline;
 }
 
 .btn {
@@ -66,6 +93,23 @@ a {
   color: #eee;
   border: 1px solid #808088;
   border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, transform 0.05s;
+}
+
+.btn:hover {
+  background: #24242c;
+  border-color: #9cf;
+}
+
+.btn:active {
+  background: #0f0f14;
+  transform: scale(0.98);
+}
+
+.btn:focus-visible {
+  outline: 2px solid #9cf;
+  outline-offset: 2px;
 }
 
 .btn-lg {
@@ -73,14 +117,10 @@ a {
   font-size: 18px;
 }
 
-/* Tombol Start/Stop jangan ikut menyusut saat labelnya berganti "Stop" -> "Start". */
 .btn-wide {
   min-width: 110px;
 }
 
-/* Tombol pengikut memang mati (hanya pemimpin yang mengubah tempo) — labelnya tetap
-   harus terbaca: #9a9ab0 di #16161c = 6,54:1. Membedakan dengan opasitas saja akan
-   menurunkannya ke bawah ambang. */
 .btn:disabled {
   background: #16161c;
   color: #9a9ab0;
@@ -96,8 +136,6 @@ a {
   padding: 6px;
 }
 
-/* Panel diagnostik. Tanpa border, isinya nyaris tidak berbeda dari latar (#101016 vs
-   #0b0b0f = 1,04:1) — panelnya ditandai oleh garis tepi, bukan oleh warna isi. */
 .pre {
   background: #101016;
   color: #8f8;
@@ -124,7 +162,6 @@ a {
   margin-top: 20px;
 }
 
-/* Versi SW harus terlihat di semua layar tanpa mengambil ruang panel diagnostik. */
 .build {
   max-width: 520px;
   margin: 8px 0 0;
@@ -142,6 +179,10 @@ a {
 }
 
 .fill {
+  width: 100%;
+}
+
+.field-lebar {
   width: 100%;
 }
 
@@ -164,8 +205,6 @@ a {
   align-items: center;
 }
 
-/* Setlist (M3b). Pemisah baris memakai warna border yang sudah dihitung (5,02:1 vs latar),
-   bukan warna baru yang belum diukur. */
 .song {
   display: flex;
   gap: 8px;
@@ -180,7 +219,6 @@ a {
   font-size: 14px;
 }
 
-/* Lagi dipakai: ditandai warna teks yang sudah ada (.ok = #8f8), bukan latar baru. */
 .song-aktif .song-nama {
   color: #8f8;
   font-weight: 600;
@@ -191,11 +229,6 @@ a {
   font-size: 13px;
 }
 
-.field-lebar {
-  width: 100%;
-}
-
-/* QR harus tetap terang di tema gelap: kontras modul-vs-kotak adalah yang dibaca kamera. */
 .qr {
   background: #fff;
   border-radius: 8px;
@@ -211,9 +244,6 @@ a {
   background: #000;
 }
 
-/* M7 irisan 2: pemberitahuan yang boleh ditutup (versi baru, tawaran pasang). Diletakkan di atas
-   <main> dan memakai lebar baca yang sama; warnanya tidak baru — #16161c dan #808088 sudah
-   dipakai .btn/.btn:disabled, jadi tidak menambah baris kontras di scripts/cr.mjs. */
 .pwa {
   max-width: 520px;
   padding: 0 16px;

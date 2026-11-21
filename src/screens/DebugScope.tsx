@@ -164,10 +164,13 @@ export function DebugScope() {
 
     await holdScreen('pengukuran');
 
+    const api = import.meta.env.VITE_PC_API as string | undefined;
+    const apiOrigin = api ? (api.startsWith('http') ? api : `https://${api}`) : `${location.protocol}//${location.host}`;
+
     let sid = '';
     let wsPath = '';
     try {
-      const res = await fetch('/create', { method: 'POST' });
+      const res = await fetch(`${apiOrigin}/create`, { method: 'POST' });
       const body = (await res.json()) as { sid?: string; wsPath?: string; error?: string };
       if (!res.ok || typeof body.sid !== 'string' || typeof body.wsPath !== 'string') {
         throw new Error(`/create gagal ${res.status}: ${JSON.stringify(body)}`);
@@ -184,7 +187,7 @@ export function DebugScope() {
 
     // wsPath sudah membawa tok hasil /create; menyusun ulang query di sini pernah jadi
     // jalur banjir DO (sid boleh dikarang bebas, tanpa token tidak ada DO yang bangkit).
-    const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${wsPath}`;
+    const url = `${apiOrigin.replace(/^http/, 'ws')}${wsPath}`;
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
