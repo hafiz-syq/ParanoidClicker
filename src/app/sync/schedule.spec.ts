@@ -6,6 +6,7 @@ import {
   abandonedBeats,
   adoptIndex,
   firstPlayableIndex,
+  nextBarMs,
   planBeats,
   wallMsOf,
   type ClockBridge,
@@ -178,6 +179,39 @@ describe('firstPlayableIndex', () => {
 
   it('layar yang bergabung di tengah lagu menunjuk beat berikutnya, bukan yang sudah lewat', () => {
     expect(firstPlayableIndex(G120, anchor + 10 * periodOf(120) + 10)).toBe(11);
+  });
+});
+
+describe('nextBarMs', () => {
+  const p = periodOf(120);
+
+  it('selalu bar yang masih di depan, di kelipatan 4 beat', () => {
+    // 2,5 beat sesudah anchor → bar berikutnya beat 4.
+    expect(nextBarMs(G120, anchor + 2.5 * p)).toBe(anchor + 4 * p);
+    // Tepat di garis bar: bar itu sedang berbunyi, anchor baru harus bar sesudahnya.
+    expect(nextBarMs(G120, anchor + 4 * p)).toBe(anchor + 8 * p);
+    // Sedikit sebelum bar → bar itu yang dipakai, bukan bar sesudahnya.
+    expect(nextBarMs(G120, anchor + 3.9 * p)).toBe(anchor + 4 * p);
+  });
+
+  it('grid tak masuk akal → NaN, supaya pemanggil memakai jalur lama', () => {
+    expect(Number.isNaN(nextBarMs({ anchorMs: anchor, periodMs: 0 }, anchor))).toBe(true);
+    expect(Number.isNaN(nextBarMs({ anchorMs: Number.NaN, periodMs: 500 }, anchor))).toBe(true);
+  });
+
+  it('grid baru ber-anchor batas bar tidak menggandakan beat di jahitan', () => {
+    const now = anchor + 2.5 * p;
+    const at = nextBarMs(G120, now);
+    const baru: Grid = gridOf(100, at);
+    // Tepat sesudah serah terima, cursor grid baru mulai di beat 1: beat 0 di garis bar sudah
+    // berbunyi dari grid lama, jadi tidak ada klik ganda (dan tidak ada beat yang dilewati).
+    const seam = adoptIndex(G120, 3, baru, at + 1);
+    expect(seam.index).toBe(1);
+    expect(beatMs(G120, 4)).toBe(at);
+    // Klik terakhir grid lama di garis bar, lalu klik pertama grid baru tepat satu periode baru
+    // sesudahnya — bukan di momen yang sama, dan bukan satu periode penuh yang kosong.
+    expect(beatMs(baru, seam.index) - beatMs(G120, 4)).toBe(periodOf(100));
+    expect(seam.swallowed).toBe(0);
   });
 });
 

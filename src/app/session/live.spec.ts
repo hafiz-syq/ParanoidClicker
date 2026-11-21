@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LiveSession, parseTarget, readRemembered, rememberTarget, type SessionState } from './live';
+import { LiveSession, parseTarget, readRemembered, rememberTarget, targetFromUrl, type SessionState } from './live';
+import type { Song } from '../../shared/setlist';
 
 const TOK = 'a'.repeat(64);
 const T0 = 1_700_000_000_000;
@@ -60,7 +61,7 @@ function install(): void {
   vi.setSystemTime(T0);
   Object.assign(globalThis, {
     WebSocket: FakeWS,
-    location: { protocol: 'https:', host: 'example.com' },
+    location: { protocol: 'https:', host: 'example.com', origin: 'https://example.com', pathname: '/' },
     localStorage: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) },
     sessionStorage: {
       getItem: (k: string) => session.get(k) ?? null,
@@ -73,6 +74,7 @@ interface Harness {
   live: LiveSession;
   states: SessionState[];
   members: number[];
+  setlists: { songs: Song[]; aktif: number | null }[];
   status: string[];
   theta: number[];
   ws(): FakeWS;
@@ -81,6 +83,7 @@ interface Harness {
 function harness(sid = 'ABCD', lk?: string): Harness {
   const states: SessionState[] = [];
   const members: number[] = [];
+  const setlists: { songs: Song[]; aktif: number | null }[] = [];
   const status: string[] = [];
   const theta: number[] = [];
   const live = new LiveSession(
@@ -88,11 +91,12 @@ function harness(sid = 'ABCD', lk?: string): Harness {
     {
       onState: (s) => states.push(s),
       onMembers: (n) => void members.push(n),
+      onSetlist: (songs, aktif) => void setlists.push({ songs, aktif }),
       onStatus: (l) => status.push(l),
       onTheta: (t) => theta.push(t),
     }
   );
-  return { live, states, members, status, theta, ws: () => FakeWS.instances[FakeWS.instances.length - 1]! };
+  return { live, states, members, setlists, status, theta, ws: () => FakeWS.instances[FakeWS.instances.length - 1]! };
 }
 
 /**
@@ -123,7 +127,78 @@ describe('parseTarget', () => {
   });
 });
 
+describe('targetFromUrl', () => {
+  it('hanya alamat sesi yang sah yang diterima, dan lk tidak pernah ikut dari luar', () => {
+    expect(targetFromUrl(`https://example.com/?sid=ABCD&tok=${TOK}`)).toEqual({ sid: 'ABCD', tok: TOK });
+    expect(targetFromUrl(`/?sid=ABCD&tok=${TOK}`)).toEqual({ sid: 'ABCD', tok: TOK });
+    // QR dari aplikasi lain, tautan tanpa token, dan teks iseng: semuanya nol, bukan sesi.
+    expect(targetFromUrl('halo dunia')).toBeNull();
+    expect(targetFromUrl('https://example.com/?sid=ABCD')).toBeNull();
+    expect(targetFromUrl('https://example.com/?sid=AB&tok=zz')).toBeNull();
+    // Sama seperti parseTarget: `lk` yang ditempel di URL tidak pernah dibaca.
+    expect(targetFromUrl(`https://example.com/?sid=ABCD&tok=${TOK}&lk=${'f'.repeat(64)}`)).toEqual({
+      sid: 'ABCD',
+      tok: TOK,
+    });
+  });
+});
+
 describe('LiveSession', () => {
+  it('setlist dari state diteruskan, dan satu lagu cacat tidak menghapus sisanya', () => {
+    const h = harness();
+    h.live.connect();
+    const ws = h.ws();
+    ws.open();
+    ws.frame({
+      t: 'state',
+      bpm: 120,
+      anchorMs: null,
+      running: false,
+      setlist: [
+        { id: 1, judul: 'Intro', bpm: 100 },
+        { id: 2, judul: '', bpm: 100 },
+        { id: 3, judul: 'Verse', bpm: 120 },
+      ],
+      laguAktif: 3,
+    });
+    expect(h.setlists.at(-1)).toEqual({
+      songs: [
+        { id: 1, judul: 'Intro', bpm: 100 },
+        { id: 3, judul: 'Verse', bpm: 120 },
+      ],
+      aktif: 3,
+    });
+    // Frame tanpa setlist (server lama) bukan "daftar kosong": layar harus mempertahankan
+    // yang sudah ada, bukan menghapusnya karena satu frame tidak menyebut lagu.
+    ws.frame({ t: 'state', bpm: 120, anchorMs: null, running: false });
+    expect(h.setlists).toHaveLength(1);
+    // laguAktif yang bukan id sah = null, bukan id hantu yang tidak ada di daftar.
+    ws.frame({ t: 'state', bpm: 120, anchorMs: null, running: false, setlist: [], laguAktif: 'tiga' });
+    expect(h.setlists.at(-1)).toEqual({ songs: [], aktif: null });
+  });
+
+  it('perintah setlist hanya mengirim niat; angka batasnya diperiksa server', () => {
+    const h = harness('ABCD', 'e'.repeat(64));
+    h.live.connect();
+    const ws = h.ws();
+    ws.open();
+    expect(h.live.laguTambah('  Intro  ', 100)).toBe(true);
+    expect(JSON.parse(ws.sent.at(-1)!)).toEqual({ t: 'lagu', op: 'tambah', judul: '  Intro  ', bpm: 100 });
+    expect(h.live.laguGeser(7, true)).toBe(true);
+    expect(JSON.parse(ws.sent.at(-1)!)).toEqual({ t: 'lagu', op: 'naik', id: 7 });
+    expect(h.live.laguGeser(7, false)).toBe(true);
+    expect(JSON.parse(ws.sent.at(-1)!)).toEqual({ t: 'lagu', op: 'turun', id: 7 });
+    expect(h.live.laguPilih(7)).toBe(true);
+    expect(JSON.parse(ws.sent.at(-1)!)).toEqual({ t: 'lagu', op: 'pilih', id: 7 });
+    expect(h.live.laguHapus(7)).toBe(true);
+    expect(JSON.parse(ws.sent.at(-1)!)).toEqual({ t: 'lagu', op: 'hapus', id: 7 });
+
+    // Terputus: tombol tidak boleh pura-pura terkirim (alasan yang sama dengan tempo).
+    ws.emit('close', { code: 1006 });
+    expect(h.live.laguTambah('Verse', 120)).toBe(false);
+    expect(h.status.join(' ')).toMatch(/tidak terkirim/);
+  });
+
   it('hello memakai did yang sama untuk reload, dan menyimpannya', () => {
     const a = harness();
     a.live.connect();

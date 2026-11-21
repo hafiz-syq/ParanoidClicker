@@ -1,6 +1,7 @@
 import { genDid, isSid } from '../../shared/ids';
 import { FrameReject, parseFrame } from '../../shared/limits';
 import { parseBpm } from '../../shared/tempo';
+import { parseSetlist, parseSongId, type Song } from '../../shared/setlist';
 import { estimateOffset, toSample, type Sample, type Stamps } from '../sync/offset';
 
 export interface SessionState {
@@ -12,6 +13,8 @@ export interface SessionState {
 export interface LiveOptions {
   onState: (s: SessionState) => void;
   onMembers: (n: number) => void;
+  /** Setlist dari frame `state`; `aktif` = id lagu yang sedang dipakai, null kalau belum dipilih. */
+  onSetlist?: (songs: Song[], aktif: number | null) => void;
   onStatus: (line: string) => void;
   /** θ baru tiap pong; engine membacanya sekali per detik, bukan 40 kali. */
   onTheta: (thetaMs: number) => void;
@@ -50,6 +53,19 @@ export function parseTarget(search: string): LiveTarget | null {
 }
 
 /**
+ * Isi QR / teks yang ditempel: alamat lengkap `…/?sid=…&tok=…`, bukan query string saja.
+ * Pemindai meneruskan apa pun yang terbaca, jadi gerbangnya tetap `parseTarget` — QR dari
+ * aplikasi lain, tautan tanpa token, dan teks iseng semuanya ditolak di sini.
+ */
+export function targetFromUrl(text: string): LiveTarget | null {
+  try {
+    return parseTarget(new URL(text, location.origin).search);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Satu socket + estimasi θ yang terus diperbarui. Klik tidak pernah menunggu socket:
  * saat koneksi putus, sesi freewheel dari grid terakhir dan θ berhenti menua —
  * itu jalur pemulihan, bukan kegagalan.
@@ -64,6 +80,8 @@ export class LiveSession {
   private timer: ReturnType<typeof setInterval> | null = null;
   private retry: ReturnType<typeof setTimeout> | null = null;
   private lastPongAt = 0;
+  /** Kapan socket ini benar-benar OPEN; dipakai layar untuk membedakan sambung stabil dari flap. */
+  private openedAt = 0;
   /** Tebakan θ dari `welcome.serverNow`: server − lokal, tanpa koreksi perjalanan. */
   private seedMs: number | null = null;
   private readonly url: string;
@@ -87,6 +105,7 @@ export class LiveSession {
     this.ws = ws;
     ws.addEventListener('open', () => {
       this.attempt = 0;
+      this.openedAt = Date.now();
       this.opts.onStatus('terhubung');
       // `lk` hanya ikut kalau target memang punya: server membedakan "tidak punya kunci"
       // dari "kunci rusak" lewat ada/tidaknya key ini, bukan lewat string kosong.
@@ -100,6 +119,7 @@ export class LiveSession {
     ws.addEventListener('close', (ev) => {
       this.stopPings();
       this.ws = null;
+      this.openedAt = 0;
       // Sampel dari sebelum putus tidak lagi menggambarkan rute sekarang; dicampur dengan
       // pong pertama sesudah reconnect justru mengunci θ di angka lama (median 4 delay
       // terkecil hampir selalu milik rute yang dulu).
@@ -143,6 +163,24 @@ export class LiveSession {
     return this.send({ t: on ? 'start' : 'stop' });
   }
 
+  // Setlist (M3b). Klien hanya mengirim niat; batas 20 lagu, panjang judul, dan rentang bpm
+  // diperiksa server — layar boleh mematikan tombol, tapi itu kenyamanan, bukan gerbang.
+  laguTambah(judul: string, bpm: number): boolean {
+    return this.send({ t: 'lagu', op: 'tambah', judul, bpm });
+  }
+
+  laguHapus(id: number): boolean {
+    return this.send({ t: 'lagu', op: 'hapus', id });
+  }
+
+  laguGeser(id: number, naik: boolean): boolean {
+    return this.send({ t: 'lagu', op: naik ? 'naik' : 'turun', id });
+  }
+
+  laguPilih(id: number): boolean {
+    return this.send({ t: 'lagu', op: 'pilih', id });
+  }
+
   /**
    * Rebut kendali (ADR-0005): satu-satunya jalan kembali ke podium sesudah DO berpindah
    * tangan atau ter-evict dengan `did` lama. Tanpa `lk` tidak ada frame yang dikirim —
@@ -155,6 +193,11 @@ export class LiveSession {
       return false;
     }
     return this.send({ t: 'claim', lk });
+  }
+
+  /** Umur socket yang sedang terbuka; `Infinity` kalau tidak ada socket. */
+  msSinceOpen(): number {
+    return this.openedAt ? Date.now() - this.openedAt : Number.POSITIVE_INFINITY;
   }
 
   thetaMs(): number {
@@ -220,6 +263,11 @@ export class LiveSession {
         // bug yang membuat angka di layar pemimpin berhenti di '1 HP'.
         const n = Number(frame.members);
         if (Number.isFinite(n)) this.opts.onMembers(n);
+        // Setlist dibaca sebelum gerbang grid, alasannya sama dengan `members`: daftar lagu
+        // adalah informasi yang berdiri sendiri, dan satu field tempo yang mencurigakan tidak
+        // boleh membekukan lagu-lagu yang sudah benar-benar dikirim server.
+        const songs = parseSetlist(frame.setlist);
+        if (songs) this.opts.onSetlist?.(songs, parseSongId(frame.laguAktif));
         const bpm = parseBpm(frame.bpm);
         const anchorMs = frame.anchorMs === null ? null : Number(frame.anchorMs);
         // Server sudah membatasi bpm, tapi kepercayaan tidak diwarisi: `bpm: 0` membuat

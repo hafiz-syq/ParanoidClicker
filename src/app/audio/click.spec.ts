@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { beatMs, gridOf, periodOf, retune, type Grid } from '../../shared/tempo';
 import { ClickEngine, type ClickStats } from './click';
+import { countInPlan } from './voice';
 
 // Harness AudioContext palsu. Yang ditiru hanya jam dan antrean oscillator, karena itulah
 // dua hal yang menentukan apakah sebuah klik berbunyi pada beat yang benar. `rate` dibuat
@@ -351,6 +352,68 @@ describe('ClickEngine + servo (ADR-0001)', () => {
       expect(server[i] - server[i - 1]).toBeGreaterThan(1);
       expect(server[i] - server[i - 1]).toBeLessThanOrEqual(periodOf(110) * 1.05 + 1);
     }
+    e.destroy();
+  });
+
+  it('hitungan masuk dijadwalkan di jam audio yang sama dengan klik, bukan timer kata', () => {
+    // M5 lama mencatat kapan speak() dipanggil, sehingga voice perangkat tetap bisa datang
+    // terlambat. Di sini yang dibaca adalah waktu `oscillator.start` yang sudah masuk antrean
+    // AudioContext. Tidak perlu memajukan timer satu kali pun: kelima penanda harus langsung
+    // ada, dan jaraknya harus sama dengan periode grid.
+    for (const bpm of [120, 100]) {
+      const { e, ctx } = engine();
+      const grid = gridOf(bpm, Date.now() + 1_000);
+      const plan = countInPlan(grid, Date.now());
+      const hasil = e.scheduleCountIn(plan);
+      expect(hasil.requested).toBe(5);
+      expect(hasil.scheduled).toBe(5);
+      expect(hasil.skipped).toBe(0);
+      expect(hasil.gapsMs).toHaveLength(4);
+      for (const gap of hasil.gapsMs) expect(gap).toBeCloseTo(periodOf(bpm), 6);
+      // θ = 0 dan COMP sudah masuk saat unlock; balikkan start audio ke waktu server untuk
+      // membuktikan bunyi mendarat tepat pada jadwal countInPlan, bukan pada jadwal sendiri.
+      const starts = ctx.armed.map((o) => ctx.wallMsOf(o.startAudioMs) + COMP);
+      expect(starts).toHaveLength(5);
+      for (let i = 0; i < starts.length; i++) expect(starts[i]).toBeCloseTo(plan[i]!.atMs, 6);
+      for (let i = 1; i < starts.length; i++) expect(starts[i]! - starts[i - 1]!).toBeCloseTo(periodOf(bpm), 6);
+      e.destroy();
+    }
+  });
+
+  it('hitungan yang sudah lewat dibuang, bukan dibunyikan beruntun di currentTime', () => {
+    const { e, ctx } = engine();
+    const hasil = e.scheduleCountIn([
+      { atMs: Date.now() - 100 },
+      { atMs: Date.now() + 500 },
+      { atMs: Date.now() + 1_000 },
+    ]);
+    expect(hasil.requested).toBe(3);
+    expect(hasil.scheduled).toBe(2);
+    expect(hasil.skipped).toBe(1);
+    expect(hasil.atMs).toEqual([Date.now() + 500, Date.now() + 1_000]);
+    expect(ctx.armed).toHaveLength(2);
+    e.destroy();
+  });
+
+  it('tab duplikat yang dibisukan tidak menjadwalkan klik maupun hitungan masuk', () => {
+    // Penjaga BroadcastChannel memanggil setMuted(true) pada tab kedua. State server tetap
+    // boleh datang, tetapi tidak boleh ada satu oscillator yang lahir dari tab itu.
+    const { e, ctx } = engine();
+    e.setMuted(true);
+    e.setTheta(0);
+    e.setGrid(gridOf(120, Date.now() + 200));
+    pump(800);
+    expect(ctx.armed).toHaveLength(0);
+
+    const plan = countInPlan(gridOf(120, Date.now() + 200), Date.now());
+    const hasil = e.scheduleCountIn(plan);
+    expect(hasil.scheduled).toBe(0);
+    expect(hasil.reason).toContain('dibisukan');
+
+    e.setMuted(false);
+    e.setGrid(gridOf(120, Date.now() + 200));
+    pump(500);
+    expect(ctx.armed.length).toBeGreaterThan(0);
     e.destroy();
   });
 

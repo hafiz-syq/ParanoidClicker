@@ -10,7 +10,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { genSid } from '../src/shared/ids';
-import { MAX_MEMBERS } from '../src/shared/limits';
+import { MAX_FRAME_BYTES, MAX_MEMBERS } from '../src/shared/limits';
+import { MAX_JUDUL, MAX_SETLIST } from '../src/shared/setlist';
 
 const BASE = process.env['PC_BASE_URL'] ?? 'http://127.0.0.1:8787';
 const LOG = process.env['PC_LOG_FILE'] ?? '';
@@ -361,6 +362,110 @@ check(
 
 for (const r of [pemimpin, ...anggota]) r.close();
 
+console.log('\n--- T13: permukaan frame lagu (M3b) ---');
+
+// `lagu` adalah permukaan TULIS baru: lima op yang mengubah data ruangan. Yang diuji di sini
+// bukan bentuk judul/bpm/id — itu T4 `setlist.spec.ts`, dengan konstanta yang sama — melainkan
+// empat sifat yang hanya bisa dilihat dari socket luar pada worker yang benar-benar jalan:
+// tanpa `lk` tidak ada op yang lolos, penolakan tidak pernah disiarkan ke HP lain, ukuran frame
+// masih diperiksa sebelum parse, dan kapasitas 20 lagu berhenti di server, bukan di layar.
+// `did` yang SAMA dengan pemimpin T12: podium sudah terikat ke situ, dan `hello` ber-`lk` dari
+// `did` lain hanya membuktikan kunci tanpa memindahkan podium (jalur pindahnya `claim`).
+const laguPemimpin = await join('attack-pemimpin', lk);
+const laguAnggota = await join('attack-lagu-anggota');
+// Bukan cek, hanya penenangan: tiap hello menyiarkan `state` ke socket lain, dan siaran itu
+// mendarat SESUDAH kedua socket terbuka. Snapshot dasar tanpa jeda ini membaca siaran hello
+// sebagai "T13a membocorkan frame" — jeda 300 ms cukup untuk localhost, dan tidak ada timer
+// ruangan yang berjalan di sesi uji ini.
+await new Promise((r) => setTimeout(r, 300));
+
+const setlistDari = (t: string): number => {
+  try {
+    const f = JSON.parse(t) as { setlist?: unknown[] };
+    return Array.isArray(f.setlist) ? f.setlist.length : -1;
+  } catch {
+    return -1;
+  }
+};
+
+const opLagu = [
+  { t: 'lagu', op: 'tambah', judul: 'Serangan', bpm: 120 },
+  { t: 'lagu', op: 'naik', id: 1 },
+  { t: 'lagu', op: 'turun', id: 1 },
+  { t: 'lagu', op: 'pilih', id: 1 },
+  { t: 'lagu', op: 'hapus', id: 1 },
+];
+const dasarPemimpin = laguPemimpin.frames.length;
+const dasarAnggota = laguAnggota.frames.length;
+for (const f of opLagu) laguAnggota.send(f);
+const ditolak = await waited(
+  () => laguAnggota.frames.slice(dasarAnggota).filter(isNotLeader).length === opLagu.length
+);
+const setlistAnggota = setlistDari(states(laguAnggota).at(-1) ?? '');
+check(
+  'T13a',
+  ditolak && laguPemimpin.frames.length === dasarPemimpin && setlistAnggota === 0,
+  `${opLagu.length} op lagu dari pengikut → ${laguAnggota.frames.slice(dasarAnggota).filter(isNotLeader).length} NOT_LEADER, ` +
+    `pemimpin ${laguPemimpin.frames.length === dasarPemimpin ? 'tidak menerima apa pun' : 'MENERIMA siaran'}, ` +
+    `setlist pengikut tetap ${setlistAnggota} lagu`
+);
+
+// Dua probe, bukan delapan: judul kosong/kepanjangan dan bpm 29/301/"120" sudah diuji T4
+// `setlist.spec.ts`. Yang tidak diuji di sana adalah bahwa penolakan ini milik PENGIRIM saja —
+// pengikut tidak menerima satu frame pun, jadi frame cacat tidak bisa dipakai menyiarkan apa pun.
+const dasarCacat = laguPemimpin.frames.length;
+const dasarCacatAnggota = laguAnggota.frames.length;
+laguPemimpin.send({ t: 'lagu', op: 'tambah', judul: 'x'.repeat(MAX_JUDUL + 1), bpm: 120 });
+laguPemimpin.send({ t: 'lagu', op: 'karangan' });
+await waited(() => laguPemimpin.frames.length >= dasarCacat + 2);
+const kodeCacat = laguPemimpin.frames.slice(dasarCacat).map(codeOf);
+const setlistTetap = setlistDari(states(laguPemimpin).at(-1) ?? '');
+check(
+  'T13b',
+  kodeCacat.join(',') === 'BAD_SONG,PROTO' &&
+    laguAnggota.frames.length === dasarCacatAnggota &&
+    setlistTetap === 0,
+  `judul ${MAX_JUDUL + 1} karakter → ${kodeCacat[0] ?? 'tanpa jawaban'}, op karangan → ${kodeCacat[1] ?? 'tanpa jawaban'}; ` +
+    `pengikut ${laguAnggota.frames.length === dasarCacatAnggota ? 'tidak menerima apa pun' : 'MENERIMA siaran'}, ` +
+    `setlist tetap ${setlistTetap} lagu`
+);
+
+// T6a sudah membuktikan gerbang ukuran untuk frame apa pun; yang ditambah di sini hanya satu
+// hal: payload 1 MB yang diselipkan ke field `judul` tetap ditolak SEBELUM parse setlist.
+const bomLagu = await bomb(JSON.stringify({ t: 'lagu', op: 'tambah', judul: 'A'.repeat(1_000_000), bpm: 120 }));
+check('T13c', bomLagu.codes.includes('TOO_BIG'), `judul 1 MB → ${show(bomLagu)}`);
+
+// T4 `setlist.spec.ts` sudah menolak lagu ke-21 di workerd; di sini yang dibuktikan adalah
+// worker yang benar-benar jalan berhenti pada angka yang sama, frame `state` terbesar masih di
+// bawah MAX_FRAME_BYTES, dan pengikut menerima teks yang identik byte.
+const judulPenuh = (i: number) => {
+  const dasar = `Lagu ${i} `;
+  return dasar + 'x'.repeat(MAX_JUDUL - dasar.length);
+};
+for (let i = 0; i < MAX_SETLIST; i++) {
+  const dari = states(laguPemimpin).length;
+  laguPemimpin.send({ t: 'lagu', op: 'tambah', judul: judulPenuh(i), bpm: 120 });
+  await waited(() => states(laguPemimpin).length > dari);
+}
+const dasarPenuh = laguPemimpin.frames.length;
+laguPemimpin.send({ t: 'lagu', op: 'tambah', judul: 'Lagu ke-21', bpm: 120 });
+const penuh = await waited(() => laguPemimpin.frames.slice(dasarPenuh).some((f) => codeOf(f) === 'FULL_SETLIST'));
+const framePenuh = states(laguPemimpin).at(-1) ?? '';
+let bentukOk = false;
+try {
+  bentukOk = typeof JSON.parse(framePenuh) === 'object' && framePenuh.length <= MAX_FRAME_BYTES;
+} catch {
+  bentukOk = false;
+}
+check(
+  'T13d',
+  penuh && setlistDari(framePenuh) === MAX_SETLIST && bentukOk && states(laguAnggota).at(-1) === framePenuh,
+  `lagu ke-21 → FULL_SETLIST; frame ${framePenuh.length} byte (batas ${MAX_FRAME_BYTES}), ${setlistDari(framePenuh)} lagu, ` +
+    `pengikut ${states(laguAnggota).at(-1) === framePenuh ? 'menerima teks yang sama' : 'MELIHAT DAFTAR BERBEDA'}`
+);
+
+for (const r of [laguPemimpin, laguAnggota]) r.close();
+
 console.log('\n--- T9: jejak di log ---');
 
 if (LOG && existsSync(LOG)) {
@@ -375,14 +480,17 @@ if (LOG && existsSync(LOG)) {
   // jadi kemunculannya di log berarti ada kode yang mencetak JSON /create.
   check('T9d', !text.includes(lk || '§'), 'kunci pemimpin tidak tertulis di log');
   // Kendali positif untuk T9b: sid dan tok duduk di query string yang sama, jadi kalau URL
-  // itu tercatat maka sid pasti ikut muncul. Kalau sid pun tidak muncul, logger ini tidak
-  // merekam query string sama sekali — T9b di atas lolos tanpa membuktikan apa-apa, dan itu
-  // harus tertulis di laporan, bukan tersamar jadi "lulus".
-  const sidSeen = text.includes(sid);
+  // itu tercatat maka sid pasti ikut muncul. Shim `[req]` di Worker (hanya hidup dengan
+  // PC_LOG_URLS=1) mencatat method + path + query dengan `tok`/`lk` disamarkan, jadi baris
+  // yang memuat `sid=<sid uji>` membuktikan log ini memang merekam URL. Kalau baris itu tidak
+  // ada, worker dijalankan tanpa shim dan T9b di atas lolos tanpa membuktikan apa-apa — itu
+  // ditulis apa adanya, bukan tersamar jadi "lulus".
+  const reqLines = text.split('\n').filter((l) => l.includes('[req]'));
+  const wsLine = reqLines.find((l) => l.includes(`sid=${sid}`));
   console.log(
-    sidSeen
-      ? `BUKTI   T9c  log merekam URL (sid ditemukan) dan tok-nya tidak ikut: T9b terbukti`
-      : `KOSONG  T9c  sid tidak muncul di log — log ini tidak merekam URL, T9b lolos tapi belum terbukti`
+    wsLine
+      ? `BUKTI   T9c  log merekam URL (${reqLines.length} baris [req]; contoh: ${wsLine.slice(0, 88)}) dan tok-nya tidak ikut: T9b terbukti`
+      : `KOSONG  T9c  tidak ada baris [req] untuk sid ini — worker dijalankan tanpa PC_LOG_URLS=1, jadi T9b lolos tanpa bukti`
   );
 } else {
   console.log('SKIP  T9  set PC_LOG_FILE ke log wrangler dev untuk memeriksa isi log');

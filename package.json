@@ -8,10 +8,10 @@
   },
   "scripts": {
     "dev": "concurrently -k -n worker,app -c cyan,green \"npm:dev:worker\" \"npm:dev:app\"",
-    "dev:worker": "wrangler dev --local --port 8787",
+    "dev:worker": "wrangler dev --local --port 8787 --var PC_LOG_URLS:1",
     "dev:app": "vite",
-    "build": "vite build",
-    "preview": "npm run build && wrangler dev --assets=dist --local --port 8787",
+    "build": "vite build && tsx scripts/build-sw.ts",
+    "preview": "npm run build && wrangler dev --assets=dist --local --port 8787 --var PC_LOG_URLS:1",
     "login": "wrangler login",
     "deploy": "npm run build && wrangler deploy",
     "secret": "wrangler secret put SESSION_SIGNING_KEY",
@@ -21,6 +21,8 @@
     "lint:arch": "tsx scripts/lint-arch.ts",
     "cek:ikon": "node scripts/gerbang-ikon.mjs",
     "cek:ikon:http": "node scripts/gerbang-ikon.mjs --served http://localhost:8787",
+    "cek:sw:http": "node scripts/cek-sw.mjs --served http://localhost:8787",
+    "cek:precache:http": "node scripts/cek-precache.mjs --served http://localhost:8787",
     "cek:kontras": "node scripts/cr.mjs",
     "test": "vitest run",
     "test:worker": "vitest run --config vitest.worker.config.ts",
@@ -28,8 +30,10 @@
     "check": "npm run typecheck && npm run lint:arch && npm run test && npm run test:worker"
   },
   "dependencies": {
+    "jsqr": "^1.4.0",
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "uqr": "0.1.3"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.8.1",

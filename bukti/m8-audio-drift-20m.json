@@ -1,0 +1,62 @@
+{
+  "judul": "Drift AudioContext vs jam server — 20 menit lokal",
+  "tanggal": "2026-11-21",
+  "lingkungan": {
+    "host": "127.0.0.1:8787",
+    "browser": "Freebuff Desktop / Chromium Electron 33.4.11 (Chrome/130.0.6723.191)",
+    "sampleRate": 48000,
+    "wakeLock": "ditolak (NotAllowedError); dijaga osilator senyap 40 Hz",
+    "jaringan": "localhost, RTT p50 1 ms / p95 2 ms"
+  },
+  "metode": {
+    "pingIntervalMs": 2000,
+    "windowMenit": 20,
+    "pasanganWaktu": "serverMs = (t2+t3)/2; audioMs = (a1+a4)/2",
+    "filter": "separuh sampel dengan RTT terendah untuk fit; seluruh sampel valid tetap dilaporkan",
+    "positif": "jam AudioContext tertinggal dari jam server"
+  },
+  "hasil": {
+    "n": 595,
+    "used": 560,
+    "rejected": 0,
+    "lost": 0,
+    "durationMs": 1197007,
+    "durationMenit": 19.9501,
+    "rttP50Ms": 1,
+    "rttP95Ms": 2,
+    "slope": 1.0000000995251699,
+    "ppm": 0.09952516988320781,
+    "msPerMenit": 0.0059715101929924685,
+    "totalDriftMs": 0.11913232502638893,
+    "r2": 0.99999999994293,
+    "noiseP95Ms": 4.8747250674059615,
+    "interceptMs": 2.820957589778118
+  },
+  "perMenit": [
+    { "menit": 1, "n": 28, "rttP50Ms": 1, "kumulatifMs": 0, "deltaMs": null },
+    { "menit": 2, "n": 29, "rttP50Ms": 1, "kumulatifMs": 0.333, "deltaMs": 0.333 },
+    { "menit": 3, "n": 30, "rttP50Ms": 1, "kumulatifMs": -0.333, "deltaMs": -0.667 },
+    { "menit": 4, "n": 28, "rttP50Ms": 1, "kumulatifMs": -0.667, "deltaMs": -0.333 },
+    { "menit": 5, "n": 29, "rttP50Ms": 1, "kumulatifMs": -0.333, "deltaMs": 0.333 },
+    { "menit": 6, "n": 30, "rttP50Ms": 1, "kumulatifMs": 0.333, "deltaMs": 0.667 },
+    { "menit": 7, "n": 28, "rttP50Ms": 1, "kumulatifMs": 0, "deltaMs": -0.333 },
+    { "menit": 8, "n": 28, "rttP50Ms": 1, "kumulatifMs": 0.667, "deltaMs": 0.667 },
+    { "menit": 9, "n": 27, "rttP50Ms": 1, "kumulatifMs": 1.333, "deltaMs": 0.667 },
+    { "menit": 10, "n": 27, "rttP50Ms": 1, "kumulatifMs": 0.333, "deltaMs": -1 },
+    { "menit": 11, "n": 30, "rttP50Ms": 1, "kumulatifMs": 0.333, "deltaMs": 0 },
+    { "menit": 12, "n": 28, "rttP50Ms": 1, "kumulatifMs": 0.333, "deltaMs": 0 },
+    { "menit": 13, "n": 29, "rttP50Ms": 1, "kumulatifMs": -1.333, "deltaMs": -1.667 },
+    { "menit": 14, "n": 28, "rttP50Ms": 1, "kumulatifMs": 0.333, "deltaMs": 1.667 },
+    { "menit": 15, "n": 26, "rttP50Ms": 1, "kumulatifMs": 0.333, "deltaMs": 0 },
+    { "menit": 16, "n": 29, "rttP50Ms": 1, "kumulatifMs": -1, "deltaMs": -1.333 },
+    { "menit": 17, "n": 29, "rttP50Ms": 1, "kumulatifMs": -0.667, "deltaMs": 0.333 },
+    { "menit": 18, "n": 26, "rttP50Ms": 1, "kumulatifMs": 0, "deltaMs": 0.667 },
+    { "menit": 19, "n": 24, "rttP50Ms": 1, "kumulatifMs": 1.333, "deltaMs": 1.333 },
+    { "menit": 20, "n": 27, "rttP50Ms": 1, "kumulatifMs": 0, "deltaMs": -1.333 }
+  ],
+  "catatan": [
+    "Ini satu run lokal di Electron/Chromium yang sama dengan server; belum bukti untuk HP fisik.",
+    "Noise p95 4,9 ms lebih besar dari total drift 0,1 ms, jadi angka drift ini tidak bisa dipakai untuk menjadwalkan re-anchor lapangan.",
+    "Raw 595 sampel ada di kotak Hasil (?layar=ukur) dan dapat disalin ulang selama tab tidak dimuat ulang."
+  ]
+}

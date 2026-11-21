@@ -124,6 +124,14 @@ a {
   margin-top: 20px;
 }
 
+/* Versi SW harus terlihat di semua layar tanpa mengambil ruang panel diagnostik. */
+.build {
+  max-width: 520px;
+  margin: 8px 0 0;
+  padding: 0 16px;
+  color: #9a9ab0;
+}
+
 .small {
   font-size: 12px;
   line-height: 1.5;
@@ -154,4 +162,80 @@ a {
   gap: 8px;
   flex-wrap: wrap;
   align-items: center;
+}
+
+/* Setlist (M3b). Pemisah baris memakai warna border yang sudah dihitung (5,02:1 vs latar),
+   bukan warna baru yang belum diukur. */
+.song {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 6px 0;
+  border-bottom: 1px solid #808088;
+}
+
+.song-nama {
+  flex: 1 1 120px;
+  font-size: 14px;
+}
+
+/* Lagi dipakai: ditandai warna teks yang sudah ada (.ok = #8f8), bukan latar baru. */
+.song-aktif .song-nama {
+  color: #8f8;
+  font-weight: 600;
+}
+
+.btn-kecil {
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.field-lebar {
+  width: 100%;
+}
+
+/* QR harus tetap terang di tema gelap: kontras modul-vs-kotak adalah yang dibaca kamera. */
+.qr {
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px;
+  width: 220px;
+  height: 220px;
+}
+
+.video {
+  width: 100%;
+  max-width: 320px;
+  border-radius: 8px;
+  background: #000;
+}
+
+/* M7 irisan 2: pemberitahuan yang boleh ditutup (versi baru, tawaran pasang). Diletakkan di atas
+   <main> dan memakai lebar baca yang sama; warnanya tidak baru — #16161c dan #808088 sudah
+   dipakai .btn/.btn:disabled, jadi tidak menambah baris kontras di scripts/cr.mjs. */
+.pwa {
+  max-width: 520px;
+  padding: 0 16px;
+}
+
+.pwa-baris {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #16161c;
+  border: 1px solid #808088;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.pwa-baris span {
+  flex: 1 1 200px;
+}
+
+.pwa-tutup {
+  padding: 8px 10px;
 }

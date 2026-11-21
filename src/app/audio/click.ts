@@ -5,6 +5,7 @@ import {
   TICK_MS,
   abandonedBeats,
   adoptIndex,
+  audioMsOf,
   planBeats,
   startsLater,
   wallMsOf,
@@ -19,6 +20,15 @@ const CLICK_S = 0.05;
 // Durasi sebuah klik termasuk jeda setelahnya; dipakai untuk menghitung kapan onended
 // seharusnya datang, dan itu juga batas atas seberapa lama satu klik boleh dianggap meleset.
 const CLICK_TOTAL_MS = (CLICK_S + 0.01) * 1000;
+// Hitungan masuk memakai pola yang tidak tertukar dengan klik biasa: intro rendah/panjang,
+// satu nada lebih tinggi, lalu tiga beep pendek. Semuanya osilator yang dijadwalkan di jam
+// audio yang sama, bukan speechSynthesis atau timer jam dinding.
+const COUNT_INTRO_HZ = 660;
+const COUNT_ONE_HZ = 1320;
+const COUNT_HZ = 990;
+const COUNT_INTRO_S = 0.12;
+const COUNT_ONE_S = 0.1;
+const COUNT_S = 0.08;
 // Dasar pengukuran laju jam audio: satu detik cukup untuk resolusi jam 1 ms (±0,1%) dan
 // cukup pendek untuk memperbaiki tab yang di-throttle dalam hitungan detik, bukan menit.
 const RATE_WINDOW_MS = 1_000;
@@ -52,6 +62,18 @@ export interface ClickStats {
   driftSamples: number;
 }
 
+export interface CountInResult {
+  requested: number;
+  scheduled: number;
+  skipped: number;
+  /** Waktu server dari penanda yang benar-benar masuk antrean AudioContext. */
+  atMs: number[];
+  /** Jarak antarbunyi yang dijadwalkan, dalam ms. */
+  gapsMs: number[];
+  /** Alasan tidak ada bunyi yang bisa dijadwalkan; hanya diisi bila scheduled = 0. */
+  reason?: string;
+}
+
 export interface ClickEngineOptions {
   onStats?: (s: ClickStats) => void;
 }
@@ -76,6 +98,10 @@ export class ClickEngine {
   private ctx: AudioContext | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private live = new Set<OscillatorNode>();
+  /** Oscillator hitungan masuk dipisahkan dari klik agar stop/clear tidak mengubah statistik klik. */
+  private countLive = new Set<OscillatorNode>();
+  /** Tab duplikat tidak boleh menyetel klik meski state server terus datang. */
+  private muted = false;
   private grid: Grid | null = null;
   /**
    * Grid dari frame `state` yang `anchorMs`-nya masih di depan. Dibunyikannya baru mulai
@@ -84,6 +110,8 @@ export class ClickEngine {
    * akan dibunyikan dan tidak boleh dibuang oleh frame yang datang lebih awal.
    */
   private pending: Grid | null = null;
+  /** Audio senyap cadangan saat wake lock ditolak; lihat `setKeepAlive`. */
+  private keep: { osc: OscillatorNode; gain: GainNode } | null = null;
   private nextIndex = 0;
   private servo: Servo = servoIdle(0);
   private compMs = 0;
@@ -122,6 +150,12 @@ export class ClickEngine {
 
   /** Ganti grid dari frame `state`; null = berhenti membunyikan, konteks tetap hidup. */
   setGrid(grid: Grid | null): void {
+    // Tab duplikat tetap boleh menerima state, tetapi tidak boleh menyetel satu klik pun.
+    if (this.muted) {
+      this.pending = null;
+      this.grid = null;
+      return;
+    }
     if (!grid) {
       this.stop();
       return;
@@ -132,6 +166,86 @@ export class ClickEngine {
     }
     this.pending = null;
     this.adopt(grid);
+  }
+
+  /**
+   * Jadwalkan penanda hitungan masuk di AudioContext yang sama dengan klik. Waktu `atMs`
+   * adalah waktu server; konversinya memakai bridge, θ, laju audio, dan kompensasi latensi
+   * yang sama persis dengan `planBeats`, sehingga beep tidak punya jam kedua yang bisa
+   * melenceng. Pemanggilan kedua membatalkan beep lama, bukan menumpuknya.
+   */
+  scheduleCountIn(plan: readonly { atMs: number }[]): CountInResult {
+    const requested = plan.length;
+    this.clearCountIn();
+    if (this.muted) {
+      return { requested, scheduled: 0, skipped: requested, atMs: [], gapsMs: [], reason: 'audio tab ini dibisukan' };
+    }
+    const ctx = this.ctx;
+    if (!ctx) {
+      return { requested, scheduled: 0, skipped: requested, atMs: [], gapsMs: [], reason: 'AudioContext belum siap' };
+    }
+    if (ctx.state !== 'running') {
+      return {
+        requested,
+        scheduled: 0,
+        skipped: requested,
+        atMs: [],
+        gapsMs: [],
+        reason: `AudioContext ${ctx.state}`,
+      };
+    }
+
+    // Dibaca berdekatan seperti tick klik. `bridge` juga memperbarui sampel laju bila sudah
+    // cukup umur, jadi hitungan sesudah beberapa detik memakai laju yang sudah terukur.
+    const wallMs = Date.now();
+    const nowAudioMs = ctx.currentTime * 1000;
+    const bridge = this.bridge(wallMs, nowAudioMs, ctx.state);
+    const shift = this.servo.appliedMs + this.compMs;
+    const items = [...plan].filter((p) => Number.isFinite(p.atMs)).sort((a, b) => a.atMs - b.atMs);
+    const atMs: number[] = [];
+    let skipped = requested - items.length;
+
+    for (const [i, item] of items.entries()) {
+      const atAudioMs = audioMsOf(bridge, item.atMs - shift);
+      // Web Audio tidak bisa start di masa lalu. Penanda yang sudah lewat dibuang dan
+      // dilaporkan, bukan dibunyikan beruntun pada currentTime.
+      if (atAudioMs < nowAudioMs) {
+        skipped++;
+        continue;
+      }
+      const intro = i === 0;
+      const firstCount = i === 1;
+      const hz = intro ? COUNT_INTRO_HZ : firstCount ? COUNT_ONE_HZ : COUNT_HZ;
+      const duration = intro ? COUNT_INTRO_S : firstCount ? COUNT_ONE_S : COUNT_S;
+      const t = atAudioMs / 1000;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = hz;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(intro ? 0.6 : firstCount ? 0.8 : 0.65, t + 0.003);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+      osc.connect(gain).connect(ctx.destination);
+      osc.onended = () => {
+        this.countLive.delete(osc);
+        osc.disconnect();
+        gain.disconnect();
+      };
+      osc.start(t);
+      osc.stop(t + duration + 0.01);
+      this.countLive.add(osc);
+      atMs.push(item.atMs);
+    }
+
+    const gapsMs = atMs.slice(1).map((at, i) => at - atMs[i]!);
+    return {
+      requested,
+      scheduled: atMs.length,
+      skipped,
+      atMs,
+      gapsMs,
+      ...(atMs.length === 0 ? { reason: items.length === 0 ? 'jadwal kosong' : 'semua jadwal sudah lewat' } : {}),
+    };
   }
 
   /**
@@ -167,6 +281,46 @@ export class ClickEngine {
     this.report();
   }
 
+  /** Tab duplikat: hentikan klik yang sedang berbunyi dan tolak grid/count-in berikutnya. */
+  setMuted(muted: boolean): void {
+    if (this.muted === muted) return;
+    this.muted = muted;
+    if (muted) this.stop();
+    this.report();
+  }
+
+  /**
+   * Cadangan saat wake lock ditolak: osilator 40 Hz bergain 0,0001 membuat peramban menganggap
+   * tab ini sedang memutar audio, jadi timer tidak di-throttle dan jam audio tidak dibekukan.
+   * Ia TIDAK menahan layar tetap menyala — itu tetap hanya bisa dilakukan wake lock, dan layar
+   * yang mati tetap dilaporkan lewat `visibilitychange`.
+   */
+  setKeepAlive(on: boolean): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    if (this.keep && !on) {
+      try {
+        this.keep.osc.stop();
+      } catch {
+        // sudah berhenti sendiri
+      }
+      this.keep.osc.disconnect();
+      this.keep.gain.disconnect();
+      this.keep = null;
+      return;
+    }
+    if (this.keep || !on) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    // 40 Hz di bawah jangkauan speaker ponsel; gain 0,0001 praktis tidak terdengar.
+    osc.frequency.value = 40;
+    gain.gain.value = 0.0001;
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    this.keep = { osc, gain };
+  }
+
   setLatencyComp(ms: number): void {
     this.compMs = Number.isFinite(ms) ? ms : 0;
     this.report();
@@ -189,6 +343,7 @@ export class ClickEngine {
   destroy(): void {
     this.dead = true;
     this.stop();
+    this.setKeepAlive(false);
     const ctx = this.ctx;
     this.ctx = null;
     // Context yang sudah ditutup menolak `close()`; tanpa catch ini penghancuran kedua
@@ -212,6 +367,20 @@ export class ClickEngine {
       }
     }
     this.live.clear();
+    this.clearCountIn();
+  }
+
+  /** Buang penanda hitungan yang masih antre; Stop dan tekan-ulang memakai jalur ini. */
+  private clearCountIn(): void {
+    const at = this.ctx ? this.ctx.currentTime : 0;
+    for (const osc of this.countLive) {
+      try {
+        osc.stop(at);
+      } catch {
+        // sudah berhenti sendiri
+      }
+    }
+    this.countLive.clear();
   }
 
   private startTimer(): void {
@@ -250,7 +419,7 @@ export class ClickEngine {
   private tick(): void {
     const ctx = this.ctx;
     let grid = this.grid;
-    if (!ctx || !grid) return;
+    if (this.muted || !ctx || !grid) return;
     // Satu tingkat per tick, di depan segalanya: θ tidak boleh menunggu jam audio sehat,
     // karena tab yang beku pun terus diberi pong.
     this.servo = servoAdvance(this.servo);

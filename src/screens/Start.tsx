@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ClickRoom } from './ClickRoom';
-import { readRemembered, type LiveTarget } from '../app/session/live';
+import { Scanner } from './Scanner';
+import { readRemembered, targetFromUrl, type LiveTarget } from '../app/session/live';
 
 type View = { kind: 'menu' } | { kind: 'room'; role: 'leader' | 'follower'; target?: LiveTarget };
 
@@ -11,6 +12,9 @@ type View = { kind: 'menu' } | { kind: 'room'; role: 'leader' | 'follower'; targ
  */
 export function Start({ badLink }: { badLink: boolean }) {
   const [view, setView] = useState<View>({ kind: 'menu' });
+  /** Pemindai terbuka: kamera hanya hidup selama layar ini, bukan selama sesi. */
+  const [pindai, setPindai] = useState(false);
+  const [galat, setGalat] = useState('');
   const remembered = readRemembered();
 
   if (view.kind === 'room') {
@@ -45,6 +49,31 @@ export function Start({ badLink }: { badLink: boolean }) {
           </button>
         )}
       </p>
+
+      {pindai ? (
+        <Scanner
+          onResult={(teks) => {
+            // Gerbang yang sama dengan tautan yang ditempel: QR aplikasi lain, tautan tanpa
+            // token, dan teks iseng ditolak di sini — bukan dipercaya karena "dipindai".
+            const target = targetFromUrl(teks);
+            if (!target) {
+              setGalat('QR itu bukan tautan sesi ParanoidClick. Minta pemimpin menampilkan QR dari layarnya sendiri.');
+              return;
+            }
+            setGalat('');
+            setPindai(false);
+            setView({ kind: 'room', role: 'follower', target });
+          }}
+          onBatal={() => setPindai(false)}
+        />
+      ) : (
+        <p className="row">
+          <button onClick={() => setPindai(true)} className="btn">
+            Pindai QR pemimpin
+          </button>
+        </p>
+      )}
+      {galat && <p className="note warn">{galat}</p>}
       <p className="note">
         <a href="/?layar=ukur">Alat ukur spike M0 (60 ping + latensi audio)</a>
       </p>

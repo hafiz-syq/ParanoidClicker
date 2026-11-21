@@ -6,6 +6,22 @@ export { SessionDO };
 
 const IP = 'CF-Connecting-IP';
 
+/** Query yang membawa kapabilitas; nilainya disamarkan sebelum menyentuh log. */
+const SECRET_QUERY = ['tok', 'lk', 'leaderKey', 'key'];
+
+/**
+ * Shim log LOKAL untuk `attack.ts` (T9c). `wrangler dev` hanya mencetak pathname, jadi tanpa
+ * baris ini T9b lulus secara hampa: tidak ada satu pun URL di log yang bisa dijadikan kendali
+ * positif. Yang ditulis adalah method + path + query dengan nilai rahasia diganti `***` — log
+ * tetap merekam bahwa URL-nya ada (sid terlihat), tanpa menyalin kapabilitas ke disk.
+ * Hanya hidup kalau `PC_LOG_URLS=1`, dan variabel itu hanya dipasang script dev lokal.
+ */
+function logRequest(request: Request): void {
+  const u = new URL(request.url);
+  for (const k of SECRET_QUERY) if (u.searchParams.has(k)) u.searchParams.set(k, '***');
+  console.log(`[req] ${request.method} ${u.pathname}${u.search}`);
+}
+
 // Tanpa kunci, token apa pun yang kami mint bisa dihitung ulang oleh siapa pun, jadi dua rute
 // di bawah harus menolak, bukan melayani sesi yang gerbangnya tidak ada.
 function noKey(env: Env): Response | null {
@@ -15,6 +31,7 @@ function noKey(env: Env): Response | null {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if ((env as unknown as Record<string, string | undefined>)['PC_LOG_URLS'] === '1') logRequest(request);
 
     if (url.pathname === '/health') {
       // keyPresent, bukan panjangnya: cukup untuk membuktikan `wrangler secret put` menempel

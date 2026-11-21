@@ -198,6 +198,9 @@ interface Peer {
   until(count: number): Promise<string[]>;
   states(): string[];
   untilStates(n: number): Promise<string[]>;
+  /** Tunggu frame yang isinya cocok, bukan urutan ke-n: dipakai saat reconnect berbagi DO
+   *  dengan socket lama yang penutupannya bisa menyelipkan frame state lain. */
+  untilFrame(pred: (frame: Record<string, unknown>) => boolean): Promise<Record<string, unknown>>;
 }
 
 async function openPeer(sid: string): Promise<Peer> {
@@ -239,6 +242,14 @@ async function openPeer(sid: string): Promise<Peer> {
       if (got.length < n) throw new Error(`baru ${got.length} frame state masuk, butuh ${n}`);
       return got;
     },
+    untilFrame: async (pred) => {
+      for (let tries = 0; tries < 200; tries++) {
+        const hit = frames.map(body).find(pred);
+        if (hit) return hit;
+        await new Promise((r) => setTimeout(r, 5));
+      }
+      throw new Error(`frame yang cocok tidak datang; ${frames.length} frame masuk`);
+    },
   };
 }
 
@@ -253,7 +264,12 @@ it('hello dibalas welcome lalu state, supaya pengikut baru langsung sephase', as
   // DO belum pernah melihat satu pun perubahan: keadaan idle, bukan kosong tanpa frame.
   // `members` ada di sini supaya HP yang sudah di ruangan bisa tahu ada orang baru, tanpa
   // harus hello ulang — jadi teks frame ini adalah bagian dari kontrak, bukan detail.
-  expect(frames[1]).toBe('{"t":"state","bpm":120,"anchorMs":null,"running":false,"members":1}');
+  // Sejak M3b frame ini juga membawa `setlist`/`laguAktif`: daftar kosong, bukan field yang
+  // hilang — klien lama mengabaikan key ekstra, dan klien baru tidak perlu membedakan
+  // "belum ada lagu" dari "server belum bicara tentang lagu".
+  expect(frames[1]).toBe(
+    '{"t":"state","bpm":120,"anchorMs":null,"running":false,"members":1,"setlist":[],"laguAktif":null}'
+  );
   peer.ws.close();
 });
 
@@ -506,9 +522,15 @@ it('pemimpin yang reconnect dengan did yang sama tetap pemimpin tanpa /create ba
   // localStorage. Kendali harus kembali tanpa /create baru dan tanpa tombol rebut.
   const b = await openPeer(sid);
   b.send({ t: 'hello', sid, did: 'devPemimpin', lk });
-  await b.untilStates(1);
+  // Jangan menunggu "state ke-1": penutupan socket a bisa menyiarkan state anggota berkurang
+  // lebih dulu, dan hitungan frame lalu terpenuhi oleh state lama (bpm 100) — itu flake yang
+  // dulu muncul hanya saat check penuh. `welcome` membuktikan hello b sudah diproses.
+  await b.untilFrame((f) => f.t === 'welcome');
   b.send({ t: 'tempo', bpm: 140 });
-  expect(body((await b.untilStates(2)).at(-1)!)).toMatchObject({ t: 'state', bpm: 140, running: false });
+  // Tunggu state yang MEMANG membawa 140, bukan urutan ke-n: asersi di bawah tetap ketat,
+  // tapi tidak lagi bergantung pada frame mana yang lebih dulu mendarat.
+  const akhir = await b.untilFrame((f) => f.t === 'state' && f.bpm === 140);
+  expect(akhir).toMatchObject({ t: 'state', bpm: 140, running: false });
   b.ws.close();
 });
 

@@ -12,3 +12,4 @@ diubah, ADR-nya di-*superseded* oleh yang baru — bukan diedit diam-diam.
 | [0005](0005-kunci-pemimpin-dari-create.md) | Otoritas pemimpin = kunci `lk` yang dicetak terpisah di `/create`; rebut hanya lewat tombol | accepted | 2026-11-17 |
 | [0006](0006-kursi-dari-socket-hidup.md) | `N HP` dihitung dari socket hidup, bukan riwayat tabel `member` | accepted | 2026-11-17 |
 | [0007](0007-attachment-identitas-socket.md) | Identitas `ws → {sid, did}` di attachment Hibernation; `webSocketError` diam karena `webSocketClose` terbukti menyusul | accepted | 2026-11-17 |
+| [0008](0008-setlist-data-di-bawah-kunci-pemimpin.md) | Setlist adalah data di bawah `lk`, bukan kemampuan baru; memilih lagu lewat jalur `retune` yang sama | accepted | 2026-11-20 |

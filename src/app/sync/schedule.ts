@@ -107,6 +107,22 @@ export function firstPlayableIndex(grid: Grid, serverNowMs: number): number {
 }
 
 /**
+ * Waktu server batas bar (4 beat) berikutnya dari grid yang SEDANG berbunyi. Dipakai saat
+ * pengikut kembali sesudah putus dan tempo pemimpin sudah berubah: grid baru diberi anchor di
+ * sini, jadi serah terima terjadi di garis bar — bukan di tengah bar seperti lompatan beat biasa.
+ * `NaN` untuk grid tak masuk akal, supaya pemanggil bisa memilih jalur lama alih-alih anchor
+ * yang tidak berarti.
+ */
+export function nextBarMs(grid: Grid, serverNowMs: number): number {
+  if (!Number.isFinite(grid.periodMs) || grid.periodMs <= 0 || !Number.isFinite(grid.anchorMs)) {
+    return Number.NaN;
+  }
+  // Selalu bar yang masih di depan: beat yang sedang berbunyi tidak boleh jadi anchor baru.
+  const bar = Math.floor(beatIndexAt(grid, serverNowMs) / BEATS_PER_BAR) + 1;
+  return beatMs(grid, bar * BEATS_PER_BAR);
+}
+
+/**
  * Tempat melanjutkan diri ketika grid berganti di tengah jalan (join, `retune`, reconnect).
  * Cursor lama boleh melompat MAJU, tapi tidak boleh mundur: beat yang sudah sempat disetel
  * masih ada di antrean oscillator, dan grid baru yang menyetel beat pada waktu yang sama

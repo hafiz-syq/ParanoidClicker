@@ -3,6 +3,7 @@ import { FrameReject, MAX_MEMBERS, parseFrame } from '../shared/limits';
 import { isSid } from '../shared/ids';
 import { verifyLeaderKey } from './keys';
 import { DEFAULT_BPM, LEAD_MS, gridOf, parseBpm, retune, type Grid } from '../shared/tempo';
+import { MAX_SETLIST, parseJudul, parseSongId, type Song } from '../shared/setlist';
 
 /** Keadaan sesi yang sebenarnya: satu grid klik, bukan daftar "tick yang sudah dikirim". */
 interface TempoState {
@@ -42,6 +43,17 @@ export class SessionDO extends DurableObject<Env> {
     this.sql.exec(
       'CREATE TABLE IF NOT EXISTS leader (id INTEGER PRIMARY KEY CHECK (id = 1), did TEXT NOT NULL, lk_hint TEXT, claimed_at INTEGER NOT NULL)'
     );
+    // Setlist (M3b): satu baris per lagu, urutannya kolom sendiri — bukan id — supaya "naik"
+    // dan "turun" cukup menukar dua angka tanpa menyentuh kunci baris. `bpm` dibatasi
+    // `parseBpm` di jalur tulis, jadi tidak ada lagu yang lahir dengan tempo di luar 30..300.
+    this.sql.exec(
+      'CREATE TABLE IF NOT EXISTS song (id INTEGER PRIMARY KEY AUTOINCREMENT, judul TEXT NOT NULL, bpm INTEGER NOT NULL, urutan INTEGER NOT NULL)'
+    );
+    // Pola baris tunggal yang sama dengan `tempo`/`leader`: satu ruangan cuma punya satu lagu
+    // aktif. NULL = belum ada lagu yang dipilih, dan itu bukan keadaan yang salah.
+    this.sql.exec(
+      'CREATE TABLE IF NOT EXISTS lagu_aktif (id INTEGER PRIMARY KEY CHECK (id = 1), song_id INTEGER)'
+    );
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -80,6 +92,8 @@ export class SessionDO extends DurableObject<Env> {
         return this.transport(ws, true);
       case 'stop':
         return this.transport(ws, false);
+      case 'lagu':
+        return this.lagu(ws, frame);
       default:
         ws.send(JSON.stringify({ t: 'error', code: 'PROTO' }));
     }
@@ -271,12 +285,19 @@ export class SessionDO extends DurableObject<Env> {
     // TURUN. Angkanya adalah kursi (socket OPEN), bukan riwayat: HP yang ditolak FULL pun sudah
     // memegang satu socket, jadi ia ikut terhitung di siaran BERIKUTNYA (penolakannya sendiri
     // tidak menyiarkan apa pun). Itu konsekuensi socket mentah yang sama dengan di seatCount().
+    // `setlist` ikut di setiap state (bukan frame sendiri) supaya satu frame tetap satu
+    // kebenaran: HP yang baru masuk, HP yang reconnect sesudah DO tidur, dan HP yang melihat
+    // lagu dipilih semuanya membaca daftar dari tempat yang sama. Kedalamannya tepat di batas
+    // MAX_JSON_DEPTH (frame → array → lagu → nilai), jadi menambah satu tingkat sarang di sini
+    // akan ditolak `checkShape` di klien.
     return JSON.stringify({
       t: 'state',
       bpm: state.bpm,
       anchorMs: state.anchorMs,
       running: state.running,
       members: this.seatCount(),
+      setlist: this.readSetlist(),
+      laguAktif: this.readAktif(),
     });
   }
 
@@ -313,12 +334,134 @@ export class SessionDO extends DurableObject<Env> {
     }
     if (!this.assertLeader(ws)) return;
     const cur = this.readTempo();
-    const at = Date.now() + LEAD_MS;
+    this.apply(cur, this.retuned(cur, bpm));
+  }
+
+  // Satu jalur ganti tempo, dipakai `tempo` dan `pilih` lagu: lagu yang dipilih menggerakkan
+  // grid lewat jahitan yang sama (ADR-0002), bukan lewat jalur kedua yang bisa berbeda.
+  private retuned(cur: TempoState, bpm: number): TempoState {
+    if (cur.bpm === bpm) return cur;
     const grid = this.gridOf(cur);
-    const next: TempoState = grid
-      ? { bpm, anchorMs: retune(grid, bpm, at).anchorMs, running: true }
-      : { bpm, anchorMs: null, running: false };
-    this.apply(cur, next);
+    const at = Date.now() + LEAD_MS;
+    return grid ? { bpm, anchorMs: retune(grid, bpm, at).anchorMs, running: true } : { bpm, anchorMs: null, running: false };
+  }
+
+  /**
+   * Setlist (M3b). Otoritasnya sama persis dengan `tempo`: satu kemampuan, satu kunci — semua
+   * jalur tulis lewat `assertLeader`, dan tidak satu pun perintah di sini membawa `lk`/`did`.
+   * Balasannya bukan frame baru, melainkan `state` yang sudah ada, jadi klien lama yang tidak
+   * mengenal `setlist` tetap memahami setiap byte lain di frame itu.
+   */
+  private lagu(ws: WebSocket, frame: Record<string, unknown>): void {
+    if (!this.assertLeader(ws)) return;
+    switch (frame.op) {
+      case 'tambah':
+        return this.laguTambah(ws, frame);
+      case 'hapus':
+        return this.laguHapus(ws, frame);
+      case 'naik':
+        return this.laguGeser(ws, frame, -1);
+      case 'turun':
+        return this.laguGeser(ws, frame, 1);
+      case 'pilih':
+        return this.laguPilih(ws, frame);
+      default:
+        ws.send(JSON.stringify({ t: 'error', code: 'PROTO' }));
+    }
+  }
+
+  private laguTambah(ws: WebSocket, frame: Record<string, unknown>): void {
+    const judul = parseJudul(frame.judul);
+    const bpm = parseBpm(frame.bpm);
+    if (judul === null || bpm === null) {
+      ws.send(JSON.stringify({ t: 'error', code: 'BAD_SONG' }));
+      return;
+    }
+    // Satu query untuk dua angka yang dibutuhkan sekaligus: kalau daftar dibaca utuh (lalu
+    // dipetakan ke `Song`) hanya untuk menghitung panjangnya, tiap tambah lagu membangun 20
+    // objek yang tidak pernah dikirim.
+    const { n, urutan } = this.sql
+      .exec<{ n: number; urutan: number }>('SELECT COUNT(*) AS n, COALESCE(MAX(urutan), 0) + 1 AS urutan FROM song')
+      .one();
+    if (n >= MAX_SETLIST) {
+      ws.send(JSON.stringify({ t: 'error', code: 'FULL_SETLIST' }));
+      return;
+    }
+    this.sql.exec('INSERT INTO song (judul, bpm, urutan) VALUES (?, ?, ?)', judul, bpm, urutan);
+    this.broadcast(this.readTempo());
+  }
+
+  private laguHapus(ws: WebSocket, frame: Record<string, unknown>): void {
+    const id = parseSongId(frame.id);
+    if (id === null) {
+      ws.send(JSON.stringify({ t: 'error', code: 'BAD_SONG' }));
+      return;
+    }
+    const cursor = this.sql.exec('DELETE FROM song WHERE id = ?', id);
+    // Tidak ada baris terhapus = tidak ada yang berubah, jadi tidak ada yang perlu disiarkan:
+    // dua belas HP tidak dibangunkan untuk perintah yang tidak melakukan apa pun.
+    if (cursor.rowsWritten === 0) return;
+    if (this.readAktif() === id) this.setAktif(null);
+    this.broadcast(this.readTempo());
+  }
+
+  /** Geser satu langkah; `delta` −1 = naik. Menukar `urutan` dua baris, bukan menomori ulang. */
+  private laguGeser(ws: WebSocket, frame: Record<string, unknown>, delta: number): void {
+    const id = parseSongId(frame.id);
+    if (id === null) {
+      ws.send(JSON.stringify({ t: 'error', code: 'BAD_SONG' }));
+      return;
+    }
+    const songs = this.sql.exec<{ id: number; urutan: number }>('SELECT id, urutan FROM song ORDER BY urutan, id').toArray();
+    const i = songs.findIndex((s) => s.id === id);
+    const j = i + delta;
+    if (i < 0 || j < 0 || j >= songs.length) return; // sudah di ujung: tidak ada yang berubah
+    this.sql.exec('UPDATE song SET urutan = ? WHERE id = ?', songs[j]!.urutan, songs[i]!.id);
+    this.sql.exec('UPDATE song SET urutan = ? WHERE id = ?', songs[i]!.urutan, songs[j]!.id);
+    this.broadcast(this.readTempo());
+  }
+
+  /** Pilih lagu = pilih nada dasar latihan: tempo ruangan pindah ke bpm lagu itu. */
+  private laguPilih(ws: WebSocket, frame: Record<string, unknown>): void {
+    const id = parseSongId(frame.id);
+    if (id === null) {
+      ws.send(JSON.stringify({ t: 'error', code: 'BAD_SONG' }));
+      return;
+    }
+    const song = this.sql.exec<{ bpm: number }>('SELECT bpm FROM song WHERE id = ?', id).toArray()[0];
+    if (!song) {
+      ws.send(JSON.stringify({ t: 'error', code: 'BAD_SONG' }));
+      return;
+    }
+    this.setAktif(id);
+    const cur = this.readTempo();
+    const next = this.retuned(cur, song.bpm);
+    if (next !== cur) this.writeTempo(next);
+    // Siaran tetap, walau bpm-nya kebetulan sama: yang berubah adalah lagu aktifnya.
+    this.broadcast(next);
+  }
+
+  private readSetlist(): Song[] {
+    // Baris SQL dipetakan ke `Song` secara eksplisit: tipe generik `exec()` menuntut record
+    // ber-index-signature, dan yang dikirim ke HP harus tepat tiga field ini, bukan apa pun
+    // yang kebetulan ada di baris tabel.
+    return this.sql
+      .exec<{ id: number; judul: string; bpm: number }>('SELECT id, judul, bpm FROM song ORDER BY urutan, id')
+      .toArray()
+      .map((row) => ({ id: row.id, judul: row.judul, bpm: row.bpm }));
+  }
+
+  private readAktif(): number | null {
+    const row = this.sql.exec<{ song_id: number | null }>('SELECT song_id FROM lagu_aktif WHERE id = 1').toArray()[0];
+    return row && typeof row.song_id === 'number' ? row.song_id : null;
+  }
+
+  private setAktif(id: number | null): void {
+    this.sql.exec(
+      `INSERT INTO lagu_aktif (id, song_id) VALUES (1, ?)
+       ON CONFLICT (id) DO UPDATE SET song_id = excluded.song_id`,
+      id
+    );
   }
 
   private transport(ws: WebSocket, on: boolean): void {

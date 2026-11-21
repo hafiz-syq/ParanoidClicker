@@ -260,7 +260,7 @@ pulihkan SessionDO.ts → EXIT=0  4 passed (4)  tests 4037ms, Duration 5.31s
 pulihkan + kedua berkas worker → EXIT=0  31 passed (31), Duration 5.46s
 ```
 
-Angka itu bukan mutasi yang diminta pemeriksa: mutasi `claim` menerima frame tanpa `lk` (fail-open sungguhan)
+Angka itu bukan mutasi yang diminta pemeriksa via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T21:59:25.402Z (§5b: "buat `claim` menerima frame tanpa lk (fail-open)"): mutasi `claim` menerima frame tanpa `lk` (fail-open sungguhan)
 **ditolak permission layer** dengan pesan `[Security Weaken]` dan penjelasan bahwa niat pengguna tidak bisa
 membukanya, jadi pagar jalur claim pasca-evict hari ini terbukti mengikat pada dua mutan di atas, bukan pada
 fail-open. Peta cakupannya tetap: jalur claim pra-evict dijaga `session.spec.ts:537`, jalur pasca-evict baru

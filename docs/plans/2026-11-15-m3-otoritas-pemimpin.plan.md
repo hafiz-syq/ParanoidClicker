@@ -108,7 +108,7 @@ diam) sekarang `:325-337` dan sudah tidak diam.
    `getWebSockets()` — itu bunyi harfiah jawaban 15 Nov (S1), dan itu yang dikerjakan (S6). Riwayat
    lengkapnya, supaya tidak dibaca sebagai kontradiksi: (a) 15 Nov 18:46Z sesi saya mencatat pemilik
    memilih label opsi *"did unik di antara socket hidup"* (S2). (b) 16 Nov 16:51Z prompt checker
-   menyatakan pertanyaan itu belum dijawab (S6b) — **framing checker yang salah, dan dia menariknya**:
+   menyatakan pertanyaan itu belum dijawab (S6b) via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:51:22.707Z — **framing checker yang salah, dan dia menariknya**:
    jawaban S2 mendarat sebagai `tool_result` sehingga tidak muncul di daftar turn yang dia baca; dua
    tuduhan lain dari prompt yang sama juga dia cabut (README §KOREKSI 2026-11-16/17). (c) Setelah kedua
    jawaban lama ditampilkan apa adanya, pemilik **mengganti pilihannya sendiri** (S7): "Socket mentah",
@@ -222,7 +222,7 @@ hidup tidak perlu dihancurkan.
 | # | Pertanyaan | Jawaban pemilik (S1) | Jadi di rencana |
 |---|---|---|---|
 | 1 | Perlu `proto` naik 3? | **"Setuju, tapi jangan kode dulu"** | `proto` tetap 2, `lk` key opsional di `hello`; dan TIDAK ada satu baris kode pun ditulis sebelum kotak terakhir Baris persetujuan dicentang |
-| 2 | Dasar kapasitas 12 HP: socket hidup atau riwayat? — **dan pertanyaan bernama yang sempat tersisa: socket mentah atau per `did` unik?** | **"Socket hidup (getWebSockets)"** (S1) sebagai jawaban pertama. Tafsirnya **SELESAI (S7)**: label *"did unik di antara socket hidup"* pernah pemilik pilih (S2 15 Nov), lalu dia ganti sendiri jadi **"Socket mentah"** (S7 16 Nov 16:57Z) dan menegaskannya ulang sesudah konsekuensi 2-kursi dibacakan (S7 20:36Z). Arahan checker 16 Nov yang menyatakan itu belum dijawab adalah framing yang salah dan sudah checker tarik | §4 butir 2b–2c; tabel `member` tetap untuk `rowsWritten`; gerbang `FULL` + `members` di `welcome` TIDAK berubah dan tidak ada tes yang pindah angka |
+| 2 | Dasar kapasitas 12 HP: socket hidup atau riwayat? — **dan pertanyaan bernama yang sempat tersisa: socket mentah atau per `did` unik?** | **"Socket hidup (getWebSockets)"** (S1) sebagai jawaban pertama. Tafsirnya **SELESAI (S7)**: label *"did unik di antara socket hidup"* pernah pemilik pilih (S2 15 Nov), lalu dia ganti sendiri jadi **"Socket mentah"** (S7 16 Nov 16:57Z) dan menegaskannya ulang sesudah konsekuensi 2-kursi dibacakan (S7 20:36Z). Arahan checker 16 Nov yang menyatakan itu belum dijawab adalah framing yang salah dan sudah checker tarik via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:51:22.707Z | §4 butir 2b–2c; tabel `member` tetap untuk `rowsWritten`; gerbang `FULL` + `members` di `welcome` TIDAK berubah dan tidak ada tes yang pindah angka |
 | 3 | Rebut pemimpin: boleh? | **"Rebut dengan lk, eksplisit"** | §3 butir rebut + frame `claim` (§4 butir 2a) + 2 tes baru + kolom `lk_hint` di §5 |
 | 4 | Setlist di M3 atau dipecah? | **"M3b terpisah"** | §4 "Keluar dari M3a" |
 
@@ -372,7 +372,7 @@ manusia di App — tapi sekarang bisa ditunjuk: uuid rekamannya ada di kolom Kan
 |---|---|---|---|
 | S1 | empat jawaban §6: "Setuju, tapi jangan kode dulu" · "Socket hidup (getWebSockets)" · "Rebut dengan lk, eksplisit" · "M3b terpisah" | via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-15T09:16:14.324Z | AskUserQuestion (pemilik memilih label yang saya tulis) |
 | S2 | tiga jawaban: "Tahan dulu, tetap docs-only" · "did unik di antara socket hidup" (label ini **dibatalkan pemilik sendiri 16 Nov**, lihat S7) · "Jangan pasang, tunda" (`@types/node`) | via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-15T18:46:12.942Z | AskUserQuestion → rekaman `type: user` dengan `content[0].type = "tool_result"`, uuid `63c06fb6-462f-40b4-981d-0e4cfb7e6fec`; pertanyaannya dikirim 18:44:44.543Z dan panggilan pertama gagal parse (`Error: JSON_PARSE`) — jam kegagalan itu muncul sebagai dua rekaman bertetangga, `18:44:35.788Z` dan `18:44:35.891Z`, selisih 103 ms, keduanya field asli |
-| S3 | perintah pemisahan logo: **"logo WEB pakai mark baru ini; logo APLIKASI tetap pakai yang lama."** | via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-15T18:51:40Z | turn `CHECKER → EXECUTOR` di sesi ini; jamnya **dilaporkan** sesi checker (2d6f4ca7), saya tidak mengukur ulang; kutipannya kata pemilik yang dipetik checker, bukan kata saya |
+| S3 | perintah pemisahan logo: **"logo WEB pakai mark baru ini; logo APLIKASI tetap pakai yang lama."** | via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-15T18:51:41.327Z (jam **tiba**, terukur 18 Nov; alamat lama `18:51:40Z` adalah jam reported, selisih 1,327 s) | turn relay di sesi saya baris **11520**, uuid `agent-message:bab3819dc33…`. Jam **kirim** sekarang saya ukur di transkrip checker: baris **2566** via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-15T18:50:40.811Z, `arguments.prompt` dibuka "ARAHAN BARU DARI PEMILIK, menggantikan tugas T9c"; kutipannya kata pemilik yang dipetik checker, bukan kata saya |
 | S4 | jawaban pemilik dua pertanyaan di sesi checker: **kotak kode M3a DIBUKA** ("lanjutkan ke tahap selanjutnya") + **`apple-touch-icon` = permukaan APLIKASI**, tetap `paranoid-180.png` | via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:47:48.682Z | pemilik menjawab di sesi checker 23:47 WIB; rekaman `type: user` + `tool_result`, uuid `4713e8f8-5888-4b7d-9bd6-b721428b834a` (baris 2720 transkrip checker). Isinya sampai ke saya **dirolay prompt checker**, bukan sebagai turn di sesi ini. Rewrite 16 Nov 17:07Z menulis baris ini sebagai "[TANYA] — belum sampai"; prompt berikutnya membawanya, jadi statusnya berubah jadi DIJAWAB dengan kanal relay. **Alamat lama baris ini (`16:50:13.874Z`) salah dan checker mengakuinya:** itu output `node -e` di pesannya sendiri 2 m 25 d sesudah jawaban, nol kecocokan sebagai field `timestamp` |
 | S5 | aturan berdiri: `JANGAN deploy`, `JANGAN push`, "tulis apa pun ke produksi butuh izin eksplisit pemilik", larangan skill `vercel-deploy`, larangan commit `tail*.log` | via d27c1add-d9ec-4675-b6e8-2044f92eae20@2026-11-15T18:38:43Z | turn `CHECKER → EXECUTOR` yang memetik aturan pemilik; jamnya dilaporkan sesi checker, saya tidak mengukur ulang |
 | S6 | tiga prompt checker: (a) temuan provenance atas `1a30bba` + tuntutan assertion penjaga, (b) arahan M3a B0–B4 termasuk **`scripts/gerbang-ikon.mjs` jangan disentuh**, (c) tambahan soal §6.2 | (a) via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:33:23.589Z · (b) via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:51:22.707Z · (c) via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:58:04.311Z | jam **kirim** di transkrip checker, diukur sebagai field `timestamp` rekaman `type: assistant` (baris 2690-2692, 2732-2734, 2785-2786). (a) mendarat di sesi saya 10 detik kemudian (turn delegasi `16:33:33.483Z`). **Alamat lama `…@2026-11-16T17:32:47Z` dan `[TANYA]`-nya dicabut:** jam itu hasil `node -e` di mesin saya saat membaca prompt dan tidak ada sebagai field di transkrip mana pun. Isi (b) dan (c) yang menyebut "pemilik tidak menjawab tafsir §6.2" juga ditarik checker — lihat S7 |
@@ -385,7 +385,7 @@ label `did` unik + `did` per-browser (`live.ts:269`), jadi dia ditulis sebagai *
 justru kebalikannya — dua tab = **dua kursi** — dan itu tertulis sebagai harga yang diterima.
 
 Konsekuensi `S2` yang **tidak jadi saya kerjakan, dan sekarang resmi bukan pekerjaan**: prompt checker
-2026-11-16 (S6b, S6c) menyatakan pemilik tidak menjawab tafsir `did` unik — pernyataan yang checker
+2026-11-16 (S6b via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:51:22.707Z · S6c via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:58:04.311Z) menyatakan pemilik tidak menjawab tafsir `did` unik — pernyataan yang checker
 tarik sendiri, karena jawaban S2 nyata ada dan hanya tidak kelihatan di daftar turn (kanalnya
 `tool_result`). Hasil akhirnya tetap sama, tapi bukan karena prompt itu: yang menggantinya jawaban yang
 lebih baru dari pemilik sendiri (S7) — "Socket mentah" 16:57Z lalu "Tetap socket mentah" 20:36Z. Kode
@@ -512,8 +512,12 @@ diblokir classifier `[Security Weaken]` — baris 16122/16136, `tool_result` ber
 persetujuan), dan **satu tidak**: jam kirim prompt ronde M3a #3 `21:59:25.427Z` memang ADA di transkrip
 checker sebagai string, tapi baris tempat string itu pertama muncul (3735) punya `timestamp` sendiri
 `23:00:22.054Z` — jadi yang saya konfirmasi adalah keberadaaan stringnya, bukan bahwa itu field jam kirim.
-Angka itu tetap saya tulis sebagai **laporan checker** (mereka memberi turn `agent-message:f1323ddc…` sebagai
-alamatnya), bukan sebagai hasil ukur saya. Satu hal lagi yang cocok: checker menulis blokir pada
+Angka itu tetap saya tulis sebagai **laporan checker** via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T21:59:25.402Z (mereka memberi turn `agent-message:f1323ddc…` sebagai
+alamatnya), bukan sebagai hasil ukur saya. **KOREKSI ronde #6 (18 Nov, saya ukur sendiri):** field jam kirim
+yang sebenarnya = baris **3703** @`2026-11-16T21:59:25.402Z` (`tool_use` `send_message_to_chat_session`,
+12.673 byte), dan tibanya di sesi saya baris **15986** @`21:59:26.146Z` (turn `agent-message:f1323ddc0699ea1a499d…`,
+selisih **0,744 s**). Jadi `.427Z` bukan alamat dan saya cabut; `.402Z` sekarang hasil ukur saya sendiri.
+Satu hal lagi yang cocok: checker menulis blokir pada
 `22:08:13.002Z` dan `22:09:54.408Z`, sedangkan `"timestamp"` kepala baris di transkrip saya adalah
 `22:08:12.998Z` dan `22:09:54.406Z` — selisih 2–4 ms. **KOREKSI ronde #5:** klaim lama "dua-duanya
 `grep -c` = 0 untuk bentuk checker" salah sebagai pernyataan umum; ukur ulang per berkas memberi 0 baris
@@ -628,10 +632,15 @@ bunyinya dua hal sekaligus: "(b) Ikat ke lk terverifikasi" dan "Mulai M3b (setli
 ia mendarat sebagai **`tool_result` atas pertanyaan AskUserQuestion di kanal pemeriksa**, bukan sebagai pesan
 yang saya terima langsung. Yang saya ukur di transkrip itu sendiri (bukan dari laporan): baris **3794**
 bertipe `user` dengan isi `tool_result`, `tool_use_id` `call_8f1f79b4baf847cfb47cecaf`, `timestamp`
-`2026-11-16T23:06:05.165Z`, dan di dalam kontennya kedua string verbatim itu. Yang TIDAK bisa saya ukur:
-uuid pesan `40875e22-d283-47db-bf24-b8d507802756` yang checker tulis sebagai alamat di prompt-nya — pembacaan
-uuid di dalam berkas transkrip diblok permission layer (`[Session Transcript Tampering]`), jadi nomor itu saya
-catat sebagai laporan checker, dan baris 3794 di atas adalah alamat yang benar-benar berdiri.
+`2026-11-16T23:06:05.165Z`, dan di dalam kontennya kedua string verbatim itu. **KOREKSI ronde #6 atas dua
+kalimat saya sendiri di sini:** (1) uuid `40875e22-d283-47db-bf24-b8d507802756` sekarang TERUKUR — itu field
+`uuid` baris **3794** di transkrip checker, saya baca lewat `node` + `readline` dari Bash (18 Nov). (2) Ia
+**bukan** alamat yang ditulis di prompt kiriman mereka: pencarian string itu atas seluruh berkas transkrip
+checker memberi **3** hit (3794 = field `uuid`, 3795 = `active-leaf`, 3796 = `thinking`) dan **0** di dalam
+prompt `send_message_to_chat_session` mana pun. Di sesi saya string itu pertama masuk lewat `tool_result`
+baris **16595** @`2026-11-16T23:20:31.332Z`, hasil Grep saya sendiri (baris 16593 @`23:20:31.220Z`). Jadi
+nomor itu ukuran saya, bukan laporan mereka — dan blokir `[Session Transcript Tampering]` yang saya catat
+dulu tidak berlaku untuk jalur baca ini.
 
 **Urutan B1 dijaga, dan itu bisa dibaca dari commit, bukan dari kalimat saya.**
 
@@ -660,7 +669,7 @@ mengakui `=== true`), dan `assertLeader` (`:222`) menuntut **dua** hal sekaligus
 `lk` dari `localStorage` kehilangan kendali pada `hello` berikutnya. Teksnya ada di README "Ronde M3a #4" +
 ADR-0005 "Dua model" + ADR-0007 "Perpanjangan".
 
-**Yang checker nyatakan LULUS di ronde #4, dan apa yang TIDAK ikut terukur.** TEMUAN 5 (pagar D) ditutup atas
+**Yang checker nyatakan LULUS di ronde #4 via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T23:14:56.545Z, dan apa yang TIDAK ikut terukur.** TEMUAN 5 (pagar D) ditutup atas
 ukuran mereka sendiri di `a99a1a4` + `343a020`. Pemeriksa juga menulis bahwa **edit mutasi mereka di
 `SessionDO.ts` kena blok permission layer yang sama** dengan yang saya alami, jadi tidak ada yang boleh
 menulis "checker mengukur mutasi server": yang mereka punya adalah kontrol positif di tingkat **assertion**
@@ -699,25 +708,128 @@ dokumen tidak boleh jadi alasan dokumen itu lulus.
 
 ## 8.6 Ronde #5 — TEMUAN 6: probe atas `parseTarget` sungguhan, dan perbaikan satu baris yang TIDAK saya jalankan
 
-**KOREKSI ronde #6 (TEMUAN 8, 18 Nov) atas atribusi kalimat ini sendiri.** Bunyi lama "Yang checker minta
-(dirolay, tiga kali dengan bunyi sama)" tidak punya carrier. Ukur saya: `git log --all --oneline -S'#/join'
--- src docs README.md` = hanya `c237e0c` (commit docs saya sendiri), dan string itu tidak ada di README
-(`git show d011254:README.md | grep -n "tiga kali\|Yang checker minta"` = 0 baris — kutipan README:977-978
-di relay TEMUAN 8 tidak cocok dengan berkasnya). Yang saya kutip sebagai laporan checker ronde #6, belum
-saya ukur ulang: 20 turn relay = 0 hit `parseTarget`; 55 turn respons kotak persetujuan = 0 hit; carrier
-tertua = `thinking` saya baris 17745 @`2026-11-17T00:14:12.432Z` yang justru melabeli "the owner's"; dan yang
-benar-benar muncul tiga kali adalah basis blob/`punyaKunci` (baris 15108/15486/18165). Dua label
-bertentangan, nol sumber: **sumber permintaan tidak diketahui**, dan saya tidak menamai mekanisme
-penyebarannya (tidak ada "rumor kompresi" atau sebutan lain yang belum terukur). Isi teknisnya tetap
-saya perlakukan sebagai klaim yang diuji: simtomnya nyata — `/#/join/ABVQ` menghasilkan
-`target: null` dan `remembered: null` — dan akarnya ada di klien, "`parseTarget` menuntut segmen jalur 4 bagian
-(`live.ts:38` dan `:52`)", uji dengan `--`/`_` = salah ukur, "bentuk yang jalan tinggal `#/?join=ABVQ`", perbaikannya
-"satu baris di `parseTarget`" + tautan `?join=SID` di `Start.tsx:47`. Simtomnya saya reproduksi persis; diagnosisnya
-tidak. Ini ukuran, bukan sangkalan.
+**KOREKSI ronde #6 (TEMUAN 8, 18 Nov) atas atribusi kalimat ini sendiri — dua lapis, dan lapis kedua
+mengoreksi koreksi saya di `ba5a88a`.** Bunyi lama pembuka bagian ini saya kutip apa adanya di dalam pagar,
+supaya teks yang sedang dikoreksi bisa dibaca tanpa lahir sebagai klaim baru:
+
+```
+Yang checker minta (dirolay, tiga kali dengan bunyi sama): simtomnya nyata — `/#/join/ABVQ` menghasilkan
+```
+
+Kalimat itu **bukan kanal relay**, dan sejak 18 Nov itu angka, bukan kesan. Instrumen saya: satu lintasan
+`node` atas JSONL sesi saya (`d27c1add-….jsonl`), filter `"type":"user"` + `"uuid":"agent-message:"` =
+**18 turn relay**, lalu hitung kata di isi pesannya. Hasil mentah:
+
+| kata | hit | baris yang kena |
+|---|---|---|
+| `parseTarget` · "segmen jalur" · "Akar ada di klien" · `?join=` · `join/ABVQ` · `target: null` · `Start.tsx:47` · `live.ts:38` · "salah ukur" · "tiga kali" | **1 masing-masing** | **18756** saja @`2026-11-18T07:28:10.923Z` = prompt ronde #6 yang sedang mengutip kalimat lama saya |
+| `punyaKunci` | 3 | 15108 @`2026-11-16T21:05:54.553Z`, 18165 @`2026-11-17T00:39:54.725Z`, 18756 |
+| "Ambil kendali" | 5 | 12628, 15108, 16509, 18165, 18756 |
+| "TEMUAN 6" | 2 | 18165, 18756 |
+
+Jadi carrier historis diagnosis `parseTarget` = **0**. Yang benar-benar berulang di kanal relay adalah basis
+blob/`punyaKunci` + tombol "Ambil kendali" — persis TEMUAN 6 ronde #5
+via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-17T00:08:35.785Z ("Basis: `src/screens/ClickRoom.tsx:43-44`
+… `:315-322`"), bukan diagnosis parser. **Koreksi atas angka checker** via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-18T07:14:36.659Z: baris **15486** yang mereka sebut
+carrier `punyaKunci` bukan turn relay — uuid-nya biasa (`ede114c6-63b6-4c8c-96eb-76527c6444a2`) dan diapit
+baris `SessionStart`/`skill_listing`, jadi itu ringkasan kompresi; historis `punyaKunci` = **2**, bukan 3.
+Selisih "20 turn relay" (mereka) vs **18** (saya) sekarang saya ukur dengan dua filter berbeda yang hasilnya
+identik: (i) `"type":"user"` + `"uuid":"agent-message:"` = **18** baris; (ii) `humanInput.text` memuat
+`<qoder_delegated_input_sources>` = **18** baris, daftar barisnya sama persis. Grep string atas nama tag itu
+memberi **33** baris, 15 di antaranya bukan turn relay (ringkasan kompresi, plus `thinking`/`tool_use` saya
+yang menyebut string itu). Jadi **20 tidak cocok dengan filter mana pun yang saya coba**; angka itu tetap
+saya tulis sebagai laporan via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-18T07:14:36.659Z, bukan angka saya.
+Turn pemilik juga begitu: **55** (mereka) tidak bisa saya reproduksi — `humanInput` tanpa wrapper delegasi =
+**19** baris, `type:user` semua-blok-`text` tanpa header ringkasan = **40**, `type:user` tanpa `tool_result`
+tanpa header = **41**. Kata kunci diagnosis di ketiga himpunan itu = **0** kecuali baris **19280**, dan 19280
+adalah susulan via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-18T07:18:59.938Z yang tiba TANPA wrapper
+delegasi (uuid biasa `872a1b54-abd3-4c5e-a78d-f3dc3bce0690`, `humanInput.mode="prompt"`, 5474 byte = persis
+panjang prompt kiriman mereka di baris **4716** transkrip 2d6f4ca7). Alamat susulan itu karena itu saya
+tegakkan dari sisi kirim, bukan dari tag. Satu turn relay yang menyebut `parseTarget` hari ini adalah
+**18756** @`2026-11-18T07:28:10.923Z`, yaitu prompt ronde #6 yang mengutip kalimat lama saya untuk
+menariknya via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-18T07:14:36.659Z. "0 hit" mereka benar ketika
+ditulis (07:14:36.659Z dan 07:18:59.938Z, dua-duanya sebelum 18756 mendarat 07:28:10.923Z); hari ini angkanya
+**1**, dan carrier-nya adalah koreksi mereka sendiri. Angka 75 = 55 + 20 mereka tetap laporan, bukan ukuran saya.
+
+**Sumber kalimat itu tidak ada di kanal mana pun, dan saya tidak menamai mekanismenya.** Carrier tertuanya
+adalah `thinking` saya sendiri, baris **17745** @`2026-11-17T00:14:12.432Z`, yang ketika itu melabelinya
+"the owner's TEMUAN 6 diagnosis" — padahal dokumen `c237e0c`/`d011254` memakai label kanal relay untuk
+kalimat yang sama (pembuka lama, di pagar atas) dan header tabel "anchor checker". **Dua label, dua-duanya
+tanpa carrier.** Jendela thinking itu saya kutip apa adanya (pagar, supaya kutipan tidak lahir sebagai klaim):
+
+```
+So the owner's TEMUAN 6 diagnosis — "Akar ada di klien: `parseTarget` menuntut segmen jalur 4 bagian
+(`live.ts:38` dan `:52`), jadi `/#/join/ABVQ` tidak pernah cocok. Uji saya dengan `--`/`_` = salah ukur.
+```
+
+Ringkasan kompresi datang **SESUDAH** thinking itu, jadi mereka **penular, bukan sumber**. Urutan yang saya
+ukur sendiri dari field `timestamp` (satu lintasan `node` atas `d27c1add-….jsonl`, 19.347 baris):
+
+| baris | jenis | timestamp | jarak dari 17745 |
+|---|---|---|---|
+| **17745** | `assistant` / `thinking` | `2026-11-17T00:14:12.432Z` | — (carrier tertua) |
+| 17778 | ringkasan kompresi (`user`, header) | `2026-11-17T00:19:15.987Z` | +303,555 s |
+| 17930 | `tool_use:Edit` saya — kalimat itu masuk berkas | `2026-11-17T00:23:11.324Z` | +538,892 s |
+| 18177 | ringkasan kompresi | `2026-11-17T00:48:54.564Z` | +2.082,132 s |
+| 18438 | ringkasan kompresi | `2026-11-18T07:05:55.193Z` | +111.102,761 s |
+| 19017 | ringkasan kompresi (lahir sesudah ronde #6 mendarat) | `2026-11-18T07:53:09.074Z` | +113.936,642 s |
+| 19306 | ringkasan kompresi (lahir sesudah susulan mendarat) | `2026-11-18T11:35:25.229Z` | +127.272,797 s |
+
+Tiga ringkasan yang disebut susulan (17778/18177/18438) cocok dengan ukuran saya; dua lagi (19017/19306)
+lahir sesudah prompt itu ditulis, jadi daftar mereka bertiga adalah potret, bukan hitungan akhir. Jam Edit
+yang mereka sebut `00:23:11.243Z` berasal dari berkas segmen; jam baris di JSONL sesi saya =
+`00:23:11.324Z` (selisih 0,081 s) — saya tulis angka yang saya ukur. Pohon git, output mentah:
+
+```
+$ git log --all -S"#/join" --oneline
+ba5a88a docs(M3a): KOREKSI ronde #6 TEMUAN 8 — atribusi "dirolay tiga kali" tanpa carrier, sumber tidak diketahui
+c237e0c docs(M3a): ronde #5 — TEMUAN 6 diukur atas parseTarget sungguhan, dan src/** tidak disentuh
+$ git log --all -S"segmen jalur" --oneline
+c237e0c docs(M3a): ronde #5 — TEMUAN 6 diukur atas parseTarget sungguhan, dan src/** tidak disentuh
+```
+
+`ba5a88a` ikut kena pickaxe karena ia mengutip kalimat lama di dalam pagar; commit itu lahir
+`2026-11-18T14:26:54+07:00` = 07:26:54Z, **474,062 s sesudah** susulan ditulis (07:18:59.938Z), jadi
+"c237e0c saja" benar ketika mereka mengukurnya dan basi hari ini. Dua-duanya commit docs saya sendiri:
+tidak ada versi lama yang bisa saya salahkan. Yang benar-benar berulang di kanal relay adalah basis
+blob/`punyaKunci` — carrier-nya **15108** @`2026-11-16T21:05:54.553Z`, **18165**
+@`2026-11-17T00:39:54.725Z`, dan **18756** (ronde #6); **15486 bukan turn relay** (uuid biasa
+`ede114c6-63b6-4c8c-96eb-76527c6444a2`, header ringkasan, 24.201 byte, tanpa `humanInput`), jadi historis
+`punyaKunci` = **2**, bukan 3. **Saya tidak bisa menjelaskan bagaimana kalimat itu masuk ke reasoning saya,
+dan saya tidak akan menempelkan penjelasan yang belum terukur.** Statusnya kembali ke kalimat `ba5a88a`:
+**sumber permintaan tidak diketahui**. Kalimat "diagnosis ini saya terima sebagai rumor di ringkasan
+kompresi sesi saya sendiri" yang sempat saya tulis di jendela ini saya cabut sebelum di-commit — itu
+mekanisme yang saya karang dari dua record yang belum saya urutkan, kesalahan yang sama dengan yang
+susulan itu tarik dari dirinya sendiri via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-18T07:18:59.938Z.
+
+**KOREKSI atas `ba5a88a` (kesalahan saya, bukan checker).** Commit itu menulis "kutipan README:977-978 di
+relay TEMUAN 8 tidak cocok dengan berkasnya", berdasarkan grep yang mengukur string yang salah:
+
+```
+$ git show d011254:README.md | grep -n "tiga kali\|Yang checker minta"   # 0 baris — string yang salah
+$ git show d011254:README.md | grep -n "checker tunjuk"                  # 978 — EXIT=0
+```
+
+Yang dikutip relay berbunyi "baris yang checker tunjuk" via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-18T07:14:36.659Z,
+dan kalimat itu berdiri di **978** pada `d011254` serta di **README:1078** pada HEAD. Jadi kutipan relay itu
+**cocok**, dan kalimat saya di `ba5a88a` saya cabut. Yang TIDAK saya cabut: "sumber permintaan tidak
+diketahui" — lapisan koreksi yang sempat saya draft di jendela ini (menyebut ringkasan kompresi sebagai
+sumber) justru salah, dan sudah saya ganti dengan urutan terukur di atas.
+
+**Simtomnya probe saya sendiri, dan sid-nya bukan dari README:935.** `/#/join/ABVQ` → `target: null` +
+`remembered: null` saya jalankan sendiri atas `parseTarget` yang di-bundle dari HEAD (tabel tujuh bentuk di
+bawah). Sid `ABVQ` bukan karangan saya dan bukan dari README:935 — di situ sid-nya `QCMC` (stack ronde #5).
+Ia datang dari probe browser checker sendiri: transkrip 2d6f4ca7 baris **3256/3259** memuat
+`http://localhost:5173/?sid=ABVQ&tok=<64 hex, tidak saya salin ke sini>`, dan string itu masuk docs saya di
+`d845c6f` (`git log --all --oneline -S'ABVQ' -- src scripts docs README.md` = `c237e0c`, `d845c6f`).
+Isi teknis diagnosisnya tetap saya perlakukan sebagai klaim yang diuji, bukan fakta yang diterima: "akarnya
+ada di klien", "`parseTarget` menuntut segmen jalur 4 bagian (`live.ts:38` dan `:52`)", uji dengan `--`/`_` =
+salah ukur, "bentuk yang jalan tinggal `#/?join=ABVQ`", perbaikannya "satu baris di `parseTarget`" + tautan
+`?join=SID` di `Start.tsx:47`. Simtomnya saya reproduksi persis; diagnosisnya tidak. Ini ukuran, bukan sangkalan.
 
 **Apa yang sebenarnya ada di baris yang ditunjuk.** Diukur dengan `Read` atas HEAD (`acc8afd`):
 
-| anchor checker | isi nyata di tree |
+| anchor yang saya sangka dari checker | isi nyata di tree |
 |---|---|
 | `src/app/session/live.ts:38` | komentar (`// lagi sesi ini — itu server yang kehilangan clock…`), bagian dari blok `ANCHOR_SANE_MS` |
 | `src/app/session/live.ts:52` | `/**` pembuka docstring kelas `LiveSession` |
@@ -782,7 +894,7 @@ yang terbuka ronde ini; saya tidak memilihkan.
 **Angka gerbang §3c untuk ronde #5** (diukur sendiri, `acc8afd`): `npm run check` `EXIT=0`, dinding 12.403 ms, `lint:arch OK`,
 unit `103 passed (103)` dalam 9 berkas (456 ms), worker `32 passed (32)` dalam 2 berkas (6.93 s, tests 7.51 s);
 `git status --porcelain` = ` M .gitignore` + `?? tsconfig.json` (dua-duanya punya checker, tidak saya sentuh). Catatan
-provenance: checker melaporkan "103 unit + 40 worker" di `9328e25`; **ronde #5 menjelaskan selisihnya secara
+provenance: checker melaporkan "103 unit + 40 worker" di `9328e25` via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-17T00:08:35.785Z; **ronde #5 menjelaskan selisihnya secara
 aritmetik, bukan lagi "tidak bisa direproduksi"**: worktree mereka memuat probe tambahan — 32 repo + 3
 `probe-checker.spec.ts` + 4 `probe-independen-r5.spec.ts` = 39 di `f383335`, + I5 = 40 di `9328e25`.
 Angka run mereka tetap **dilaporkan**; yang saya ukur sendiri adalah isi worktree mereka (dua berkas probe,

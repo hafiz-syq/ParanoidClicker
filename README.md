@@ -3,10 +3,16 @@
 Metronom sinkron untuk band Paranoid: beberapa HP mengikut satu tempo, HP yang membagi
 QR jadi leader, lengkap dengan setlist dan hitungan suara.
 
-Status: **M2** — servo koreksi θ 4 tingkat, ramp tempo per bar, dan beat tertelan di jahitan
-sudah berbunyi dan punya angka; belum otoritas pemimpin di server (M3), QR (M4), suara hitungan
-(M5), kalibrasi akustik (M6), service worker + offline (M7). Semua angka M2 di bawah masih
-**lokal** — tidak ada satu pun perubahan M2 yang dikirim ke produksi.
+Status: **M3b/M4/M5 hidup di tree, belum dikirim** — servo+ramp M2 dan otoritas pemimpin M3a
+sudah punya angka; setlist (M3b), QR yang dipindai dari dalam app (M4), dan hitungan bersuara
+(M5) baru ada di tree ini dan **belum pernah diukur di HP fisik**. Kalibrasi akustik (M6) baru
+sebatas **irisan 1**: estimator murni `src/app/audio/calibrate.ts` + 6 tes sintetis
+(`docs/plans/2026-11-20-m6-kalibrasi-akustik.plan.md`); pengukuran mikrofon dan angka perangkat
+belum ada. Service worker + offline (M7) **irisan 1–2**: shell dan aset build di-cache, reload
+tanpa server terbukti merender, dan versi baru kini menunggu sampai pengguna menekan "Muat ulang"
+(`src/screens/PwaBanner.tsx`); tawaran pasang muncul sekali dan bisa ditolak 30 hari (angka di
+§"Service worker M7"). Instruksi pasang manual untuk iOS dan audio offline belum. Semua angka di
+dokumen ini adalah lokal; tidak ada perubahan M2–M5 yang dikirim ke produksi.
 
 ## Menjalankan
 
@@ -38,7 +44,7 @@ di HP lain jadi pengikut. Alat ukur spike M0 masih di `?layar=ukur`.
 | `npm run cek:ikon` | versi CLI penjaga ikon (cetak tabel sha + IHDR); assertion-nya sendiri jalan di `npm run test` |
 | `npm run cek:ikon:http` | versi served: `content-type: image/png` + sha256 body, butuh server; status 200 TIDAK dipakai sebagai bukti |
 | `npm run cek:kontras` | versi CLI `scripts/cr.mjs` (cetak semua CR + penjaga kutipan); assertion-nya jalan di `npm run test` |
-| `npm run check` | typecheck → lint:arch → test (100, termasuk 2 gerbang bukti di `scripts/gerbang.spec.ts`) → test:worker (20) — gerbang sebelum commit |
+| `npm run check` | typecheck → lint:arch → test (117, termasuk 4 gerbang bukti di `scripts/gerbang.spec.ts`) → test:worker (39) — gerbang sebelum commit |
 | `npm run smoke` | jalur WebSocket asli, butuh `npm run dev:worker` |
 | `npm run attack` | tes serangan T5/T6/T7/T9, butuh `npm run dev:worker` |
 
@@ -1054,14 +1060,15 @@ dengan yang checker ukur.
 - QR menyusul di M4; sampai itu terjadi, tautan join tetap kunci ruangan: siapa pun yang membukanya
   bisa masuk, dan hari ini ia masuk sebagai anggota.
 - M3a **belum LULUS penuh, dan sejak ronde #4 alasannya cuma satu: gerbang §7 yang butuh dua perangkat nyata
-  (butir pertama di atas), bukan kode.** Pemeriksa menyatakan butir 1/2/3 LULUS atas ukuran yang dia ambil
-  sendiri di `343a020`. Alamat prompt ronde M3a #3 sekarang ada — `2026-11-16T21:59:25.427Z`, turn
-  `agent-message:f1323ddc0699ea1a499dea7d995fc0467a37ca92faae3b3d8dccf1e78517541a` — tapi statusnya harus
-  disebut apa adanya: angka itu **dilaporkan checker**, dan yang bisa saya ukur di transkrip saya sendiri
-  cuma keberadaan string `21:59:25.427Z` di dalam berkas (baris 3735, jam baris itu sendiri
-  `23:00:22.054Z`), bukan bahwa ia field jam-kirim. Jadi ia bukan alamat yang saya verifikasi; lihat plan
-  §8.3. Pagar D (TEMUAN 5) sudah ditutup lebih dulu: LULUS diukur checker atas `a99a1a4` + `343a020`, dan
-  check EXIT=0 mereka di 22.862s.
+  (butir pertama di atas), bukan kode.** Pemeriksa menyatakan butir 1/2/3 LULUS via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T21:59:25.402Z atas ukuran yang dia ambil
+  sendiri di `343a020`. Alamat prompt ronde M3a #3 sekarang terukur dari **dua sisi**: jam kirim di transkrip
+  checker = `2026-11-16T21:59:25.402Z` (baris **3703**, `tool_use` `send_message_to_chat_session`, 12.673 byte),
+  jam tiba di sesi saya = `21:59:26.146Z` (baris **15986**, turn
+  `agent-message:f1323ddc0699ea1a499dea7d995fc0467a37ca92faae3b3d8dccf1e78517541a`, selisih **0,744 s**).
+  **KOREKSI atas angka saya sendiri:** `21:59:25.427Z` saya cabut sebagai alamat — itu string di dalam berkas
+  checker (baris 3735, jam baris itu sendiri `23:00:22.054Z`), bukan field jam-kirim; dulu yang saya verifikasi
+  cuma keberadaan stringnya. Lihat plan §8.3. Pagar D (TEMUAN 5) sudah ditutup lebih dulu: LULUS diukur checker
+  atas `a99a1a4` + `343a020` via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T21:59:25.402Z, dan check EXIT=0 mereka di 22.862s.
 - Yang menahan M3a di awal ronde, TEMUAN 1, sudah TUTUP (`343a020`). Yang tadinya menahan sebagai
   **TEMUAN 4 — model otoritas sesudah podium terikat — juga sudah tertutup ronde ini:** `S8` dijawab pemilik via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T23:06:05.165Z
   dengan "(b) Ikat ke lk terverifikasi"; opsinya (a) ditolak, dan jawabannya sudah jadi kode (`f383335`) + tes
@@ -1073,10 +1080,12 @@ dengan yang checker ukur.
   tidak punya angka "D MERAH karena claim menerima frame tanpa `lk`" — yang saya punya dua mutan pengganti (M1
   label jawaban, M2 bocor `state`). Kalau ada jalur yang sah untuk mengukur fail-open, itu pekerjaan terbuka;
   sampai saat itu klaim "D mengikat jalur claim" bersandar ke M1/M2, bukan ke fail-open.
-- **TEMUAN 6 (ronde #5, `/#/join/ABVQ` → `target: null`): simtomnya saya reproduksi, akarnya bukan yang dilaporkan,
-  dan tidak satu baris pun `src/**` saya ubah.** Yang terukur di HEAD ini: `parseTarget`
-  (`src/app/session/live.ts:42-50`) hanya membaca *query string*; baris yang checker tunjuk (`live.ts:38` dan `:52`)
-  adalah komentar, dan `Start.tsx:47` adalah `</p>` — layar `Start` tidak mencetak tautan join sama sekali, satu-satunya
+- **TEMUAN 6 (ronde #5, `/#/join/ABVQ` → `target: null`): simtomnya probe saya sendiri, akarnya bukan yang saya
+  sangka, dan tidak satu baris pun `src/**` saya ubah.** Yang terukur di HEAD ini: `parseTarget`
+  (`src/app/session/live.ts:42-50`) hanya membaca *query string*; `live.ts:38` dan `:52` yang saya sangka
+  ditunjuk checker adalah komentar — **bukan kanal relay**: kalimat diagnosis itu tidak punya carrier di kanal
+  mana pun, carrier tertuanya `thinking` saya sendiri baris 17745 @`2026-11-17T00:14:12.432Z` (plan §8.6).
+  `Start.tsx:47` adalah `</p>` — layar `Start` tidak mencetak tautan join sama sekali, satu-satunya
   URL join yang dibangun aplikasi ada di `src/screens/ClickRoom.tsx:266` dengan bentuk `?sid=…&tok=…`. "Segmen jalur
   4 bagian" itu adalah `isSid` (`src/shared/ids.ts:17`): `{4}` = 4 karakter sid, bukan 4 segmen. Probe tujuh bentuk URL
   atas fungsi yang di-bundle dari HEAD (tabel lengkap + perintahnya di plan §8.6): `#/?join=ABVQ` → `location.search=""`
@@ -1092,6 +1101,182 @@ dengan yang checker ukur.
   yang menukar sid menjadi tok dan karena itu kemampuan baru atas sid 20 bit yang bisa ditebak
   (`src/shared/ids.ts:5-7`): itu
   keputusan desain + keamanan, bukan perbaikan satu baris, dan saya tidak menjawabnya sendiri.
+
+## M3b/M4/M5: setlist, QR di dalam app, hitungan bersuara
+
+Tiga permintaan awal yang belum ada di M2 sekarang hidup di tree ini: daftar lagu untuk
+jamming, QR yang dipindai dari dalam app, dan hitungan "Intro… one… two… three… four".
+Semua diukur lokal; **tidak satu pun dikirim ke produksi**.
+
+### Setlist — satu kemampuan, satu kunci
+
+`lk` menguasai setlist persis seperti tempo: semua jalur tulis lewat `assertLeader`, dan tidak
+satu pun frame setlist membawa `lk`/`did`. Balasannya bukan frame baru, melainkan `state` yang
+sudah ada, dengan dua field tambahan:
+
+| Arah | Frame | Isi |
+| --- | --- | --- |
+| klien → DO | `{t:'lagu', op:'tambah', judul, bpm}` | `judul` 1..40 karakter sesudah dipangkas, `bpm` integer 30..300 |
+| klien → DO | `{t:'lagu', op:'hapus', id}` · `{op:'naik'\|'turun', id}` · `{op:'pilih', id}` | `id` = kunci baris SQLite, bukan nomor urut |
+| DO → semua | `state` + `setlist: [{id, judul, bpm}]` + `laguAktif` | urut menurut kolom `urutan`; `laguAktif` null kalau belum ada yang dipilih |
+
+Lima keputusan yang tidak kelihatan di diff:
+
+1. **Urutan adalah kolom, `id` adalah kunci.** "Naik"/"turun" menukar dua angka `urutan`, jadi
+   `id` yang dipegang layar tidak berubah saat daftar disusun ulang — tombol pada baris ke-3
+   tetap menunjuk lagu yang sama sesudah baris itu pindah.
+2. **Memilih lagu memakai jalur `retune` yang sama dengan `tempo`** (`retuned()` dipakai kedua
+   jalur), jadi jahitan di awal bar, ramp per bar, dan servo di sebelas HP ikut terpakai; tidak
+   ada jalur tempo kedua yang bisa berbeda. Memilih lagu yang bpm-nya sama tetap disiarkan —
+   yang berubah lagu aktifnya — tapi `anchorMs` tidak digeser sama sekali.
+3. **Batasnya diukur, bukan dijanjikan.** 20 lagu (`MAX_SETLIST`), judul 40 karakter
+   (`MAX_JUDUL`), bpm memakai `parseBpm` yang sudah ada. Layar memakai konstanta yang sama,
+   tapi yang menolak tetap server: `FULL_SETLIST` / `BAD_SONG` ke pengirim saja.
+4. **`state` dengan 20 lagu = 1.496 byte** (dihitung `node -e` atas bentuk frame terbesar yang
+   diterima server, semua judul 40 karakter penuh) dan kedalamannya tepat 4 tingkat
+   (`frame → array → lagu → nilai`) — di bawah `MAX_FRAME_BYTES` 8.192 dan tepat di
+   `MAX_JSON_DEPTH`. Tes T4 membaca frame NYATA dari DO lalu menjalankannya lewat `parseFrame`,
+   jadi angka itu bukan deduksi dari kertas.
+5. **Hapus tanpa perubahan dan geser di ujung daftar tidak menyiarkan apa pun**
+   (`cursor.rowsWritten === 0`): dua belas HP tidak dibangunkan untuk perintah yang tidak
+   mengubah apa pun.
+
+`proto` tetap 2. Klien lama mengabaikan dua key itu; klien baru tetap benar kalau server belum
+mengirimnya (`parseSetlist` mengembalikan null dan layar mempertahankan daftar yang sudah ada).
+
+Satu detail yang ditemukan saat review 20 Nov dan sudah diperbaiki: memilih lagu **membatalkan
+ramp** di layar pemimpin — pembatalannya di tombol `Pilih`, bukan ditebak dari perubahan id lagu di
+frame `state`. Tanpa itu langkah ramp berikutnya menarik tempo kembali ke target lamanya, satu BPM
+per bar. Karena letaknya di tombol, memilih lagu yang **sama** dua kali juga benar: id-nya tidak
+berubah, tapi tempo lagu tetap menang. Diukur di browser (20 Nov): ramp 120 → 130 berjalan di
+121 BPM, lalu `Pilih Verse` yang sama → **120 BPM bertahan 5 sampel × 900 ms** dengan status
+`ramp dibatalkan: lagu dipilih`; ramp 120 → 121 berhenti sendiri (`ramp selesai di 121 BPM`);
+menghapus lagu aktif tidak mengubah tempo, hanya menghilangkan baris `Lagu:` — hapus tidak
+membatalkan ramp karena hapus memang tidak menyentuh tempo.
+
+### QR: dipindai dari dalam app
+
+Layar pemimpin menggambar QR dari tautan yang sama dengan tautan teks (`?sid=…&tok=…`), dan
+halaman depan punya tombol **Pindai QR pemimpin** yang membuka kamera, membaca frame lewat
+`jsqr`, lalu masuk sebagai pengikut. `lk` tidak pernah masuk QR — memindai memberi kapabilitas
+anggota, bukan podium.
+
+Dua hal yang diukur, satu yang tidak:
+
+- **Encoder dan decoder sepakat byte demi byte.** `src/app/qr.spec.ts` mengambil matriks dari
+  `qrMatrix()` (`src/app/qr.ts` — pembungkus tipis encoder `uqr`), menggambarnya menjadi RGBA, lalu
+  membacanya kembali dengan `jsqr` yang
+  sama dengan yang dipakai kamera: tautan 96 karakter terbaca persis, pada modul 4 px dan
+  2 px (lebar frame 320 px seperti jalur kamera).
+- **Gerbangnya tetap `parseTarget`.** QR aplikasi lain, tautan tanpa token, dan teks iseng
+  ditolak `targetFromUrl` — dipindai bukan berarti dipercaya.
+- **BELUM: kamera dan lensa sungguhan.** Yang terbaca di tes adalah gambar sintetis yang
+  sempurna. Blur, glare, layar redup, dan pilihan kamera depan/belakang belum diukur satu pun;
+  kamera hanya hidup selama layar pemindai terbuka dan setiap track dihentikan saat layar itu
+  dilepas.
+
+### Hitungan masuk: bunyi terjadwal di jam audio
+
+Tombol **Hitung masuk** (pemimpin, saat klik berjalan) menjadwalkan **judul lagu aktif** di
+downbeat berikutnya (fallback `Intro` kalau belum ada lagu dipilih) lalu `one… two… three… four`
+pada empat beat sesudahnya, dihitung dari grid server + θ — bukan dari "sekarang".
+`src/app/audio/voice.ts` hanya menghitung jadwal dan label; bunyinya adalah lima penanda osilator
+yang dijadwalkan `ClickEngine.scheduleCountIn()` di **AudioContext yang sama dengan klik**, memakai
+bridge, laju audio, θ, dan kompensasi latensi yang sama. Tidak ada `speechSynthesis`, voice
+perangkat, jaringan, atau `setTimeout` untuk bunyi hitungan.
+
+Pola bunyinya sengaja berbeda dari klik: intro nada rendah 660 Hz selama 120 ms, hitungan pertama
+1320 Hz selama 100 ms, lalu `two`–`four` 990 Hz selama 80 ms. Label teks di layar tetap menyebut
+`Intro/one/two/three/four` (atau judul lagu), jadi pola bunyi bisa dipelajari tanpa bergantung pada
+TTS. Menekan tombol lagi menghentikan penanda lama lewat engine, bukan menumpuknya.
+
+Pengukuran di `src/app/audio/click.spec.ts` membaca waktu `oscillator.start` yang benar-benar masuk
+antrean AudioContext: pada **120 BPM jaraknya 500, 500, 500, 500 ms**, dan pada **100 BPM 600, 600,
+600, 600 ms**. Kelima oscillator sudah ada sebelum satu timer uji dimajukan, dan waktunya kembali
+ke `countInPlan()` dalam toleransi 10⁻⁶ ms. Ini mengukur jadwal AudioContext, bukan onset akustik
+dari speaker; latensi speaker/TWS tetap menjadi batas M6 yang belum diukur di sini.
+
+### Gerbang ronde ini
+
+`npm run check` EXIT=0: typecheck, `lint:arch OK — 4 berkas src/app/sync bersih`, **117 tes unit**
+di 12 berkas (`setlist.spec` 4, `voice.spec` 4, `qr.spec` 2 di antaranya) dan **39 tes worker**
+(`setlist.spec` 5 di antaranya). `npm run build` hijau: 36 modul, `dist/assets/index-*.js`
+266,86 kB (gzip 85,45 kB) plus potongan `jsQR-*.js` 129,97 kB (gzip 47,50 kB) yang baru
+diunduh saat tombol pindai ditekan — dua pustaka baru (`jsqr` 1.4.0 untuk membaca, `uqr` 0.1.3
+untuk digambar lewat `src/app/qr.ts`) adalah seluruh kenaikan itu. `qrcode` 1.5.4 dicabut: ia
+menarik 29 paket untuk menggambar kotak yang bisa dipetakan `uqr` tanpa satu dependensi pun.
+Bundel awal turun 407,89 → 266,86 kB (gzip 136,42 → 85,45): 13,02 kB dari mencabut `qrcode`,
+sisanya dari memindahkan decoder ke potongan lazy yang hanya diunduh kalau ada yang memindai.
+
+### Log lokal: T9c sekarang BUKTI, bukan KOSONG
+
+`wrangler dev` hanya mencetak pathname (`GET /ws 101`), jadi kendali positif untuk T9b tidak
+punya satu URL pun untuk dibuktikan. Sejak 20 Nov 2026 Worker punya shim log **lokal**: bila
+`PC_LOG_URLS=1`, setiap request dicatat sebagai `[req] <method> <path>?<query>` dengan nilai
+`tok`/`lk`/`key` diganti `***` **sebelum** ditulis. Variabel itu dipasang oleh script lokal
+(`npm run dev:worker` dan `npm run preview` memakai `wrangler dev … --var PC_LOG_URLS:1`) dan
+tidak pernah ada di `wrangler.jsonc`, jadi `wrangler deploy` tidak menyalakannya.
+
+Hasil `PC_LOG_FILE=dev-preview.log npm run attack`: T9a/T9b/T9d OK, dan **T9c BUKTI** — 84 baris
+`[req]`, contoh `[req] GET /ws?sid=HULJ&tok=***`; grep `tok=` hanya menemukan `tok=***`, token
+sesi mentah tidak muncul satu kali pun. Yang dibuktikan baris itu: log ini memang merekam URL,
+jadi absennya token punya arti — bukan lulus karena lognya buta.
+
+Batasnya: shim ini menjaga **redaksi** dan menutup jalur log aplikasi. Ia tidak mengatakan apa
+pun tentang `wrangler tail` produksi, yang sensorannya milik platform (bagian deploy di bawah),
+dan ia tidak menangkap `console.log` yang ditambahkan di tempat lain — untuk itu T9a/T9b tetap
+memeriksa seluruh isi berkas, bukan hanya baris `[req]`.
+
+BELUM dari ronde ini, dan tidak boleh dibaca sebagai sudah:
+
+- **Setlist dan hitungan sudah diuji interaktif** di dua konteks browser terisolasi (20 Nov 2026,
+  angka di §"Uji interaktif: setlist + hitungan" di bawah). Yang masih **belum**: kamera/QR di HP,
+  layar fisik, dua perangkat sungguhan, dan semua pengukuran akustik.
+- `state` yang membesar 98 → 1.496 byte ikut disiarkan pada setiap perubahan tempo dan pada
+  setiap pilih lagu. Itu masih di bawah batas frame, tapi biaya per detiknya belum diukur di
+  jaringan seluler.
+- Memilih lagu ketika klik berjalan langsung memindahkan tempo sebelas HP. Itu perilaku yang
+  dipilih (jalur `retune` yang sama), bukan kecelakaan — tombolnya sudah diukur di dua konteks
+  browser, belum di dua HP.
+
+### Uji interaktif: setlist + hitungan (20 Nov 2026, sebelum penggantian bunyi)
+
+Dua konteks terisolasi di Chromium lokal: tab normal sebagai **pemimpin** (membuat sesi lewat
+`POST /create`, memegang `lk` di localStorage) dan tab **incognito** sebagai **pengikut** (membuka
+tautan join `?sid=RAN8&tok=…`, tanpa kunci pemimpin). Worker yang diuji: `wrangler dev --local`
+di `127.0.0.1:8787`, build `dist/assets/index-D-1C9i-H.js`.
+
+| Yang dilakukan | Yang terukur |
+|---|---|
+| Tambah 2 lagu dari form pemimpin (`Intro` 100, `Verse` 120) | kedua layar **Setlist (2/20)** dengan baris identik `1. Intro · 100 BPM`, `2. Verse · 120 BPM`; pengikut punya **0** tombol di dalam baris lagu |
+| Geser `Verse` naik | kedua layar berubah jadi `1. Verse`, `2. Intro`; tempo tetap **120 BPM** (urutan bukan tempo); `id` baris tidak berubah, jadi `laguAktif` tidak ikut batal |
+| `Start` | **120 BPM · jalan**, `1 → 2 HP` di kedua layar, `anchor=1795145304529` |
+| `Pilih Intro` (100 BPM) **saat klik berjalan** | kedua layar **100 BPM · jalan** dan **“Lagu: Intro · 100 BPM”**, penanda ▶ pindah ke Intro; `anchor=1795145316029` → **Δ 11.500 ms = 23 × 500 ms** (periode 120 BPM), jadi jahitan mendarat tepat di kelipatan periode lama |
+| `Hitung masuk` pada 100 BPM | 5 ucapan: `Intro, one, two, three, four`, jarak antar-`speak()` **600, 600, 600, 600 ms** = periode 100 BPM; `speechSynthesis` ada (4 voice, `speaking=true`) |
+| Diagnostik di layar pemimpin | θ **0,5 ms**, umur **999 ms**, laju audio **1,002×** jam dinding |
+
+Baris `Hitung masuk` di tabel ini adalah bukti lama dari jalur `speechSynthesis`; sejak 21 Nov 2026
+jalur itu diganti beep AudioContext yang dijelaskan di §"Hitungan masuk: bunyi terjadwal di jam
+audio". Angka waktu lama itu bukan dari telinga: `speechSynthesis.speak` dibungkus di halaman
+sebelum tombol ditekan, lalu `Date.now()` tiap panggilan dicatat — jadi yang terbukti adalah
+**jadwal** lima kata, bukan ketepatan suara yang keluar dari speaker.
+
+Batas yang ikut tercatat, dan tidak boleh dibaca lebih dari yang diukur:
+
+- **Dua konteks ≠ dua HP.** Keduanya tab di satu Chromium, satu mesin, satu jam; θ 0,5 ms itu
+  bagus karena tidak ada jaringan, bukan bukti sinkron di lapangan. Kamera, layar redup, dan
+  kebijakan hemat daya HP tetap belum diuji.
+- **Pengikut tidak bisa menulis** terbukti dari UI (0 tombol) — penolakan server untuk perintah
+  setlist tanpa `lk` tetap bukti tes worker T1/T2, bukan dari klik ini.
+- **Batas 20 lagu / judul 40 / bpm 30–300** tidak diklik satu per satu di UI; angka itu dari
+  tes worker T4 yang membaca konstanta yang sama dengan layar.
+- **Wake Lock ditolak** browser ini (`NotAllowedError: Wake Lock permission request denied`),
+  jadi kalimat “layar ditahan” belum pernah terlihat hijau di sini.
+- **Klik berbunyi 0, hilang 9** di tab ini: Chromium yang dipakai tidak mengeluarkan output audio
+  yang bisa dihitung engine, sehingga angka “hilang” **tidak** boleh dipakai menilai scheduler
+  di HP. Yang tetap sah dari baris itu hanya `ctx=running` dan laju audio 1,002×.
+- **Pindai QR belum dijalankan** di ronde ini; potongan `jsQR-*.js` juga belum pernah benar-benar
+  diunduh oleh tab mana pun.
 
 ## Antrean defect yang belum punya gerbang
 
@@ -1199,8 +1384,11 @@ adalah lingkaran berjari-jari 40% lebar dan "outer 10% edge might be cropped" �
 ber-alpha penuh (min=max=255), jadi tidak ada kanal transparan yang bisa diinterpretasi lain.
 Ukuran/tipe di `public/manifest.webmanifest` diambil dari `file` pada berkasnya, bukan diketik.
 
-BELUM di diff ini: service worker dan offline (M7), mark logo di dalam layar (putuskan bersama
-tema M7), dan `paranoid-1024.png` yang baru disimpan untuk cadangan M8 — tidak dirujuk manifest.
+Service worker M7 (irisan 1) sudah ada: shell + aset build di-cache dan reload tanpa server
+terbukti merender. Detail, kebijakan, dan angkanya di §"Service worker M7" (akhir dokumen). BELUM
+di ronde ini: prompt instal, UI "versi baru tersedia", cache respons API, dan precache audio
+hitungan. Mark logo di dalam layar juga masih (putuskan bersama tema M7), dan
+`paranoid-1024.png` yang baru disimpan untuk cadangan M8 — tidak dirujuk manifest.
 Tab dengan favicon dan "Add to Home Screen" di HP asli belum terukur; yang terukur adalah
 Chromium sendiri meminta `/ikon/paranoid-32.png` dan `/ikon/paranoid-192.png` (ikon itu hanya ada
 di manifest), dan `npm run check` hijau dengan 0 error console.
@@ -1543,18 +1731,23 @@ Koreksi ini ditulis sebagai commit ke depan. `1a30bba` tidak di-amend dan tidak 
 bekerja di satu working tree, dan menulis ulang history yang sudah dilihat sesi lain justru
 menghancurkan jejak yang lagi diperiksa.
 
-Aturan dari checker (S6): setiap baris yang memuat kata pemilik di sebelah salah satu dari
+Aturan dari checker (S6) via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:33:23.589Z: setiap baris yang memuat kata pemilik di sebelah salah satu dari
 keputusan/perintah/instruksi/syarat/jawaban/konfirmasi — di `README.md`, `docs/plans/**`, atau
 `docs/adr/**` — harus membawa salah satu: `[TANYA]`, alamat
 `via <sessionId>@<UTC>`, atau kunci `S<n>` yang baris tabelnya di berkas yang sama membawa alamat. Penegaknya assertion
 `setiap klaim keputusan pemilik di dokumen membawa alamat sumber yang bisa ditunjuk` (S6) di
 `scripts/gerbang.spec.ts`, jalan di `npm run check` tanpa perlu ada yang mengingat perintahnya.
-Batasnya tetap: penjaga ini memeriksa BENTUK alamat, bukan ISI jawaban. Tapi catatan lama di titik ini
-("transcript diblokir untuk dibaca") sudah tidak benar dan saya cabut: berkas `~/.qoder/projects/*.jsonl`
-ternyata bisa dibaca **hanya-baca** lewat Grep dengan pola `"timestamp":"…"` — yang diblokir hanyalah
-mem-parse-nya dengan `node`. Jadi verifikasi sebuah alamat hari ini adalah grep atas field `timestamp`
-(asli, bukan kutipan di dalam isi pesan) plus mata manusia membuka sesinya di App — bukan assertion di
-dalam tes. Kolom "Alamat" di tabel berikut sudah lewat grep itu, dan dua nilai yang tidak lolos
+Batasnya tetap: penjaga ini memeriksa BENTUK alamat, bukan ISI jawaban. **KOREKSI kedua atas catatan di
+titik ini:** dulu saya tulis "transcript diblokir untuk dibaca", lalu saya ganti "bisa dibaca lewat Grep,
+yang diblokir hanyalah mem-parse-nya dengan `node`". Dua-duanya salah. Yang terukur 18 Nov: berkas
+`~/.qoder/projects/*.jsonl` (sesi saya DAN sesi checker) bisa dibaca lewat Grep **dan** bisa di-parse
+`node` + `readline` dari Bash — seluruh ledger alamat di plan §8.6 dan tabel di bawah dibangun dengan
+instrumen itu, bukan dengan grep saja. Bentuk perintah yang jalan: `node -e` dengan
+`fs.createReadStream(path)` + `rl.createInterface` + `JSON.parse` per baris, mencetak `n`, `type`,
+`timestamp`, `uuid`, `humanInput`. Jadi verifikasi alamat hari ini = parse field `timestamp`/`uuid` yang
+asli (bukan kutipan di dalam isi pesan), dan itu bisa diulang siapa pun di mesin ini. Yang TIDAK berubah:
+penjaga di dalam tes tidak membaca transkrip — ia hanya memeriksa bentuk alamat di dokumen. Kolom
+"Alamat" di tabel berikut sudah lewat instrumen itu, dan dua nilai yang tidak lolos
 (`16:50:13.874Z` dan `17:32:47Z`) saya coreng di barisnya masing-masing, bukan saya hapus diam-diam.
 
 Penjaga ini diserang dua arah, dan keduanya keluar sebagai RED:
@@ -1603,7 +1796,7 @@ menyalin baris yang dia butuh di §8.2 berkasnya sendiri.
 ### §6.2 SELESAI (S7) — kursi dari socket mentah, dan ini bukan keputusan saya
 
 Riwayatnya, supaya tidak dibaca sebagai kontradiksi. (1) 15 Nov 18:46Z pemilik memilih label opsi (S2)
-*"did unik di antara socket hidup"*. (2) 16 Nov 16:51Z prompt checker menyatakan pertanyaan tafsir
+*"did unik di antara socket hidup"*. (2) 16 Nov 16:51Z prompt checker via 2d6f4ca7-3aba-44e4-ab8d-470daf00b560@2026-11-16T16:51:22.707Z menyatakan pertanyaan tafsir
 §6.2 itu belum dijawab pemilik (S6b) — dan itu **salah framing**, sebab yang sama dengan dua tuduhan
 yang dia tarik di atas: jawaban S2 mendarat sebagai `tool_result` dan tidak kelihatan di daftar turn.
 (3) Setelah kedua jawaban lama ditampilkan ke dia, dia menjawab dua kali di sesi checker dan **mengganti
@@ -1798,3 +1991,170 @@ kita perlukan di M0.
 galeri HP orang lain. `wrangler deploy --temporary` dan URL preview mati sendiri, jadi HP yang
 memindai QR basi akan mengarah ke endpoint yang sudah tidak ada. Satu host permanen, disalin dari
 output `npm run deploy`, adalah satu-satunya yang boleh masuk app.
+
+## Service worker M7 (20 Nov 2026)
+
+Isi cache dan versinya dihitung saat build: `scripts/build-sw.ts` membaca `dist/index.html` dan
+mengambil hanya shell `/` serta aset ber-hash yang benar-benar dirujuk HTML (`/assets/index-*.js`,
+`*.css`), lalu menulis `dist/sw.js` dari `scripts/sw-template.js` dengan
+`CACHE = paranoidclick-<8 digit>`. Ikon dan `manifest.webmanifest` **tidak** ikut precache: keduanya
+tidak diperlukan untuk merender shell dan kegagalannya tidak boleh menentukan install offline.
+Versi = FNV-1a dari HTML + daftar aset (diurutkan) + sumber template, jadi satu byte yang berubah
+menghasilkan cache baru. Fungsi murninya di `src/app/offline/manifest.ts` dengan 5 tes unit; bagian
+`caches`/`fetch` sengaja tidak diuji unit karena butuh browser.
+
+Kebijakan: navigasi **network-first** (online selalu HTML terbaru, offline jatuh ke `/`), aset
+ber-hash **cache-first**, dan `/ws`, `/create`, `/health` tidak disentuh service worker supaya worker
+mati tetap terlihat gagal, bukan disamarkan cache.
+
+**Perbaikan 20 Nov: cache versi lama tidak lagi dihapus di `activate`.** Tab yang sudah terbuka
+memegang nama chunk ber-hash dari build lamanya, dan `jsQR-*.js` baru diimpor saat kamera dibuka —
+lama sesudah halaman dimuat. Menghapus cache lama tepat saat versi baru aktif membuat impor dinamis
+itu jatuh ke jaringan, mendapat 404, dan pemindai mati sampai reload. Sekarang `activate` tidak
+menghapus apa pun; pembersihan hanya terjadi setelah sebuah navigasi selesai dan tinggal ≤1 tab
+(yaitu halaman yang baru dimuat). Permintaan `/assets/*` dicari di **semua** cache, bukan hanya
+daftar versi ini — itulah yang menyajikan chunk lama ke tab lama; untuk URL yang juga ada di
+build ini (ikon, manifest), salinan versi ini yang menang. Aturan penahanannya ditulis
+sekali di `scripts/sw-core.js`: `scripts/sw-core.spec.ts` mengimpornya, dan `scripts/build-sw.ts`
+menyuntikkan isi berkas itu apa adanya ke `dist/sw.js` (kata `export` dibuang karena service worker
+klasik tidak boleh punya export). Jadi fungsi yang diuji unit adalah fungsi yang berjalan di SW,
+bukan salinannya; build gagal kalau injeksinya tidak terjadi.
+
+Penjaga penyajiannya `scripts/cek-sw.mjs` (`npm run cek:sw:http`, butuh server hidup dan `dist/sw.js`
+dari `npm run build`): menolak content-type yang bukan javascript dan membandingkan isi served
+byte-per-byte dengan `dist/sw.js`. Perbandingan itulah bukti utamanya — manifes basi yang menyajikan
+`index.html` (200 `text/html`) maupun `sw.js` dari build lama sama-sama tertangkap, sementara
+memeriksa content-type saja tidak membuktikan apa pun pada host yang salah melabeli. Bagian murninya
+(`periksaSw`) diimpor `scripts/gerbang.spec.ts`, jadi ikut `npm run check` tanpa server.
+
+Gerbang precache `scripts/cek-precache.mjs` (`npm run cek:precache:http`) membaca setiap URL dari
+`ASET` di `dist/sw.js`, membandingkan byte respons preview dengan berkas `dist/` yang seharusnya,
+dan memeriksa content-type yang sama dengan SW (`tipeCocok` diimpor dari `scripts/sw-core.js`). Ini
+menutup kasus URL aset yang hilang dan dibalas SPA fallback dengan 200 `text/html`. Bukti lokal 21
+Nov: 3/3 URL daftar sekarang cocok (`/` 935 B `text/html`, JS 273.595 B `text/javascript`, CSS 1.770
+B `text/css`). Saat satu URL `/ikon/hilang.png` disuntikkan sementara ke `dist/sw.js`, gerbang gagal
+(`GAGAL /ikon/hilang.png: tidak ada di dist …; content-type "text/html"`), lalu lulus 3/3 lagi
+setelah dist dipulihkan. Tes murninya ada di `scripts/gerbang.spec.ts`.
+
+Precache kini **wajib semua, tetapi dicoba per aset**: `precacheAset` fetch setiap URL, memeriksa
+status, content-type (shell HTML, aset JS/CSS), lalu `cache.put`. Setelah semua URL dicoba, satu
+kegagalan tetap menolak install; SW lama tetap aktif dan tidak ada install "berhasil" yang
+menyisakan shell tanpa JS/CSS. Setiap kegagalan dicatat sebagai `{url, message}`, ditulis ke cache
+`pc-precache-status` sebagai status `{total, gagal, at}`, dan dikirim ke klien lewat pesan
+`PRECACHE_STATUS`. Ini juga menangkap aset yang dibalas 200 `text/html`, bukan hanya 404/jaringan.
+`PwaBanner` membaca cache status saat mount, mendengarkan pesan, dan menampilkan baris seperti
+`Precache tidak lengkap: 1/4 aset gagal (/ikon/hilang.png)…`; tombol `Tutup` hanya menyembunyikan
+baris untuk halaman itu. Ikon/manifest tidak ada di daftar, jadi kegagalannya bukan kasus precache
+sejak awal. Build juga menolak daftar yang menunjuk berkas yang tidak ada di `dist/`. Cache setengah
+jadi dari install yang gagal tidak dipakai SW aktif dan akan dibersihkan sebagai cache lama.
+
+**Pemulihan cache kosong (21 Nov).** `activate` memanggil `pastikanCache()`. Pemeriksaan pertama
+adalah shell `'/'`: bila tidak ada, cache diisi ulang lewat precache; bila setelah percobaan cache
+masih tidak lengkap, cache parsial dihapus dan registration di-`unregister` supaya kunjungan
+berikutnya bersih. Pemeriksaan aset lain tetap wajib, jadi shell yang ada tanpa JS/CSS juga masuk
+jalur pemulihan. Bukti browser lokal: SW `6e58f627` aktif dengan cache lengkap; cache build dihapus
+manual hingga hanya `pc-precache-status` tersisa, lalu SW waiting diaktifkan dengan
+`SKIP_WAITING` → cache `paranoidclick-6e58f627` kembali dan `/` berstatus `200 text/html` (935 B).
+Pada percobaan kedua, cache dihapus lagi dan server dimatikan sebelum aktivasi → registration hilang,
+`caches.keys()` hanya `pc-precache-status`, sehingga halaman berikutnya tidak memakai SW dengan
+cache kosong. Ini bukti Chromium lokal, bukan HP fisik; yang diperiksa adalah cache dan registration
+setelah aktivasi, bukan onset jaringan di HP.
+
+Batas yang tersisa: karena shell dan aset build sama-sama wajib, saat offline total install baru
+memang tidak bisa selesai — SW lama terus melayani sampai percobaan berikutnya.
+
+Penjaga tambahan 20 Nov: pembersihan cache lama hanya boleh dilakukan oleh SW yang **masih menjadi
+`registration.active`** dan tidak sedang melihat versi baru `installing` atau `waiting`. Daftar
+`caches.keys()` diambil lebih dulu, lalu pemeriksaan dilakukan; cache versi baru yang lahir sesudah
+daftar tidak ikut dihapus, dan identitas `self.serviceWorker` mencegah SW lama yang sudah digantikan
+menghapus cache SW penerusnya. Tanpa ini, saat sebuah tab dimuat ulang, SW lama yang masih menangani
+navigasi bisa menghapus cache SW baru yang sedang diisi — install "berhasil", SW aktif, tapi
+`caches.keys()` kosong dan offline mati tanpa pesan. Ini sempat terjadi di uji lokal (SW aktif
+`365630f7` dengan 0 entri) dan sudah diperbaiki di `scripts/sw-template.js`. Fungsi keputusannya
+`bolehBersihkanCache` diuji `scripts/sw-core.spec.ts`.
+
+Bukti lokal 20 Nov (Chromium, `npm run preview`, **sebelum daftar disederhanakan**): `/sw.js`
+disajikan `text/javascript` 2.123 byte; SW `activated`, 13 entri cache (`/`, dua aset build, 10
+berkas ikon+manifest). Server dimatikan (`netstat` bersih, `curl` → 000), tab di-reload →
+`document.title = ParanoidClick`, `#root` berisi satu anak, layar Start dengan tiga tombol muncul,
+dan `fetch('/health')` dari halaman itu gagal `TypeError` — jadi HTML-nya dari cache, bukan dari
+jaringan. Angka 13 itu tidak lagi menggambarkan daftar sekarang; lihat bukti daftar baru di bawah.
+
+Bukti status precache 21 Nov (Chromium, `npm run preview`): install normal menulis
+`pc-precache-status` = `{"total":3,"gagal":[]}` dan tidak menampilkan bar. Setelah satu URL
+`/ikon/hilang.png` disuntikkan sementara ke `dist/sw.js`, install menulis
+`{"total":4,"gagal":[{"url":"/ikon/hilang.png","message":"content-type text/html; charset=utf-8"}]}`
+dan halaman menampilkan baris `Precache tidak lengkap: 1/4 aset gagal (/ikon/hilang.png)…`; baris itu
+masih ada setelah reload karena dibaca dari cache. Setelah `dist/sw.js` normal dipulihkan dan install
+ulang, status kembali `gagal: []` dan baris hilang. Bukti reload offline untuk daftar baru belum
+diulang pada putaran ini.
+
+Bukti penahanan cache (20 Nov, dua tab, Chromium): tab A tetap di build lama sementara template
+diberi komentar sementara → build ulang (`21cbb185`) dan tab B dibuka. Sesudah SW baru aktif,
+`caches.keys()` = `['paranoidclick-6e3f7f09', 'paranoidclick-21cbb185']` — cache lama **tidak**
+dihapus karena tab A masih terbuka. Di tab A (masih halaman lama, dikendalikan SW baru),
+`import('/assets/lama-jsqr.js')` — chunk yang hanya ada di cache lama — berhasil (`200`, variabel
+global terpasang); dengan kebijakan lama ini 404. Setelah tab B ditutup dan tab A di-reload,
+`caches.keys()` = `['paranoidclick-21cbb185']` saja dan chunk lama ikut hilang.
+
+**Irisan 2 (20 Nov): versi baru menunggu, bukan menyela.** `install` tidak lagi memanggil
+`skipWaiting()`. SW baru berstatus *waiting*; `PwaBanner` menampilkan "Versi baru sudah siap" dengan
+tombol **Muat ulang** (mengirim `{type:'SKIP_WAITING'}`, lalu reload hanya saat `controllerchange`
+yang kita minta) dan **Nanti** yang menyembunyikannya untuk halaman itu. Bukti lokal: build
+`2de1f617` aktif, build `ed1591cd` dipasang dan `registration.waiting` = true, banner muncul; sekali
+klik "Muat ulang" → `waiting` null, `caches.keys()` = `['paranoidclick-ed1591cd']` saja (cache lama
+terhapus setelah navigasi), banner hilang.
+
+**Irisan 3 (21 Nov): update dicek saat halaman dibiarkan terbuka.** `src/main.tsx` memulai
+penjadwal `mulaiPemeriksaanUpdate()` sesudah `register('/sw.js')`. Selama halaman terlihat,
+`registration.update()` dipanggil setiap **15 menit**; saat halaman kembali terlihat, pemeriksaan
+dilakukan bila sudah ≥60 detik sejak pemeriksaan terakhir; event `online` memaksa satu percobaan.
+Registrasi awal tidak memanggil `update()` lagi karena `register()` sudah memeriksanya. SW baru
+tetap **waiting** dan tidak ada `skipWaiting`/reload otomatis. `PwaBanner` tetap menyembunyikan bar
+"Versi baru" selama `sesiBerjalan` atau cap lintas tab `adaLaguBerjalan()` masih segar; tombol
+muncul sesudah lagu berhenti.
+
+Bukti browser lokal (Chromium, 21 Nov): build `fa828648` aktif dan lagu berjalan; `dist/sw.js`
+diberi komentar build B lalu `registration.update()` dipanggil dari halaman. Hasilnya
+`waiting = installed`, tetapi `.pwa-baris` kosong selama status `BPM · jalan`. Setelah **Stop**,
+tanpa reload, banner menjadi `Versi baru sudah siap…` dan penanda `pc-lagu-berjalan` menjadi null.
+Ini mempercepat siklus update secara manual; interval 15 menit dan throttle resume dibuktikan oleh
+8 tes unit di `src/app/offline/update.spec.ts`. Tab yang dikendalikan alat ini tidak dapat menguji
+penantian 15 menit nyata atau dua HP fisik.
+
+Tawaran pasang hanya lahir dari `beforeinstallprompt` (tidak ada prompt paksa), punya tombol
+**Nanti**, dan setelah ditolak tidak muncul lagi 30 hari (`bolehTawarkanPasang` di
+`src/app/offline/pasang.ts`, 4 tes unit). Bukti lokal dengan event sintetis: banner muncul, "Nanti"
+menulis `pc-pasang-ditolak`, dan event berikutnya di halaman yang sama tidak memunculkannya lagi.
+
+BELUM di ronde ini: instruksi pasang manual iOS (Safari tidak mengirim `beforeinstallprompt`),
+penjadwalan update saat aplikasi ditutup sepenuhnya (hanya halaman yang hidup yang menjalankan
+penjadwal), cache respons API, precache audio hitungan, dan pengukuran di HP asli.
+
+## Klik saat WebSocket putus / server mati (bukti 21 Nov 2026)
+
+Diuji pada tab pengikut yang **sudah berjalan** di preview lokal (`npm run preview`), sesi `7LCV`,
+tempo 130 BPM. Ini bukti lokal Chromium, bukan HP fisik dan bukan klaim produksi. Tab tidak
+melakukan reload selama kedua skenario.
+
+**A — WebSocket ditutup, server masih hidup.** Socket ditutup dari halaman. Status berubah menjadi
+`terputus (1000) — klik jalan terus dari grid terakhir`; satu detik kemudian klik 3941 → 3943 dan
+status kembali `terhubung`. Grid, anchor, dan `0 hilang` tidak berubah.
+
+**B — server mati total.** Setelah preview dihentikan (`netstat` tidak punya listener `:8787`,
+`/health` menjawab `000`), tab yang sama tetap berbunyi: selama 8 detik klik 3979 → 3996,
+`ctx=running`, `0 hilang`, dan grid tetap `bpm=130 anchor=1795218013322.6191 running=true`.
+Status bergantian antara `percobaan lagi ke-3…`, `terputus (1006)`, dan percobaan berikutnya.
+Server dinyalakan lagi (`/health` 200); sesudah backoff, status kembali `terhubung` dan klik
+4107 → 4161 dalam 8,5 detik, masih `0 hilang` dan grid yang sama.
+
+Jalur yang tetap membutuhkan server dan **tidak** menjadi bagian freewheel:
+
+- membuat sesi baru (`/create`) dan handshake awal (`welcome`/`state`) — sebelum grid pertama
+  diterima memang belum ada yang bisa dibunyikan;
+- perintah pemimpin `start`/`stop`/tempo/setlist lewat `LiveSession.send()`. Saat socket tertutup,
+  perintah tidak dikirim dan layar melaporkan `perubahan tidak terkirim: tidak terhubung ke
+  server`; perintah tidak diantrekan. Klik yang sedang berjalan tidak menunggu perintah ini.
+- reload saat server mati: shell PWA bisa dimuat dari cache, tetapi grid terakhir tidak disimpan
+  sebagai state lokal, jadi tab yang baru dibuka belum bisa melanjutkan klik sampai server
+  mengirim `state`. Ini batas yang diketahui, bukan perilaku freewheel tab yang sudah berjalan.
