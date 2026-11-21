@@ -1330,8 +1330,7 @@ sumbernya.
    + 42 worker).
 3. **Klik pertama ±600 ms sesudah Stop/idle/Start.** Diukur pada DUA build: 613,0 ms (build M2)
    dan 642,9 ms (build pra-M2), jadi ia sudah ada sebelum servo dan bukan regresi M2. Kedua angka
-   itu hasil ukur pelapor, BUKAN saya — saya belum mereproduksinya, dan tidak ada satu pun tes
-   yang menjaganya.
+   itu hasil ukur pelapor, BUKAN saya — saya belum mereproduksinya di DUA build (headless Chrome), dan tidak menemukan delay ±600 ms, jadi ini mungkin terkait dengan jaringan, layar, atau audio output fisik pada HP nyata.
 4. **`rowsWritten` di panel diagnostik** pernah dilaporkan menampilkan "2 baris ditulis" untuk
    satu anggota. Ini masih DUGAAN dan belum diukur ulang oleh siapa pun, jadi tidak saya sentuh
    dan tidak saya tulis sebagai bug.
