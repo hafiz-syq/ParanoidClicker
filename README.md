@@ -12,9 +12,12 @@ belum ada. Service worker + offline (M7) **irisan 1–3**: shell dan aset build 
 tanpa server terbukti merender, versi baru kini menunggu sampai pengguna menekan "Muat ulang"
 (`src/screens/PwaBanner.tsx`), dan update diperiksa berkala saat tab dibiarkan terbuka; tawaran
 pasang muncul sekali dan bisa ditolak 30 hari (angka di §"Service worker M7"). Instruksi pasang
-manual untuk iOS dan audio offline belum. M8 (sambung ulang, re-anchor dua klien, layar mati,
+manual iOS sudah ada di kode (`perluPetunjukIos` + banner "Mengerti" di `src/screens/PwaBanner.tsx`,
+menerima keputusan D3 usulan). Audio hitungan offline tidak butuh file: bunyi TTS diganti oscillator
+Web Audio di `src/app/audio/voice.ts`. M8 (sambung ulang, re-anchor dua klien, layar mati,
 prompt instal) ada di tree; tiga keputusan [TANYA] di
-`docs/plans/2026-11-20-m8-prompt-instal-sw.plan.md` masih terbuka. Semua angka di
+`docs/plans/2026-11-20-m8-prompt-instal-sw.plan.md` — keputusan-1 sudah memakai usulan sementara
+(D1: tetap menunggu tap, D2: semua HP, D3: otomatis sekali). Semua angka di
 dokumen ini adalah lokal; tidak ada perubahan M2–M5 yang dikirim ke produksi.
 
 ## Menjalankan
@@ -2137,9 +2140,10 @@ Tawaran pasang hanya lahir dari `beforeinstallprompt` (tidak ada prompt paksa), 
 `src/app/offline/pasang.ts`, 4 tes unit). Bukti lokal dengan event sintetis: banner muncul, "Nanti"
 menulis `pc-pasang-ditolak`, dan event berikutnya di halaman yang sama tidak memunculkannya lagi.
 
-BELUM di ronde ini: instruksi pasang manual iOS (Safari tidak mengirim `beforeinstallprompt`),
-penjadwalan update saat aplikasi ditutup sepenuhnya (hanya halaman yang hidup yang menjalankan
-penjadwal), cache respons API, precache audio hitungan, dan pengukuran di HP asli.
+BELUM di ronde ini: penjadwalan update saat aplikasi ditutup sepenuhnya (hanya halaman yang hidup
+yang menjalankan penjadwal), cache respons API, dan pengukuran di HP asli. Instruksi pasang manual
+iOS sudah terpasang (`perluPetunjukIos` + banner di `PwaBanner`). Precache audio hitungan tidak
+diperlukan: bunyi TTS diganti oscillator Web Audio yang dijadwalkan dari jam audio.
 
 ## Klik saat WebSocket putus / server mati (bukti 21 Nov 2026)
 
