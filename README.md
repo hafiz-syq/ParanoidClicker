@@ -8,10 +8,13 @@ sudah punya angka; setlist (M3b), QR yang dipindai dari dalam app (M4), dan hitu
 (M5) baru ada di tree ini dan **belum pernah diukur di HP fisik**. Kalibrasi akustik (M6) baru
 sebatas **irisan 1**: estimator murni `src/app/audio/calibrate.ts` + 6 tes sintetis
 (`docs/plans/2026-11-20-m6-kalibrasi-akustik.plan.md`); pengukuran mikrofon dan angka perangkat
-belum ada. Service worker + offline (M7) **irisan 1–2**: shell dan aset build di-cache, reload
-tanpa server terbukti merender, dan versi baru kini menunggu sampai pengguna menekan "Muat ulang"
-(`src/screens/PwaBanner.tsx`); tawaran pasang muncul sekali dan bisa ditolak 30 hari (angka di
-§"Service worker M7"). Instruksi pasang manual untuk iOS dan audio offline belum. Semua angka di
+belum ada. Service worker + offline (M7) **irisan 1–3**: shell dan aset build di-cache, reload
+tanpa server terbukti merender, versi baru kini menunggu sampai pengguna menekan "Muat ulang"
+(`src/screens/PwaBanner.tsx`), dan update diperiksa berkala saat tab dibiarkan terbuka; tawaran
+pasang muncul sekali dan bisa ditolak 30 hari (angka di §"Service worker M7"). Instruksi pasang
+manual untuk iOS dan audio offline belum. M8 (sambung ulang, re-anchor dua klien, layar mati,
+prompt instal) ada di tree; tiga keputusan [TANYA] di
+`docs/plans/2026-11-20-m8-prompt-instal-sw.plan.md` masih terbuka. Semua angka di
 dokumen ini adalah lokal; tidak ada perubahan M2–M5 yang dikirim ke produksi.
 
 ## Menjalankan
@@ -44,7 +47,7 @@ di HP lain jadi pengikut. Alat ukur spike M0 masih di `?layar=ukur`.
 | `npm run cek:ikon` | versi CLI penjaga ikon (cetak tabel sha + IHDR); assertion-nya sendiri jalan di `npm run test` |
 | `npm run cek:ikon:http` | versi served: `content-type: image/png` + sha256 body, butuh server; status 200 TIDAK dipakai sebagai bukti |
 | `npm run cek:kontras` | versi CLI `scripts/cr.mjs` (cetak semua CR + penjaga kutipan); assertion-nya jalan di `npm run test` |
-| `npm run check` | typecheck → lint:arch → test (117, termasuk 4 gerbang bukti di `scripts/gerbang.spec.ts`) → test:worker (39) — gerbang sebelum commit |
+| `npm run check` | typecheck → lint:arch → test (176, termasuk 4 gerbang bukti di `scripts/gerbang.spec.ts`) → test:worker (42) — gerbang sebelum commit |
 | `npm run smoke` | jalur WebSocket asli, butuh `npm run dev:worker` |
 | `npm run attack` | tes serangan T5/T6/T7/T9, butuh `npm run dev:worker` |
 
@@ -1317,6 +1320,14 @@ sumbernya.
    (module-MIME error); ini sudah menabrak saya sekali, lihat jebakan snapshot `dist/` di bagian
    M2. Bentuk perbaikan yang sah = assert `content-type` untuk `assets/index-*.js`, bukan status
    200 — pelajaran TEMUAN 4 berlaku lagi di sini.
+   **DIPERBAIKI 21 Nov 2026** — akar masalahnya di worker, bukan di gerbang: `env.ASSETS.fetch`
+   sekarang menolak jawaban `text/html` untuk path `/assets/*` dengan `404 text/plain`
+   (`src/worker/index.ts`, cabang terakhir). Tes: `src/worker/aset.spec.ts` (3 kasus — aset
+   hilang, aset nyata, rute SPA; `env.ASSETS` di-stub supaya tidak butuh `dist/`). Diukur pada
+   server lokal `wrangler dev --assets=dist` port 8788: `/assets/index-hilang.js` → `404
+   text/plain; charset=utf-8`, `/assets/index-C_RBvfNS.js` → `200 text/javascript;
+   charset=utf-8`, `/gabung` → `200 text/html; charset=utf-8`. `npm run check` EXIT=0 (176 unit
+   + 42 worker).
 3. **Klik pertama ±600 ms sesudah Stop/idle/Start.** Diukur pada DUA build: 613,0 ms (build M2)
    dan 642,9 ms (build pra-M2), jadi ia sudah ada sebelum servo dan bukan regresi M2. Kedua angka
    itu hasil ukur pelapor, BUKAN saya — saya belum mereproduksinya, dan tidak ada satu pun tes

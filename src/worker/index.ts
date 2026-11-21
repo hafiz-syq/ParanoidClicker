@@ -76,7 +76,13 @@ export default {
       return env.SESSION.get(env.SESSION.idFromName(sid)).fetch(request);
     }
 
-    return env.ASSETS.fetch(request);
+    const aset = await env.ASSETS.fetch(request);
+    // SPA fallback menjawab `/assets/*` yang tidak dikenal dengan index.html 200 → layar putih
+    // (module-MIME error) tanpa gejala lain. Aset yang hilang harus 404, bukan HTML.
+    if (url.pathname.startsWith('/assets/') && (aset.headers.get('content-type') ?? '').startsWith('text/html')) {
+      return new Response('not found', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+    }
+    return aset;
   },
 } satisfies ExportedHandler<Env>;
 
