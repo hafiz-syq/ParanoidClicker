@@ -508,6 +508,21 @@ export function ClickRoom(props: ClickRoomProps) {
     say(`kompensasi latensi = ${Number.isFinite(ms) ? ms : 0} ms (klik berikutnya ikut bergeser)`);
   };
 
+  // Auto-apply hasil kalibrasi akustik dari DebugScope: kalau sudah diukur di layar ukur
+  // gunakan auto-apply kalau used >= 6 (sudah disimpan di localStorage oleh calibrateAudio).
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('pc-cal-ms');
+      if (stored !== null && live) {
+        const ms = Number(stored);
+        if (Number.isFinite(ms)) {
+          engineRef.current?.setLatencyComp(ms);
+          say(`latensi akustik otomatis diterapkan: ${ms} ms`);
+        }
+      }
+    } catch { /* mode privat */ }
+  }, [live]);
+
   const running = ses?.running === true;
   const stale = Number.isFinite(age) && age > 5_000;
   const joinUrl = join ? `${location.origin}${location.pathname}?sid=${join.sid}&tok=${join.tok}` : '';

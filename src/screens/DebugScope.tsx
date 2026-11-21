@@ -10,6 +10,7 @@ import {
   type Sample,
   type Stamps,
 } from '../app/sync/offset';
+import { acousticLatency, type AcousticEstimate } from '../app/audio/calibrate';
 
 const PING_COUNT = 60;
 const PING_INTERVAL_MS = 1000;
@@ -94,6 +95,8 @@ export function DebugScope() {
   const [count, setCount] = useState(0);
   const [verdict, setVerdict] = useState('belum jalan');
   const [audio, setAudio] = useState<string[]>([]);
+  const [calRunning, setCalRunning] = useState(false);
+  const [calResult, setCalResult] = useState<{ estimate: AcousticEstimate | null; pairs: number; detail: string[] } | null>(null);
   const [wake, setWake] = useState('belum diuji');
   // Satu run per HP adalah bukti lapangan: tidak boleh hilang karena tombol dite twice
   // atau karena /create gagal pada percobaan berikutnya.
@@ -558,6 +561,143 @@ export function DebugScope() {
     setAudio(out);
   }, []);
 
+  const calibrateAudio = useCallback(async () => {
+    if (calRunning) return;
+    setCalRunning(true);
+    setCalResult(null);
+    const detail: string[] = [];
+    const say = (line: string) => detail.push(line);
+    say('menyiapkan audio + mic…');
+    setCalResult({ estimate: null, pairs: 0, detail: [...detail] });
+
+    let ctx: AudioContext | null = null;
+    let stream: MediaStream | null = null;
+    let recorder: MediaRecorder | null = null;
+    const chunks: BlobPart[] = [];
+    const clickTimes: number[] = [];
+    let recorderStop: (() => Promise<void>) | null = null;
+
+    try {
+      ctx = new AudioContext();
+      if (ctx.state !== 'running') await ctx.resume();
+      if (ctx.state !== 'running') throw new Error(`AudioContext tetap ${ctx.state}`);
+
+      // Mikrofon wajib hidup: tanpa itu tidak ada yang direkam.
+      let timedOut = false;
+      const wantMic = navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      });
+      wantMic.then((s) => { if (timedOut) s.getTracks().forEach((t) => t.stop()); }, () => undefined);
+      const micTimeout = sleep(12_000).then(() => { timedOut = true; throw new Error('mic tidak dijawab 12 dtk'); });
+      stream = await Promise.race([wantMic, micTimeout]);
+      const settings = stream.getAudioTracks()[0]?.getSettings() as (MediaTrackSettings & { label?: string }) | undefined;
+      say(`mic: ${settings?.label ?? '?'}`);
+
+      // Mulai rekam sebelum klik pertama.
+      recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.start();
+      recorderStop = () => new Promise<void>((resolve) => {
+        if (!recorder) return resolve();
+        const onstop = () => resolve();
+        recorder.addEventListener('stop', onstop, { once: true });
+        recorder.stop();
+      });
+
+      // Jadwalkan 8 klik dengan jarak 500ms, mulai 500ms dari sekarang.
+      const CLICK_GAP_MS = 500;
+      const CLICK_START_DELAY_MS = 500;
+      const NUM_CLICKS = 8;
+      const nowMs = ctx.currentTime * 1000;
+      for (let i = 0; i < NUM_CLICKS; i++) {
+        const t = nowMs + CLICK_START_DELAY_MS + i * CLICK_GAP_MS;
+        clickTimes.push(t);
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 1760;
+        gain.gain.setValueAtTime(0.0001, t / 1000);
+        gain.gain.linearRampToValueAtTime(0.8, t / 1000 + 0.002);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t / 1000 + 0.05);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(t / 1000);
+        osc.stop(t / 1000 + 0.06);
+        osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+      }
+      say(`${NUM_CLICKS} klik dijadwalkan, gap=${CLICK_GAP_MS}ms, delay=${CLICK_START_DELAY_MS}ms`);
+
+      // Tunggu semua klik selesai + 500ms tail.
+      const totalWaitMs = CLICK_START_DELAY_MS + (NUM_CLICKS - 1) * CLICK_GAP_MS + 500;
+      await sleep(totalWaitMs);
+
+      // Stop rekam, decode, deteksi onset.
+      await recorderStop!();
+      stream.getTracks().forEach((t) => t.stop());
+      stream = null;
+      say('rekaman selesai, decode…');
+
+      const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+      const arrayBuf = await blob.arrayBuffer();
+      const audioBuf = await ctx.decodeAudioData(arrayBuf);
+      say(`decoded: ${audioBuf.duration.toFixed(2)}s, ${audioBuf.numberOfChannels}ch, ${audioBuf.sampleRate}Hz`);
+
+      // Deteksi onset: scan tiap 50ms window setelah klik dijadwalkan, cari peak pertama di atas threshold.
+      const sr = audioBuf.sampleRate;
+      const ch0 = audioBuf.getChannelData(0);
+      const pairs: { sentMs: number; heardMs: number }[] = [];
+      const THRESHOLD = 0.02; // amplitudo minimal dianggap onset (bukan noise)
+      const WINDOW_MS = 100;  // window pencarian onset setelah klik
+      const STEP_MS = 10;     // langkah scan
+
+      for (const sentMs of clickTimes) {
+        const startSample = Math.floor((sentMs / 1000) * sr);
+        const winSamples = Math.floor((WINDOW_MS / 1000) * sr);
+        let onsetSample = -1;
+        for (let s = startSample; s < startSample + winSamples && s < ch0.length; s += Math.floor((STEP_MS / 1000) * sr)) {
+          // Simple RMS in this step
+          let sum = 0;
+          for (let j = s; j < s + Math.floor((STEP_MS / 1000) * sr) && j < ch0.length; j++) {
+            sum += ch0[j] * ch0[j];
+          }
+          const rms = Math.sqrt(sum / Math.floor((STEP_MS / 1000) * sr));
+          if (rms > THRESHOLD) { onsetSample = s; break; }
+        }
+        if (onsetSample >= 0) {
+          const heardMs = (onsetSample / sr) * 1000;
+          pairs.push({ sentMs, heardMs });
+        } else {
+          say(`klik @${sentMs.toFixed(0)}ms: onset tidak terdeteksi`);
+        }
+      }
+      say(`onset terdeteksi: ${pairs.length}/${NUM_CLICKS}`);
+
+      const estimate = acousticLatency(pairs);
+      if (estimate) {
+        say(`hasil: ${estimate.ms}ms (used=${estimate.used}, rejected=${estimate.rejected})`);
+        if (estimate.used >= 6) {
+          say('auto-apply (≥6 terpercaya)');
+          // Simpan di localStorage untuk ClickRoom baca nanti
+          try { localStorage.setItem('pc-cal-ms', String(estimate.ms)); } catch { /* mode privat */ }
+        } else {
+          say('kurang dari 6 terpercaya — perlu "Terapkan"');
+        }
+      } else {
+        say('hasil: null (tidak ada angka terpercaya)');
+      }
+      setCalResult({ estimate, pairs: pairs.length, detail: [...detail] });
+    } catch (e) {
+      say(`gagal: ${String(e)}`);
+      setCalResult({ estimate: null, pairs: 0, detail: [...detail] });
+    } finally {
+      if (recorder && recorder.state !== 'inactive') {
+        try { recorder.stop(); } catch { /* already stopped */ }
+      }
+      stream?.getTracks().forEach((t) => t.stop());
+      if (ctx) void ctx.close().catch(() => undefined);
+      setCalRunning(false);
+    }
+  }, [calRunning]);
+
   const exportJson = JSON.stringify(
     {
       host: location.host,
@@ -585,14 +725,17 @@ export function DebugScope() {
       </ul>
 
       <p className="row">
-        <button onClick={measure} disabled={running || driftRunning} className="btn">
+        <button onClick={measure} disabled={running || driftRunning || calRunning} className="btn">
           {running ? 'Mengukur…' : `Ukur ${PING_COUNT} ping`}
         </button>
-        <button onClick={() => void measureDrift()} disabled={running || driftRunning} className="btn">
+        <button onClick={() => void measureDrift()} disabled={running || driftRunning || calRunning} className="btn">
           {driftRunning ? `Mengukur drift… ${driftCount} (buang ${driftRejected}, hilang ${driftLost})` : 'Ukur drift 20 menit'}
         </button>
-        <button onClick={probeAudio} disabled={running || driftRunning} className="btn">
+        <button onClick={probeAudio} disabled={running || driftRunning || calRunning} className="btn">
           Ukur audio
+        </button>
+        <button onClick={calibrateAudio} disabled={running || driftRunning || calRunning} className="btn">
+          {calRunning ? 'Kalibrasi…' : 'Kalibrasi akustik'}
         </button>
       </p>
 
@@ -619,6 +762,25 @@ export function DebugScope() {
           {l}
         </p>
       ))}
+
+      {calResult && (
+        <>
+          <h2>Kalibrasi Akustik (M6)</h2>
+          {calResult.estimate === null ? (
+            <p className="note">Belum ada angka terpercaya — periksa log.</p>
+          ) : (
+            <p className="note">
+              Latensi akustik: <b>{calResult.estimate.ms} ms</b> · dipakai {calResult.estimate.used} ·
+              dibuang {calResult.estimate.rejected}
+            </p>
+          )}
+          {calResult.detail.map((l, i) => (
+            <p key={i} className="note tight">
+              {l}
+            </p>
+          ))}
+        </>
+      )}
 
       <h2>Log</h2>
       <pre className="pre">{log.join('\n')}</pre>
