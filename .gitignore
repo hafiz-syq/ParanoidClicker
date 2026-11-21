@@ -13,3 +13,6 @@ prod-attack.log
 
 # artefak `tsc -b`; tanpa ini tree jadi kotor tiap kali seseorang memverifikasi references
 *.tsbuildinfo
+
+.vercel
+.env*

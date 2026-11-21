@@ -1,4 +1,4 @@
-w# Aturan kerja ParanoidClick
+# Aturan kerja ParanoidClick
 
 ## Ponytail — mode lazy senior dev (teks saja, tanpa hook)
 
