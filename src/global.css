@@ -14,16 +14,18 @@
  */
 :root {
   color-scheme: dark;
-  /* Warna akcent metal/rock: perakabu/hitam dengan biru electric & merah agresif */
   --accent-primary: #9cf;
   --accent-secondary: #00d4aa;
   --accent-danger: #ff4757;
   --accent-warm: #ffa502;
+  --bg-dark: #0b0b0f;
+  --bg-mid: #121218;
+  --text-light: #eee;
+  --text-dark: #bbb;
+  --border-mid: #4a4a5a;
+  --border-dark: #333344;
 }
 
-/* Diukur di browser bukti (viewport 390px): textarea .fill punya width:100% + padding
- * + border bawaan, jadi totalnya 396px dan layar alat-ukur dapat scrollbar horizontal.
- * Tanpa border-box, kelas .fill akan selalu lebih lebar 6px dari kontainer mana pun. */
 *,
 *::before,
 *::after {
@@ -33,10 +35,12 @@
 html,
 body {
   margin: 0;
-  background: #0b0b0f;
-  color: #eee;
+  background: var(--bg-dark);
+  color: var(--text-light);
   font-family: system-ui, sans-serif;
   text-rendering: optimizeLegibility;
+  height: 100vh;
+  overflow-x: hidden;
 }
 
 /* Latar depan: logo Paranoid sebagai background menempel di tengah, overlay gelap
@@ -46,131 +50,195 @@ body::before {
   position: fixed;
   inset: 0;
   background: url("/ikon/Paranoid.jpg") center/cover no-repeat,
-              linear-gradient(180deg, #0b0b0f 0%, #121218 100%);
+              linear-gradient(180deg, var(--bg-dark) 0%, var(--bg-mid) 100%);
   pointer-events: none;
   z-index: 0;
 }
 
-/* Konten di atas overlay latar. */
-main {
+body {
   position: relative;
   z-index: 1;
-  padding: 16px;
-  max-width: 520px;
+}
+
+/* Kontainer utama: responsive, card-like dengan bayangan halus untuk tampilan profesional */
+main {
+  position: relative;
+  z-index: 2;
+  padding: 24px;
+  max-width: 720px;
   margin: 0 auto;
+  width: 100%;
+  min-height: calc(100vh - 48px);
+  background: var(--bg-dark);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+  border-radius: 16px;
+  border: 1px solid var(--border-mid);
+  display: flex;
+  flex-direction: column;
 }
 
 main.wide {
-  max-width: 720px;
-  padding: 16px;
+  max-width: 1100px;
+  padding: 32px;
+  margin: 16px auto;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.7);
+  border-radius: 20px;
+  border: 2px solid var(--border-dark);
+  background: var(--bg-mid);
 }
 
+/* Heading rock-ish: tebal, berdampingan, terlihat seperti judul album */
 h1 {
-  font-size: 20px;
-  font-weight: 600;
-  color: #eee;
-  margin-bottom: 8px;
-  letter-spacing: 0.5px;
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-light);
+  margin: 0 0 16px 0;
+  letter-spacing: 1px;
+  text-shadow: 0 0 6px rgba(156, 204, 252, 0.4);
 }
 
 h2 {
-  font-size: 15px;
+  font-size: 22px;
   font-weight: 600;
-  color: #9cf;
-  margin-top: 24px;
-  margin-bottom: 12px;
+  color: var(--accent-primary);
+  margin-top: 32px;
+  margin-bottom: 16px;
+  border-bottom: 2px solid var(--accent-primary);
+  padding-bottom: 6px;
 }
 
 a {
-  color: #9cf;
+  color: var(--accent-secondary);
   text-decoration: underline;
+  text-underline-offset: 4px;
+  transition: color 0.2s;
 }
 
+a:hover {
+  color: var(--accent-primary);
+  text-shadow: 0 0 8px rgba(156, 204, 252, 0.5);
+}
+
+/* Tombol dengan efek metal/gradien - tampak professional */
 .btn {
-  padding: 10px 14px;
-  font-size: 15px;
-  background: #1b1b22;
+  padding: 14px 22px;
+  font-size: 16px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #1b1b22 0%, #0f0f14 100%);
   color: #eee;
-  border: 1px solid #808088;
-  border-radius: 8px;
+  border: 1px solid var(--border-mid);
+  border-radius: 12px;
   cursor: pointer;
-  transition: background 0.1s, border-color 0.1s, transform 0.05s;
+  transition: all 0.2s ease;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: inline-block;
+  min-width: 140px;
+  text-align: center;
 }
 
 .btn:hover {
-  background: #24242c;
-  border-color: #9cf;
+  background: linear-gradient(135deg, #24242c 0%, #1a1a20 100%);
+  border-color: var(--accent-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.6);
 }
 
 .btn:active {
-  background: #0f0f14;
-  transform: scale(0.98);
+  background: #0a0a0f;
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .btn:focus-visible {
-  outline: 2px solid #9cf;
-  outline-offset: 2px;
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 3px;
 }
 
 .btn-lg {
-  padding: 12px 16px;
-  font-size: 18px;
+  padding: 18px 28px;
+  font-size: 19px;
+  min-width: 200px;
 }
 
 .btn-wide {
-  min-width: 110px;
+  width: 100%;
+  max-width: 320px;
+  margin: 8px auto;
 }
 
 .btn:disabled {
   background: #16161c;
-  color: #9a9ab0;
-  border-color: #55555f;
+  color: #777788;
+  border-color: #333344;
+  opacity: 0.8;
+  cursor: not-allowed;
 }
 
+/* Field input dengan latar gelap dan teks terang */
 .field {
-  width: 72px;
+  width: 80px;
   background: #0f0f14;
   color: #8f8;
-  border: 1px solid #808088;
-  border-radius: 6px;
-  padding: 6px;
+  border: 1px solid var(--border-mid);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 16px;
+  text-align: center;
+  font-weight: 500;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
-.pre {
-  background: #101016;
+.field-lebar {
+  width: 100%;
+  background: #0f0f14;
   color: #8f8;
-  font-size: 12px;
-  padding: 10px;
-  border: 1px solid #808088;
-  border-radius: 8px;
-  white-space: pre-wrap;
-  word-break: break-all;
+  border: 1px solid var(--border-mid);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 16px;
+  text-align: center;
+  font-weight: 500;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
-.note {
-  font-size: 13px;
-  line-height: 1.5;
+/* Row horizontal */
+.row {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 12px 0;
+  justify-content: center;
 }
 
+/* Status bar */
 .status {
-  font-size: 14px;
-  margin: 4px 0;
+  font-size: 16px;
+  margin: 6px 0;
+  color: var(--text-dark);
 }
 
 .foot {
-  font-size: 12px;
-  margin-top: 20px;
+  font-size: 13px;
+  margin-top: 24px;
+  color: #666;
+  border-top: 1px solid var(--border-mid);
+  padding-top: 16px;
 }
 
 .build {
-  max-width: 520px;
+  max-width: 600px;
   margin: 8px 0 0;
   padding: 0 16px;
   color: #9a9ab0;
+  font-size: 14px;
 }
 
+/* Kecil */
 .small {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -182,90 +250,159 @@ a {
   width: 100%;
 }
 
-.field-lebar {
-  width: 100%;
+.note {
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 8px 0;
+  color: var(--text-dark);
 }
 
 .warn {
-  color: #f99;
+  color: var(--accent-danger);
 }
 
 .ok {
-  color: #8f8;
+  color: var(--accent-secondary);
 }
 
 .bad {
-  color: #f88;
+  color: var(--accent-danger);
 }
 
-.row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
+/* Setlist (M3b) - bar lagu dengan efek singkat */
 .song {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
   flex-wrap: wrap;
-  padding: 6px 0;
-  border-bottom: 1px solid #808088;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-mid);
+  background: var(--bg-mid);
+  border-radius: 10px;
+  margin: 6px 0;
 }
 
 .song-nama {
-  flex: 1 1 120px;
-  font-size: 14px;
+  flex: 1 1 140px;
+  font-size: 16px;
+  color: var(--text-light);
+  font-weight: 500;
 }
 
 .song-aktif .song-nama {
-  color: #8f8;
+  color: var(--accent-primary);
   font-weight: 600;
+  text-shadow: 0 0 6px rgba(156, 204, 252, 0.6);
+  animation: pulse 2s infinite alternate;
 }
 
+@keyframes pulse {
+  from { text-shadow: 0 0 6px rgba(156, 204, 252, 0.6); }
+  to { text-shadow: 0 0 10px rgba(156, 204, 252, 0.9); }
+}
+
+/* Tombol kecil */
 .btn-kecil {
-  padding: 4px 8px;
+  padding: 8px 12px;
   font-size: 13px;
+  border-radius: 8px;
+  background: #24242c;
+  color: #eee;
+  border: 1px solid var(--border-mid);
+  transition: all 0.1s;
 }
 
+.btn-kecil:hover {
+  background: #333344;
+}
+
+/* QR tetap terang di tema gelap */
 .qr {
   background: #fff;
   border-radius: 8px;
-  padding: 6px;
-  width: 220px;
-  height: 220px;
+  padding: 8px;
+  width: 240px;
+  height: 240px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border-mid);
 }
 
+/* Video */
 .video {
   width: 100%;
-  max-width: 320px;
-  border-radius: 8px;
+  max-width: 400px;
+  border-radius: 10px;
   background: #000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--border-mid);
 }
 
-.pwa {
-  max-width: 520px;
-  padding: 0 16px;
-}
-
+/* PWA banner */
 .pwa-baris {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  padding: 10px 12px;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px 18px;
   background: #16161c;
-  border: 1px solid #808088;
-  border-radius: 8px;
-  font-size: 14px;
+  border: 1px solid var(--border-mid);
+  border-radius: 10px;
+  font-size: 15px;
+  color: #ccc;
 }
 
 .pwa-baris span {
-  flex: 1 1 200px;
+  flex: 1 1 240px;
+  font-weight: 500;
 }
 
 .pwa-tutup {
-  padding: 8px 10px;
+  padding: 10px 18px;
+  background: #121218;
+  border: 1px solid var(--border-mid);
+  border-radius: 8px;
+  font-size: 14px;
+  color: #8f8;
+}
+
+/* Panel diagnostik */
+.pre {
+  background: #101016;
+  color: #8f8;
+  font-size: 14px;
+  padding: 14px;
+  border: 1px solid var(--border-mid);
+  border-radius: 10px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 12px 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* Responsive adjustments untuk laptop/desktop */
+@media (min-width: 768px) {
+  main {
+    max-width: 800px;
+    padding: 32px;
+  }
+
+  h1 {
+    font-size: 40px;
+  }
+
+  .row {
+    justify-content: center;
+  }
+
+  .btn-wide {
+    max-width: 400px;
+  }
+}
+
+@media (min-width: 1024px) {
+  main.wide {
+    max-width: 1200px;
+    padding: 40px;
+  }
 }
