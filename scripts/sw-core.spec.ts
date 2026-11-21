@@ -38,20 +38,18 @@ it('saat aman, hanya cache versi lain dengan awalan yang sama yang dihapus', () 
 });
 
 const tipeUntuk = (url: string) => (url.endsWith('.js') ? 'text/javascript' : url.endsWith('.css') ? 'text/css' : 'text/html');
-const respons = (url: string, tipe = tipeUntuk(url)) => ({
-  ok: true,
-  status: 200,
-  headers: { get: () => tipe },
-});
+const respons = (url: string, tipe = tipeUntuk(url)) =>
+  new Response(null, { status: 200, headers: { 'content-type': tipe } });
 
 it('precache mencatat URL yang gagal dan tetap mencoba URL berikutnya', async () => {
   const dicoba: string[] = [];
   const disimpan: string[] = [];
   const cache = { put: async (url: string) => void disimpan.push(url) };
-  const ambil = async (url: string) => {
-    dicoba.push(url);
-    if (url === '/assets/gagal.js') throw new Error('HTTP 404');
-    return respons(url);
+  const ambil: typeof fetch = async (url) => {
+    const alamat = String(url);
+    dicoba.push(alamat);
+    if (alamat === '/assets/gagal.js') throw new Error('HTTP 404');
+    return respons(alamat);
   };
 
   const gagal = await precacheAset(cache, ['/', '/assets/gagal.js', '/assets/ok.css'], ambil);
@@ -68,7 +66,7 @@ it('precache mencatat URL yang gagal dan tetap mencoba URL berikutnya', async ()
 it('200 text/html untuk aset JS dicatat gagal, bukan disimpan sebagai JS', async () => {
   const disimpan: string[] = [];
   const cache = { put: async (url: string) => void disimpan.push(url) };
-  const ambil = async () => respons('/assets/a.js', 'text/html; charset=utf-8');
+  const ambil: typeof fetch = async () => respons('/assets/a.js', 'text/html; charset=utf-8');
 
   expect(await precacheAset(cache, ['/assets/a.js'], ambil)).toEqual([
     { url: '/assets/a.js', message: 'content-type text/html; charset=utf-8' },
@@ -78,7 +76,7 @@ it('200 text/html untuk aset JS dicatat gagal, bukan disimpan sebagai JS', async
 
 it('precache tanpa kegagalan menghasilkan status bersih', async () => {
   const cache = { put: async () => undefined };
-  const ambil = async (url: string) => respons(url);
+  const ambil: typeof fetch = async (url) => respons(String(url));
   expect(await precacheAset(cache, ['/', '/assets/a.js'], ambil)).toEqual([]);
   expect(statusPrecache(2, [], 7)).toEqual({ total: 2, gagal: [], at: 7 });
 });

@@ -305,7 +305,6 @@ check(
 
 // Kursi: 1 pemimpin + 11 anggota = MAX_MEMBERS persis.
 const pemimpin = await join('attack-pemimpin', lk);
-const masuk = await waited(() => pemimpin.frames.length >= 2);
 const anggota: Room[] = [];
 for (let i = 0; i < MAX_MEMBERS - 1; i++) {
   const r = await join(`attack-anggota-${i}`);

@@ -33,7 +33,7 @@ function toHex(buf: ArrayBuffer): string {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-function parseHex(text: string): Uint8Array | null {
+function parseHex(text: string): Uint8Array<ArrayBuffer> | null {
   if (!HEX64.test(text)) return null;
   const out = new Uint8Array(32);
   for (let i = 0; i < 32; i++) out[i] = Number.parseInt(text.slice(i * 2, i * 2 + 2), 16);

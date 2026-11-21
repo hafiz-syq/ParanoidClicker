@@ -18,6 +18,8 @@
     "verbatimModuleSyntax": true
   },
   "include": [
+    "src/vite-env.d.ts",
+    "src/main.tsx",
     "src/app/**/*",
     "src/screens/**/*",
     "src/shared/**/*"
