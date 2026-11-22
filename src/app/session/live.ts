@@ -2,7 +2,7 @@ import { genDid, isSid } from '../../shared/ids';
 import { FrameReject, parseFrame } from '../../shared/limits';
 import { parseBpm } from '../../shared/tempo';
 import { parseSetlist, parseSongId, type Song } from '../../shared/setlist';
-import { estimateOffset, toSample, type Sample, type Stamps } from '../sync/offset';
+import { estimateOffset, median, toSample, type Sample, type Stamps } from '../sync/offset';
 
 export interface SessionState {
   bpm: number;
@@ -213,6 +213,11 @@ export class LiveSession {
   /** Berapa milidetik lalu pong terakhir; > 5 s berarti θ yang dipakai klik sudah basi. */
   thetaAgeMs(): number {
     return this.lastPongAt ? Date.now() - this.lastPongAt : Number.POSITIVE_INFINITY;
+  }
+
+  /** Median RTT sampel yang masih dipegang; NaN kalau belum ada pong. */
+  rttMs(): number {
+    return median(this.samples.map((s) => s.rttMs));
   }
 
   sampleCount(): number {

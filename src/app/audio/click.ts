@@ -76,6 +76,8 @@ export interface CountInResult {
 
 export interface ClickEngineOptions {
   onStats?: (s: ClickStats) => void;
+  /** Dipanggil mendekati waktu dengar beat utama; dipakai bar beat di layar. */
+  onBeat?: (index: number, accent: boolean) => void;
 }
 
 type AudioCtor = new () => AudioContext;
@@ -115,6 +117,13 @@ export class ClickEngine {
   private nextIndex = 0;
   private servo: Servo = servoIdle(0);
   private compMs = 0;
+  /** Kanal mixer; null = destination bawaan (tes dan mode tanpa mixer). */
+  private outClick: AudioNode | null = null;
+  private outCount: AudioNode | null = null;
+  /** Birama untuk aksen dan jumlah ketukan yang digambar layar. */
+  private beatsPerBar = 4;
+  /** 1 = quarter, 2 = eighth, 3 = triplet, 4 = sixteenth. */
+  private subdivision = 1;
   private rate = 1;
   private rateRef: ClockBridge | null = null;
   /** true sesudah destroy(): tidak boleh ada timer yang lahir lagi dari engine mati. */
@@ -146,6 +155,23 @@ export class ClickEngine {
     this.compMs = (c.baseLatency + (c.outputLatency ?? 0)) * 1000;
     return `${this.ctx.state} sr=${this.ctx.sampleRate} base=${(c.baseLatency * 1000).toFixed(1)}ms ` +
       `output=${c.outputLatency === undefined ? '?' : (c.outputLatency * 1000).toFixed(1)}ms comp=${this.compMs.toFixed(1)}ms`;
+  }
+
+  /** Konteks yang sudah hidup; dipakai Mixer/BackingPlayer supaya tidak ada jam kedua. */
+  audioContext(): AudioContext | null {
+    return this.ctx;
+  }
+
+  /** Sambungkan klik dan hitungan masuk ke kanal mixer. */
+  setOutputs(click: AudioNode | null, countIn: AudioNode | null): void {
+    this.outClick = click;
+    this.outCount = countIn;
+  }
+
+  /** Birama + subdivision; hanya memengaruhi klik berikutnya, bukan antrean yang sudah ada. */
+  setMeter(beatsPerBar: number, subdivision: number): void {
+    this.beatsPerBar = Math.max(1, Math.min(12, Math.round(beatsPerBar) || 4));
+    this.subdivision = Math.max(1, Math.min(4, Math.round(subdivision) || 1));
   }
 
   /** Ganti grid dari frame `state`; null = berhenti membunyikan, konteks tetap hidup. */
@@ -225,7 +251,7 @@ export class ClickEngine {
       gain.gain.setValueAtTime(0.0001, t);
       gain.gain.linearRampToValueAtTime(intro ? 0.6 : firstCount ? 0.8 : 0.65, t + 0.003);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
-      osc.connect(gain).connect(ctx.destination);
+      osc.connect(gain).connect(this.outCount ?? ctx.destination);
       osc.onended = () => {
         this.countLive.delete(osc);
         osc.disconnect();
@@ -456,7 +482,7 @@ export class ClickEngine {
     this.nextIndex = plan.nextIndex;
     this.missed += plan.missed;
     for (const job of plan.jobs) {
-      this.fire(ctx, job, bridge);
+      this.fire(ctx, job, bridge, grid);
     }
     this.report();
   }
@@ -465,8 +491,9 @@ export class ClickEngine {
    * `bridge` menerjemahkan jam audio ↔ jam dinding pada tick ini, termasuk laju jam audio
    * yang sebenarnya; tanpa itu satu klik yang diminta pada 4550 ms bisa mendarat di mana saja.
    */
-  private fire(ctx: AudioContext, job: BeatJob, bridge: ClockBridge): void {
+  private fire(ctx: AudioContext, job: BeatJob, bridge: ClockBridge, grid: Grid): void {
     const t = job.audioMs / 1000;
+    const accent = ((job.index % this.beatsPerBar) + this.beatsPerBar) % this.beatsPerBar === 0;
     // CLICK_TOTAL_MS hidup di jam audio, jadi ia ikut dibagi laju sebelum dipindah ke
     // jam dinding — ditambah telanjang, probe-nya meleset CLICK_TOTAL·(1−1/rate) ≈ 34 ms
     // persis di kondisi yang membuat `rate` ada.
@@ -474,11 +501,11 @@ export class ClickEngine {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.value = job.accent ? ACCENT_HZ : CLICK_HZ;
+    osc.frequency.value = accent ? ACCENT_HZ : CLICK_HZ;
     gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.linearRampToValueAtTime(job.accent ? 1 : 0.55, t + 0.002);
+    gain.gain.linearRampToValueAtTime(accent ? 1 : 0.55, t + 0.002);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + CLICK_S);
-    osc.connect(gain).connect(ctx.destination);
+    osc.connect(gain).connect(this.outClick ?? ctx.destination);
     osc.onended = () => {
       this.live.delete(osc);
       osc.disconnect();
@@ -492,6 +519,45 @@ export class ClickEngine {
     osc.stop(t + CLICK_S + 0.01);
     this.live.add(osc);
     this.played++;
+
+    // Subdivision: klik tipis di antara dua beat utama, memakai jam audio yang sama.
+    // Yang dihitung sebagai `played` tetap beat utama saja, supaya angka diagnostik
+    // "klik berbunyi" tidak berubah arti saat subdivision dinaikkan.
+    if (this.subdivision > 1) {
+      const nowAudioMs = ctx.currentTime * 1000;
+      const periodAudio = grid.periodMs / (bridge.rate || 1);
+      for (let k = 1; k < this.subdivision; k++) {
+        const at = job.audioMs + (periodAudio * k) / this.subdivision;
+        if (at < nowAudioMs) continue;
+        const sub = ctx.createOscillator();
+        const subGain = ctx.createGain();
+        sub.type = 'sine';
+        sub.frequency.value = CLICK_HZ;
+        subGain.gain.setValueAtTime(0.0001, at / 1000);
+        subGain.gain.linearRampToValueAtTime(0.22, at / 1000 + 0.002);
+        subGain.gain.exponentialRampToValueAtTime(0.0001, at / 1000 + CLICK_S * 0.55);
+        sub.connect(subGain).connect(this.outClick ?? ctx.destination);
+        sub.onended = () => {
+          this.live.delete(sub);
+          sub.disconnect();
+          subGain.disconnect();
+        };
+        sub.start(at / 1000);
+        sub.stop(at / 1000 + CLICK_S * 0.55 + 0.01);
+        this.live.add(sub);
+      }
+    }
+
+    // Bar beat di layar harus menyala saat bunyinya terdengar, bukan saat dijadwalkan
+    // (lookahead 120 ms lebih awal). Timer kecil ini hanya untuk visual.
+    if (this.opts.onBeat) {
+      const delay = Math.max(0, wallMsOf(bridge, job.audioMs) - Date.now());
+      const kabari = () => {
+        if (!this.dead) this.opts.onBeat?.(job.index, accent);
+      };
+      if (delay < 5) kabari();
+      else window.setTimeout(kabari, delay);
+    }
   }
 
   private drift(ms: number): void {
