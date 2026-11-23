@@ -316,42 +316,45 @@ export function ClickRoom(props: ClickRoomProps) {
   }, [engineFor]);
 
   const openSession = useCallback(
-    async (t: LiveTarget) => {
-      rememberTarget(t, props.role === 'leader' && t.lk !== undefined);
-      const audio = await engineFor().unlock().catch((e: unknown) => `GAGAL: ${String(e)}`);
-      say(`audio: ${audio}`);
-      siapkanAudio();
-      if (!(await siapkanTab())) {
-        engineRef.current?.setMuted(true);
-        say('tab lain di HP ini menjadi pemilik audio — tab ini dibisukan, sesi tidak dibuka');
-        return;
-      }
-      const session = new LiveSession(t, {
-        onState: (s) => {
-          sesRef.current = s;
-          menungguStateRef.current = false;
-          setSes(s);
-          pushGrid(putusRef.current !== null);
-        },
-        onMembers: setMembers,
-        onSetlist: (list, aktifId) => {
-          setSongs(list);
-          setAktif(aktifId);
-        },
-        onStatus: say,
-        onTheta: (value) => {
-          engineFor().setTheta(value);
-          setTheta(value);
-          if (!menungguStateRef.current) pushGrid(putusRef.current !== null);
-        },
-      });
-      liveRef.current = session;
-      session.connect();
-      setLive(true);
-      void holdScreen();
-    },
-    [engineFor, holdScreen, props.role, pushGrid, say, siapkanAudio, siapkanTab]
-  );
+      async (t: LiveTarget, options?: { alreadyUnlocked?: boolean }) => {
+        rememberTarget(t, props.role === 'leader' && t.lk !== undefined);
+        if (!options?.alreadyUnlocked) {
+          const audio = await engineFor().unlock().catch((e: unknown) => `GAGAL: ${String(e)}`);
+          say(`audio: ${audio}`);
+          if (audio.startsWith('GAGAL')) return;
+        }
+        siapkanAudio();
+        if (!(await siapkanTab())) {
+          engineRef.current?.setMuted(true);
+          say('tab lain di HP ini menjadi pemilik audio — tab ini dibisukan, sesi tidak dibuka');
+          return;
+        }
+        const session = new LiveSession(t, {
+          onState: (s) => {
+            sesRef.current = s;
+            menungguStateRef.current = false;
+            setSes(s);
+            pushGrid(putusRef.current !== null);
+          },
+          onMembers: setMembers,
+          onSetlist: (list, aktifId) => {
+            setSongs(list);
+            setAktif(aktifId);
+          },
+          onStatus: say,
+          onTheta: (value) => {
+            engineFor().setTheta(value);
+            setTheta(value);
+            if (!menungguStateRef.current) pushGrid(putusRef.current !== null);
+          },
+        });
+        liveRef.current = session;
+        session.connect();
+        setLive(true);
+        void holdScreen();
+      },
+      [engineFor, holdScreen, props.role, pushGrid, say, siapkanAudio, siapkanTab]
+    );
 
   const startLeader = useCallback(async () => {
     if (peranTabRef.current === 'duplikat') {
@@ -377,7 +380,7 @@ export function ClickRoom(props: ClickRoomProps) {
       const lk = typeof body.leaderKey === 'string' ? body.leaderKey : undefined;
       const t: LiveTarget = { sid: body.sid, tok: body.token, ...(lk ? { lk } : {}) };
       setJoin(t);
-      await openSession(t);
+      await openSession(t, { alreadyUnlocked: true });
     } catch (e) {
       say(String(e));
     }
