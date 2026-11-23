@@ -3,6 +3,9 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/create", "destination": "https://paranoidclick.hafizsyq.workers.dev/create" }
+  ],
   "headers": [
     {
       "source": "/create",
