@@ -2484,6 +2484,26 @@ textarea.input {
   cursor: pointer;
 }
 
+.pwa-float {
+  position: fixed;
+  right: var(--space-3);
+  bottom: calc(140px + env(safe-area-inset-bottom));
+  z-index: 95;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--fg);
+  border: none;
+  box-shadow: var(--shadow-elevated);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
 .build {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.5625rem;

@@ -186,6 +186,29 @@ export function PwaBanner() {
   const laguBerjalan = jalan || adaLaguBerjalan();
   const tampilVersi = versiBaru && !laguBerjalan;
 
+  /** Event `beforeinstallprompt` yang disimpan meskipun inline bar sudah ditutup,
+   *  supaya tombol floating masih bisa memicu pasang nanti. */
+  const pasangSimpan = useRef<PromptPasang | null>(null);
+
+  useEffect(() => {
+    if (pasang) pasangSimpan.current = pasang;
+  }, [pasang]);
+
+  const pasangLagi = async () => {
+    const p = pasangSimpan.current;
+    if (!p) return;
+    try {
+      await p.prompt();
+    } catch {
+      // Browser menolak: diabaikan.
+    }
+    pasangSimpan.current = null;
+    setPasang(null);
+  };
+
+  const standalone = window.matchMedia('(display-mode: standalone)').matches;
+  const tampilTombolFloat = !standalone && !!pasangSimpan.current && !pasang && !petunjukIos;
+
   if (!tampilVersi && !pasang && !petunjukIos && !(precache && precache.gagal.length > 0 && !precacheTutup)) return null;
 
   return (
@@ -236,6 +259,15 @@ export function PwaBanner() {
             Nanti
           </button>
         </div>
+      )}
+      {tampilTombolFloat && (
+        <button
+          className="btn pwa-float"
+          onClick={pasangLagi}
+          aria-label="Pasang aplikasi sekarang"
+        >
+          Pasang
+        </button>
       )}
     </div>
   );
